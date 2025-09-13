@@ -1,0 +1,31 @@
+# Global owners
+* @syntropy-cc/core-team
+
+# Infrastructure
+/infrastructure/ @syntropy-cc/infrastructure-team
+/platform/ @syntropy-cc/platform-team
+/scripts/ @syntropy-cc/devops-team
+
+# Services
+/services/ @syntropy-cc/backend-team
+/services/security/ @syntropy-cc/security-team
+/services/blockchain/ @syntropy-cc/blockchain-team
+
+# Mobile
+/mobile/ @syntropy-cc/mobile-team
+/sdk/mobile/ @syntropy-cc/mobile-team
+
+# Web
+/web/ @syntropy-cc/frontend-team
+
+# Documentation
+/docs/ @syntropy-cc/docs-team
+README.md @syntropy-cc/docs-team
+CONTRIBUTING.md @syntropy-cc/docs-team
+
+# Security
+SECURITY.md @syntropy-cc/security-team
+/tools/security/ @syntropy-cc/security-team
+
+# Legal
+/legal/ @syntropy-cc/legal-team
