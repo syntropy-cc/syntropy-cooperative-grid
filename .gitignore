@@ -149,3 +149,6 @@ temp/
 .localenv
 .dev
 local/
+
+# Adicionando o diretório lib como exceção
+!scripts/bootstrap/lib/
