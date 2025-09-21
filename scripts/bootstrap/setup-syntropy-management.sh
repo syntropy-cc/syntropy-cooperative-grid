@@ -305,7 +305,7 @@ spec:
         emptyDir: {}
       restartPolicy: Never
   backoffLimit: 3
-EOF
+FORTRAN_EOF
 
 # Python data science template
 cat > "$CONFIG_DIR/templates/applications/python-datascience.yaml" << 'PYTHON_EOF'
@@ -361,7 +361,7 @@ spec:
   - port: 8888
     targetPort: 8888
   type: NodePort
-EOF
+PYTHON_EOF
 
 echo -e "${BLUE}[6/6] Setting up command aliases and PATH...${NC}"
 
