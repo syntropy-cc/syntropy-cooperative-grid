@@ -1,36 +1,168 @@
 #!/bin/bash
 
 # Syntropy Cooperative Grid - USB Detection and Safety
-# Version: 2.0.0 - Implementação final corrigida
+# Version: 2.0.0 - Enhanced USB Detection
 
-# Detectar dispositivos USB removíveis
-detect_usb_devices() {
-    # Buscar dispositivos removíveis usando lsblk
-    lsblk -d -n -o NAME,SIZE,TYPE,RM,MODEL 2>/dev/null | \
-    awk '$3=="disk" && $4=="1" {print "/dev/"$1":"$2":"($5?$5:"Unknown")}' | \
-    while IFS=: read -r device size model; do
-        # Verificar se o dispositivo existe e não é um disco do sistema
-        if [ -b "$device" ] && ! is_system_disk "$device"; then
-            echo "$device:$size:$model"
-        fi
-    done
+# USB detection configuration
+USB_MIN_SIZE_MB=1024  # Minimum USB size in MB
+USB_MAX_SIZE_GB=128   # Maximum USB size in GB for safety
+
+# Convert size string to MB
+convert_size_to_mb() {
+    local size="$1"
+    local number="${size%[A-Za-z]*}"
+    local unit="${size##*[0-9]}"
+    
+    case "$unit" in
+        "K"|"KB") echo "$(echo "scale=0; $number/1024" | bc)";;
+        "M"|"MB") echo "$number";;
+        "G"|"GB") echo "$(echo "scale=0; $number*1024" | bc)";;
+        "T"|"TB") echo "$(echo "scale=0; $number*1024*1024" | bc)";;
+        *) echo "0";;
+    esac
 }
 
-# Verificar se é um disco do sistema
+# Detectar dispositivos USB removíveis com validações aprimoradas
+detect_usb_devices() {
+    local detected=false
+    
+    # Buscar dispositivos removíveis usando lsblk com informações detalhadas
+    lsblk -d -n -o NAME,SIZE,TYPE,RM,MODEL,SERIAL,VENDOR 2>/dev/null | \
+    while read -r name size type rm model serial vendor; do
+        if [ "$type" = "disk" ] && [ "$rm" = "1" ]; then
+            local device="/dev/$name"
+            local size_mb=$(convert_size_to_mb "$size")
+            
+            # Validar tamanho mínimo e máximo
+            if [ "$size_mb" -lt "$USB_MIN_SIZE_MB" ]; then
+                log WARN "Dispositivo $device ignorado: muito pequeno (mínimo ${USB_MIN_SIZE_MB}MB)"
+                continue
+            fi
+            
+            if [ "$size_mb" -gt "$((USB_MAX_SIZE_GB*1024))" ]; then
+                log WARN "Dispositivo $device ignorado: muito grande (máximo ${USB_MAX_SIZE_GB}GB)"
+                continue
+            fi
+            
+            # Verificar se o dispositivo existe e não é um disco do sistema
+            if [ -b "$device" ] && ! is_system_disk "$device"; then
+                detected=true
+                # Format: device:size:model:vendor:serial
+                echo "$device:$size:${model:-Unknown}:${vendor:-Unknown}:${serial:-Unknown}"
+            fi
+        fi
+    done
+    
+    if [ "$detected" = false ]; then
+        log ERROR "Nenhum dispositivo USB válido encontrado"
+        return 1
+    fi
+}
+
+# Verificar se é um disco do sistema com validações adicionais
 is_system_disk() {
     local device="$1"
     
-    # Verificar se alguma partição está montada em pontos críticos do sistema
+    # Verificar se o dispositivo é válido
+    if [ ! -b "$device" ]; then
+        log ERROR "Dispositivo inválido: $device não existe"
+        return 0
+    fi
+    
+    # Verificar se o dispositivo é um disco do sistema via fstab
+    if grep -q "^$device" /etc/fstab; then
+        log WARN "Dispositivo $device encontrado em /etc/fstab - possível disco do sistema"
+        return 0
+    fi
+    
+    # Verificar pontos de montagem críticos
+    local critical_mounts=("/" "/boot" "/boot/efi" "/usr" "/var" "/home" "/opt" "[SWAP]")
+    
     lsblk -n -o NAME,MOUNTPOINT "$device" 2>/dev/null | \
-    while read name mountpoint; do
-        case "$mountpoint" in
-            "/" | "/boot" | "/usr" | "/var" | "/home" | "/opt" | "[SWAP]")
-                return 0  # É disco do sistema
-                ;;
-        esac
+    while read -r name mountpoint; do
+        for mount in "${critical_mounts[@]}"; do
+            if [ "$mountpoint" = "$mount" ]; then
+                log WARN "Dispositivo $device montado em ponto crítico: $mountpoint"
+                return 0
+            fi
+        done
     done
     
-    return 1  # Não é disco do sistema
+    # Verificar se tem partições com dados importantes
+    if lsblk -n -o FSTYPE "$device" | grep -qE "ext[234]|btrfs|xfs|zfs"; then
+        log WARN "Dispositivo $device contém sistema de arquivos não-removível"
+        echo -e "${YELLOW}AVISO: Este dispositivo parece conter um sistema de arquivos não-removível.${NC}"
+        echo -e "Continuar irá APAGAR TODOS OS DADOS no dispositivo."
+        read -p "Tem certeza que deseja continuar? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Validar USB criado
+validate_usb() {
+    local device="$1"
+    local success=true
+    
+    log INFO "Iniciando validação do USB em $device..."
+    
+    # 1. Verificar se o dispositivo ainda existe
+    if [ ! -b "$device" ]; then
+        log ERROR "Dispositivo $device não encontrado"
+        return 1
+    fi
+    
+    # 2. Tentar montar o dispositivo
+    local mount_point="/tmp/syntropy_validate_$$"
+    mkdir -p "$mount_point"
+    
+    if ! mount "$device"1 "$mount_point" 2>/dev/null; then
+        log ERROR "Falha ao montar partição de boot"
+        rm -rf "$mount_point"
+        return 1
+    fi
+    
+    # 3. Verificar arquivos essenciais
+    local required_files=(
+        "syntropy/config.json"
+        "syntropy/keys/node.key"
+        "syntropy/keys/node.pub"
+        "boot/grub/grub.cfg"
+    )
+    
+    for file in "${required_files[@]}"; do
+        if [ ! -f "$mount_point/$file" ]; then
+            log ERROR "Arquivo essencial não encontrado: $file"
+            success=false
+        else
+            log DEBUG "Arquivo validado: $file"
+        fi
+    done
+    
+    # 4. Verificar permissões dos arquivos sensíveis
+    if [ -d "$mount_point/syntropy/keys" ]; then
+        local key_perms=$(stat -c %a "$mount_point/syntropy/keys/node.key")
+        if [ "$key_perms" != "600" ]; then
+            log ERROR "Permissões incorretas em node.key: $key_perms (deveria ser 600)"
+            success=false
+        fi
+    fi
+    
+    # Limpar
+    umount "$mount_point"
+    rm -rf "$mount_point"
+    
+    if [ "$success" = true ]; then
+        log SUCCESS "Validação do USB concluída com sucesso"
+        return 0
+    else
+        log ERROR "Validação do USB falhou"
+        return 1
+    fi
 }
 
 # Função principal de seleção de dispositivo USB

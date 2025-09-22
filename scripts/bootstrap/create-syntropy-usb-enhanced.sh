@@ -8,17 +8,82 @@ set -e
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Check for required dependencies
+check_dependencies() {
+    local missing_deps=()
+    
+    # Required commands
+    local required_commands=(
+        "dd"        # For writing to USB
+        "mkfs.fat"  # For formatting USB
+        "parted"    # For partition management
+        "openssl"   # For key generation
+        "curl"      # For downloads
+        "jq"        # For JSON processing
+        "lsblk"     # For disk detection
+        "sudo"      # For elevated privileges
+    )
+    
+    # Check each command
+    for cmd in "${required_commands[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            missing_deps+=("$cmd")
+        fi
+    done
+    
+    # Check for sudo access
+    if ! sudo -n true 2>/dev/null; then
+        echo -e "${RED}Error: This script requires sudo privileges${NC}"
+        echo "Please ensure you have sudo access and try again"
+        exit 1
+    fi
+    
+    # If we found missing dependencies, error out with instructions
+    if [ ${#missing_deps[@]} -ne 0 ]; then
+        echo -e "${RED}Error: Missing required dependencies${NC}"
+        echo "Please install the following packages:"
+        printf '%s\n' "${missing_deps[@]}"
+        
+        # Provide installation instructions based on common package managers
+        echo -e "\nOn Ubuntu/Debian:"
+        echo "sudo apt-get install ${missing_deps[*]}"
+        echo -e "\nOn RHEL/CentOS:"
+        echo "sudo yum install ${missing_deps[*]}"
+        exit 1
+    fi
+    
+    # Check for minimum disk space (1GB in /tmp)
+    local available_space=$(df -BG /tmp | awk 'NR==2 {print $4}' | sed 's/G//')
+    if [ "$available_space" -lt 1 ]; then
+        echo -e "${RED}Error: Insufficient disk space${NC}"
+        echo "At least 1GB of free space is required in /tmp"
+        exit 1
+    fi
+}
+
 # Source all modules
 source "$SCRIPT_DIR/lib/colors.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/usb-detection.sh"
+source "$SCRIPT_DIR/lib/wsl-usb-detection.sh"  # Add WSL support
 source "$SCRIPT_DIR/lib/geographic.sh"
 source "$SCRIPT_DIR/lib/security.sh"
 source "$SCRIPT_DIR/lib/iso-management.sh"
 source "$SCRIPT_DIR/lib/usb-preparation.sh"
 source "$SCRIPT_DIR/lib/cloud-init.sh"
 source "$SCRIPT_DIR/lib/management-scripts.sh"
+
+# Check if running in WSL
+WSL_MODE=false
+if is_wsl; then
+    WSL_MODE=true
+    log INFO "Running in WSL mode - using Windows USB detection"
+fi
+source "$SCRIPT_DIR/lib/progress.sh"
+
+# Check dependencies first
+check_dependencies
 
 # Main banner
 show_banner() {
@@ -145,6 +210,24 @@ main() {
     if [ -z "$USB_DEVICE" ] || [ "$AUTO_DETECT" = true ]; then
         log INFO "Auto-detecting USB devices..."
         USB_DEVICE=$(select_usb_device)
+    fi
+
+    # Para WSL, validar o dispositivo físico do Windows
+    if [ "$WSL_MODE" = true ]; then
+        if [[ ! "$USB_DEVICE" =~ ^PhysicalDrive[0-9]+$ ]] && [[ ! "$USB_DEVICE" =~ ^\\\\\.\\PhysicalDrive[0-9]+$ ]]; then
+            log ERROR "Invalid Windows physical device format: $USB_DEVICE"
+            log ERROR "Expected format: PhysicalDrive# or \\\\.\\PhysicalDrive#"
+            exit 1
+        fi
+        # Converter formato Windows para formato WSL
+        DISK_NUMBER=$(echo "$USB_DEVICE" | grep -o '[0-9]\+')
+        if [ -n "$DISK_NUMBER" ]; then
+            USB_DEVICE="/dev/sd$(printf "\\$(printf '%03o' $((97 + $DISK_NUMBER)))")"
+            log INFO "Converted Windows device $USB_DEVICE to WSL device $USB_DEVICE"
+        else
+            log ERROR "Failed to extract disk number from device path"
+            exit 1
+        fi
     fi
 
     if [ ! -b "$USB_DEVICE" ]; then
