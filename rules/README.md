@@ -1,0 +1,165 @@
+# 📋 Regras para LLMs - Syntropy Cooperative Grid
+
+> **Diretório de regras técnicas e sucintas para auxiliar LLMs a executar tarefas no projeto**
+
+## 🎯 **Objetivo**
+
+Este diretório contém regras otimizadas para LLMs trabalharem com o projeto Syntropy Cooperative Grid. As regras são:
+
+- **Sucintas**: Informações essenciais sem verbosidade
+- **Técnicas**: Focadas em implementação e uso prático
+- **Otimizadas para LLMs**: Estruturadas para fácil parsing e compreensão
+- **Específicas**: Direcionadas para componentes específicos do projeto
+
+## 📁 **Estrutura**
+
+```
+rules/
+├── README.md                    # Este arquivo - visão geral
+├── management-system.md         # Regras para o Management System
+├── development.md              # Regras para desenvolvimento (futuro)
+├── deployment.md               # Regras para deployment (futuro)
+├── testing.md                  # Regras para testes (futuro)
+└── security.md                 # Regras para segurança (futuro)
+```
+
+## 🔧 **Componentes Disponíveis**
+
+### **Management System** (`management-system.md`)
+Sistema unificado para gerenciar a Syntropy Cooperative Grid:
+- **CLI**: Interface de linha de comando (Go + Cobra)
+- **Web**: Dashboard web (React + Next.js)
+- **Mobile**: App mobile (Flutter)
+- **Desktop**: App desktop (Electron)
+
+**Funcionalidades principais:**
+- Gerenciamento de nós (detecção USB, configuração, monitoramento)
+- Gerenciamento de containers (deploy, orquestração, escalabilidade)
+- Gerenciamento de rede (service mesh, roteamento, conectividade)
+- Gerenciamento cooperativo (créditos, governança, reputação)
+
+## 📖 **Como Usar**
+
+### **Para LLMs:**
+1. **Leia as regras relevantes** antes de executar tarefas
+2. **Siga os padrões estabelecidos** para comandos e configurações
+3. **Use os exemplos fornecidos** como base para implementações
+4. **Valide inputs** e implemente error handling adequado
+5. **Documente mudanças** importantes
+
+### **Para Desenvolvedores:**
+1. **Consulte as regras** ao trabalhar com componentes específicos
+2. **Mantenha as regras atualizadas** quando houver mudanças
+3. **Adicione novas regras** para novos componentes
+4. **Use as regras como referência** para documentação
+
+## 🎯 **Padrões das Regras**
+
+### **Estrutura Padrão:**
+```markdown
+# 🎯 Título do Componente
+
+> **Descrição sucinta do componente**
+
+## 📋 **Visão Geral**
+- Objetivo e propósito
+- Contexto no projeto
+
+## 🏗️ **Arquitetura**
+- Componentes principais
+- Relacionamentos
+- Stack tecnológico
+
+## 🔧 **Funcionalidades**
+- Lista de funcionalidades principais
+- Casos de uso
+- Comandos essenciais
+
+## 📝 **Regras para LLMs**
+- Instruções específicas
+- Padrões a seguir
+- Exemplos práticos
+```
+
+### **Características:**
+- **Emojis**: Para identificação visual rápida
+- **Código**: Exemplos práticos e comandos
+- **Estrutura clara**: Seções bem definidas
+- **Informações técnicas**: Detalhes de implementação
+- **Casos de uso**: Exemplos reais de uso
+
+## 🚀 **Roadmap de Regras**
+
+### **Implementadas:**
+- ✅ [Management System](management-system.md) - Sistema de gerenciamento completo
+
+### **Planejadas:**
+- ⏳ [Development](development.md) - Regras para desenvolvimento
+- ⏳ [Deployment](deployment.md) - Regras para deployment
+- ⏳ [Testing](testing.md) - Regras para testes
+- ⏳ [Security](security.md) - Regras para segurança
+- ⏳ [API](api.md) - Regras para APIs
+- ⏳ [Database](database.md) - Regras para banco de dados
+- ⏳ [Monitoring](monitoring.md) - Regras para monitoramento
+
+## 📝 **Contribuindo**
+
+### **Ao adicionar novas regras:**
+1. **Siga a estrutura padrão** definida acima
+2. **Mantenha o foco técnico** e sucinto
+3. **Inclua exemplos práticos** sempre que possível
+4. **Use emojis** para identificação visual
+5. **Atualize este README** com a nova regra
+
+### **Ao atualizar regras existentes:**
+1. **Mantenha a compatibilidade** com versões anteriores
+2. **Documente mudanças** importantes
+3. **Atualize exemplos** se necessário
+4. **Valide comandos** e configurações
+
+## 🔍 **Exemplos de Uso**
+
+### **Para LLMs trabalhando com Management System:**
+```bash
+# Sempre validar antes de executar
+syntropy-cli node list --format json | jq '.[] | select(.status == "unhealthy")'
+
+# Usar templates para consistência
+syntropy-cli container deploy --template nginx --node node-01
+
+# Monitorar operações
+syntropy-cli node status node-01 --watch --format table
+```
+
+### **Para desenvolvimento:**
+```go
+// Seguir padrões estabelecidos
+func (s *NodeService) CreateNode(req *CreateNodeRequest) (*Node, error) {
+    // Validação
+    if err := validateNodeRequest(req); err != nil {
+        return nil, fmt.Errorf("validation failed: %w", err)
+    }
+    
+    // Implementação
+    // ...
+}
+```
+
+## 📚 **Recursos Relacionados**
+
+- [Documentação Principal](../docs/) - Documentação completa do projeto
+- [Management System Docs](../docs/management-system/) - Documentação detalhada
+- [Development Guide](../docs/development/) - Guia de desenvolvimento
+- [API Reference](../docs/api/) - Referência das APIs
+
+## 🎯 **Objetivos**
+
+1. **Facilitar trabalho de LLMs** com informações técnicas precisas
+2. **Padronizar abordagens** para tarefas comuns
+3. **Reduzir tempo de onboarding** para novos componentes
+4. **Manter consistência** entre diferentes partes do projeto
+5. **Fornecer referência rápida** para comandos e configurações
+
+---
+
+**Este diretório é um recurso vivo que evolui com o projeto. Mantenha as regras atualizadas e relevantes!** 🚀

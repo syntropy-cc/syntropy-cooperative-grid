@@ -1,89 +1,159 @@
-# Syntropy Cooperative Grid
+# Syntropy Cooperative Grid Management System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub issues](https://img.shields.io/github/issues/syntropy-cc/syntropy-cooperative-grid)](https://github.com/syntropy-cc/syntropy-cooperative-grid/issues)
-[![GitHub stars](https://img.shields.io/github/stars/syntropy-cc/syntropy-cooperative-grid)](https://github.com/syntropy-cc/syntropy-cooperative-grid/stargazers)
-[![Discord](https://img.shields.io/discord/DISCORD_ID?label=Discord&logo=discord)](https://discord.gg/syntropy-grid)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/syntropy-cc/cooperative-grid/actions)
 
-## 🌌 Vision
+> **Sistema de Gerenciamento Completo para a Syntropy Cooperative Grid**
 
-**Syntropy Cooperative Grid** is a decentralized platform for community-driven computational resource sharing. Members contribute their servers and earn credits to use resources from other community members, creating emergent order (syntropy) from distributed chaos.
+Um sistema unificado para gerenciar nós, containers, redes e serviços cooperativos da Syntropy Cooperative Grid através de múltiplas interfaces (CLI, Web, Desktop, Mobile).
 
-> *"From many nodes, one grid. From one grid, infinite possibilities."*
+## 🎯 **Visão Geral**
 
-## 🏗️ Architecture
+O Syntropy Cooperative Grid Management System é uma plataforma abrangente que permite:
 
-- **Infrastructure as Code**: Terraform + Ansible for reproducible deployments
-- **Container Orchestration**: Kubernetes with multi-tenant isolation  
-- **Monitoring & Observability**: Prometheus + Grafana + OpenTelemetry
-- **Security**: Zero Trust, gVisor isolation, Wireguard mesh networking
-- **Consensus**: Blockchain-based credit system with hybrid PoS+PoC
-- **Service Mesh**: Istio for secure inter-service communication
+- **Criação e Gerenciamento de Nós**: Detecção automática de hardware, configuração de USB, setup de nós
+- **Orquestração de Containers**: Deploy, gerenciamento e monitoramento de containers Docker/Kubernetes
+- **Gerenciamento de Rede**: Configuração de service mesh, rotas e conectividade
+- **Serviços Cooperativos**: Sistema de créditos, governança e economia distribuída
+- **Múltiplas Interfaces**: CLI, Web, Desktop e Mobile para diferentes casos de uso
 
-## 🚀 Quick Start
+## 🏗️ **Arquitetura**
 
-### Prerequisites
-- Ubuntu Server 22.04 LTS
-- Minimum 4GB RAM, 50GB storage
-- SSH access configured
-
-### Genesis Node Setup
-```bash
-# 1. Clone repository
-git clone https://github.com/syntropy-cc/syntropy-cooperative-grid.git
-cd syntropy-cooperative-grid
-
-# 2. Run bootstrap script
-./bootstrap.sh
-
-# 3. Initialize Genesis Node
-./scripts/bootstrap/genesis-setup.sh
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    INTERFACES LAYER                         │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│   CLI (Go)      │   Web (React)   │  Desktop (Electron)     │
+│   Mobile (Flutter) │  API Client  │  Future Interfaces      │
+└─────────────────┴─────────────────┴─────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    API GATEWAY LAYER                        │
+├─────────────────────────────────────────────────────────────┤
+│  REST API  │  GraphQL  │  WebSocket  │  gRPC  │  CLI Direct │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                      CORE LAYER                             │
+├─────────────┬─────────────┬─────────────┬───────────────────┤
+│ Node Mgmt   │ Container   │ Network     │ Cooperative       │
+│ Service     │ Service     │ Service     │ Service           │
+├─────────────┼─────────────┼─────────────┼───────────────────┤
+│ USB Creator │ K8s Mgmt    │ Mesh Mgmt   │ Credit System     │
+│ Device Mgmt │ Runtime     │ Routing     │ Governance        │
+│ Monitoring  │ Security    │ Discovery   │ Economics         │
+└─────────────┴─────────────┴─────────────┴───────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    DATA LAYER                               │
+├─────────────┬─────────────┬─────────────┬───────────────────┤
+│ PostgreSQL  │ Redis       │ InfluxDB    │ File Storage      │
+│ (Metadata)  │ (Cache)     │ (Metrics)   │ (Configs/Logs)    │
+└─────────────┴─────────────┴─────────────┴───────────────────┘
 ```
 
-## 📚 Documentation
+## 🚀 **Quick Start**
 
-- [📐 Architecture Overview](docs/architecture/ARCHITECTURE.md)
-- [🚀 Genesis Node Setup](docs/setup/genesis-node/README.md)
-- [⚙️ Worker Node Setup](docs/setup/worker-nodes/README.md)
-- [📱 Mobile Integration](docs/setup/mobile-devices/)
-- [🔧 Edge Devices](docs/setup/edge-devices/)
-- [🔌 API Reference](docs/api/)
-- [💰 Economics](docs/economics/)
-- [🛡️ Security Model](docs/security/)
+### Pré-requisitos
 
-## 🗺️ Roadmap
+- Go 1.21+
+- Docker & Docker Compose
+- Node.js 18+ (para interfaces web)
+- Git
 
-- [x] **Phase 0**: Genesis Foundation (Infrastructure as Code)
-- [ ] **Phase 1**: Cooperative Foundation (Multi-node cluster + Credit system)
-- [ ] **Phase 2**: Advanced Security (Service mesh + Multi-tenant isolation)
-- [ ] **Phase 3**: Decentralization (Blockchain + Mobile integration)
-- [ ] **Phase 4**: Ecosystem (Developer tools + Enterprise features)
+### Instalação
 
-[View detailed roadmap →](ROADMAP.md)
+```bash
+# Clone o repositório
+git clone https://github.com/syntropy-cc/cooperative-grid.git
+cd cooperative-grid
 
-## 🤝 Contributing
+# Instale dependências
+make install
 
-This is an open-source cooperative project! We welcome contributions from:
-- Infrastructure engineers
-- Backend developers
-- Mobile developers
-- Security researchers
-- Documentation writers
-- Community builders
+# Inicie os serviços
+make up
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
+# Execute a CLI
+./interfaces/cli/bin/syntropy-cli --help
+```
 
-## 🌐 Community
+### Uso Básico
 
-- 🐙 **GitHub**: [syntropy-cc](https://github.com/syntropy-cc)
-- 💬 **Discord**: [Join our server](https://discord.gg/syntropy-grid)
-- 📧 **Email**: community@syntropy.cc
-- 🐦 **Twitter**: [@SyntropyGrid](https://twitter.com/SyntropyGrid)
+```bash
+# Listar nós disponíveis
+syntropy-cli node list
 
-## 📄 License
+# Criar um novo nó
+syntropy-cli node create --usb /dev/sdb --name "node-01"
 
-MIT License - Open source for the cooperative future
+# Deploy de container
+syntropy-cli container deploy --image nginx --node node-01
+
+# Status da rede
+syntropy-cli network status
+```
+
+## 📁 **Estrutura do Projeto**
+
+```
+syntropy-cooperative-grid/
+├── core/                    # Core do sistema (lógica de negócio)
+├── interfaces/              # Interfaces de usuário
+│   ├── cli/                # Interface CLI
+│   ├── web/                # Interface web
+│   ├── mobile/             # App mobile
+│   ├── desktop/            # App desktop
+│   └── api/                # Definições de API
+├── deployments/            # Configurações de deploy
+├── docs/                   # Documentação
+└── scripts/                # Scripts de build e utilitários
+```
+
+## 🛠️ **Tecnologias**
+
+### Core
+- **Go 1.21+**: Linguagem principal
+- **PostgreSQL**: Banco de dados principal
+- **Redis**: Cache e sessões
+- **InfluxDB**: Métricas e time-series
+
+### Interfaces
+- **CLI**: Go com Cobra
+- **Web**: React/Next.js + TypeScript
+- **Mobile**: Flutter com Dart
+- **Desktop**: Electron com React
+
+### DevOps
+- **Docker Compose**: Desenvolvimento local
+- **Kubernetes**: Orquestração
+- **Helm**: Gerenciamento de charts
+- **GitHub Actions**: CI/CD
+
+## 📚 **Documentação**
+
+- [Arquitetura](docs/architecture/README.md)
+- [API Reference](docs/api/README.md)
+- [Guia de Desenvolvimento](docs/development/README.md)
+- [Deployment](docs/deployment/README.md)
+- [Roadmap](docs/roadmap/README.md)
+
+## 🤝 **Contribuição**
+
+Veja nosso [Guia de Contribuição](CONTRIBUTING.md) para detalhes sobre como contribuir.
+
+## 📄 **Licença**
+
+Este projeto está licenciado sob a [Licença MIT](LICENSE).
+
+## 🔗 **Links Úteis**
+
+- [Website](https://syntropy.coop)
+- [Documentação](https://docs.syntropy.coop)
+- [Discord](https://discord.gg/syntropy)
+- [Twitter](https://twitter.com/syntropy_coop)
 
 ---
 
-> *"Together we build the cooperative future of computing."*
+**Syntropy Cooperative Grid** - Construindo o futuro da computação cooperativa 🌐

@@ -1,12 +1,31 @@
 #!/bin/bash
 
-# Syntropy Cooperative Grid - Enhanced USB Creator (Main Script)
-# Version: 2.0.0
+# Syntropy Cooperative Grid - Enhanced USB Creator (Fixed for WSL)
+# Version: 3.0.0 - Fully WSL Compatible
 
 set -e
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Global variables
+WSL_MODE=false
+ORIGINAL_DEVICE=""
+WSL_DEVICE=""
+
+# Check if running in WSL
+is_wsl() {
+    if grep -qi microsoft /proc/version; then
+        return 0  # True, is WSL
+    else
+        return 1  # False, not WSL
+    fi
+}
+
+# Initialize WSL mode
+if is_wsl; then
+    WSL_MODE=true
+fi
 
 # Check for required dependencies
 check_dependencies() {
@@ -66,7 +85,12 @@ source "$SCRIPT_DIR/lib/colors.sh"
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/usb-detection.sh"
-source "$SCRIPT_DIR/lib/wsl-usb-detection.sh"  # Add WSL support
+
+# Only source WSL detection if it exists
+if [ -f "$SCRIPT_DIR/lib/wsl-usb-detection.sh" ]; then
+    source "$SCRIPT_DIR/lib/wsl-usb-detection.sh"
+fi
+
 source "$SCRIPT_DIR/lib/geographic.sh"
 source "$SCRIPT_DIR/lib/security.sh"
 source "$SCRIPT_DIR/lib/iso-management.sh"
@@ -74,13 +98,10 @@ source "$SCRIPT_DIR/lib/usb-preparation.sh"
 source "$SCRIPT_DIR/lib/cloud-init.sh"
 source "$SCRIPT_DIR/lib/management-scripts.sh"
 
-# Check if running in WSL
-WSL_MODE=false
-if is_wsl; then
-    WSL_MODE=true
-    log INFO "Running in WSL mode - using Windows USB detection"
+# Source progress if it exists
+if [ -f "$SCRIPT_DIR/lib/progress.sh" ]; then
+    source "$SCRIPT_DIR/lib/progress.sh"
 fi
-source "$SCRIPT_DIR/lib/progress.sh"
 
 # Check dependencies first
 check_dependencies
@@ -92,7 +113,7 @@ show_banner() {
 ╔════════════════════════════════════════════════════════════════════════════╗
 ║                    SYNTROPY COOPERATIVE GRID                              ║
 ║                Enhanced USB Creator with Node Management                  ║
-║                          Version 2.0.0                                   ║
+║                          Version 3.0.0                                   ║
 ║                                                                           ║
 ║  Creates production-ready USB with automated node management setup       ║
 ╚════════════════════════════════════════════════════════════════════════════╝
@@ -116,6 +137,11 @@ show_help() {
     echo "  If no USB device is specified, the script will automatically detect and"
     echo "  prompt you to select from available USB storage devices."
     echo ""
+    echo "Supported device formats:"
+    echo "  Linux:    /dev/sdb, /dev/sdc, etc."
+    echo "  WSL:      /dev/sdb (already converted from PhysicalDrive)"
+    echo "  Windows:  PhysicalDrive1 (will be converted automatically)"
+    echo ""
     echo "Examples:"
     echo "  $0                                                       # Auto-detect USB"
     echo "  $0 --auto-detect --node-name home-server-01             # Auto-detect with custom name"
@@ -136,6 +162,74 @@ show_help() {
     echo "  - Comprehensive error handling and recovery"
 }
 
+# Convert PhysicalDrive to WSL device if needed
+convert_device_if_needed() {
+    local device="$1"
+    
+    # If already in Linux format, return as-is
+    if [[ "$device" =~ ^/dev/ ]]; then
+        echo "$device"
+        return 0
+    fi
+    
+    # If PhysicalDrive format, convert
+    if [[ "$device" =~ ^PhysicalDrive([0-9]+)$ ]]; then
+        local disk_number="${BASH_REMATCH[1]}"
+        local letter_ascii=$((97 + disk_number))
+        local device_letter=$(printf "\\$(printf '%03o' $letter_ascii)")
+        local wsl_device="/dev/sd${device_letter}"
+        
+        log INFO "Converting Windows device to WSL format:"
+        log INFO "  Windows: $device"
+        log INFO "  WSL: $wsl_device"
+        
+        echo "$wsl_device"
+        return 0
+    fi
+    
+    # Unknown format
+    log ERROR "Unknown device format: $device"
+    return 1
+}
+
+# Validate device exists and is accessible
+validate_device_access() {
+    local device="$1"
+    
+    if [ ! -e "$device" ]; then
+        log ERROR "Device $device does not exist"
+        
+        # In WSL, try to list available devices
+        if [ "$WSL_MODE" = true ]; then
+            log INFO "Available block devices in WSL:"
+            lsblk -d -o NAME,SIZE,TYPE 2>/dev/null | grep disk || true
+            
+            # Suggest alternatives
+            log INFO "If your USB is not listed, try:"
+            log INFO "  1. Ensure USB is connected to Windows"
+            log INFO "  2. Check Windows Disk Management"
+            log INFO "  3. Restart WSL: wsl --shutdown (from PowerShell)"
+        fi
+        
+        return 1
+    fi
+    
+    if [ ! -b "$device" ]; then
+        log ERROR "$device exists but is not a block device"
+        return 1
+    fi
+    
+    # Try to read device info
+    if ! sudo fdisk -l "$device" >/dev/null 2>&1; then
+        log ERROR "Cannot read device information for $device"
+        log INFO "This might be a permission issue. Try: sudo fdisk -l $device"
+        return 1
+    fi
+    
+    log SUCCESS "Device $device is valid and accessible"
+    return 0
+}
+
 # Parse command line arguments
 parse_arguments() {
     OWNER_KEY_FILE=""
@@ -145,8 +239,8 @@ parse_arguments() {
     AUTO_DETECT=false
     USB_DEVICE=""
 
-    # If first argument is not a flag and looks like a device, use it
-    if [ $# -gt 0 ] && [[ "$1" =~ ^/dev/ ]]; then
+    # If first argument is not a flag, treat as device
+    if [ $# -gt 0 ] && [[ ! "$1" =~ ^-- ]]; then
         USB_DEVICE="$1"
         shift
     fi
@@ -177,16 +271,16 @@ parse_arguments() {
                 show_help
                 exit 0
                 ;;
-            /dev/*)
-                if [ -z "$USB_DEVICE" ]; then
+            *)
+                # If not a flag and no device set, treat as device
+                if [ -z "$USB_DEVICE" ] && [[ ! "$1" =~ ^-- ]]; then
                     USB_DEVICE="$1"
+                else
+                    log ERROR "Unknown option: $1"
+                    show_help
+                    exit 1
                 fi
                 shift
-                ;;
-            *)
-                log ERROR "Unknown option: $1"
-                show_help
-                exit 1
                 ;;
         esac
     done
@@ -195,6 +289,11 @@ parse_arguments() {
 # Main function
 main() {
     show_banner
+    
+    # Show WSL mode if detected
+    if [ "$WSL_MODE" = true ]; then
+        log INFO "Running in WSL mode"
+    fi
     
     # Parse arguments
     parse_arguments "$@"
@@ -206,42 +305,67 @@ main() {
     mkdir -p "$WORK_DIR"
     cd "$WORK_DIR"
     
-    # USB device detection and validation
+    # Handle device detection and validation
     if [ -z "$USB_DEVICE" ] || [ "$AUTO_DETECT" = true ]; then
         log INFO "Auto-detecting USB devices..."
-        USB_DEVICE=$(select_usb_device)
-    fi
-
-    # Para WSL, validar o dispositivo físico do Windows
-    if [ "$WSL_MODE" = true ]; then
-        if [[ ! "$USB_DEVICE" =~ ^PhysicalDrive[0-9]+$ ]] && [[ ! "$USB_DEVICE" =~ ^\\\\\.\\PhysicalDrive[0-9]+$ ]]; then
-            log ERROR "Invalid Windows physical device format: $USB_DEVICE"
-            log ERROR "Expected format: PhysicalDrive# or \\\\.\\PhysicalDrive#"
-            exit 1
-        fi
-        # Converter formato Windows para formato WSL
-        DISK_NUMBER=$(echo "$USB_DEVICE" | grep -o '[0-9]\+')
-        if [ -n "$DISK_NUMBER" ]; then
-            USB_DEVICE="/dev/sd$(printf "\\$(printf '%03o' $((97 + $DISK_NUMBER)))")"
-            log INFO "Converted Windows device $USB_DEVICE to WSL device $USB_DEVICE"
+        
+        if [ "$WSL_MODE" = true ]; then
+            # For WSL, list available devices and let user choose
+            log INFO "Available block devices:"
+            lsblk -d -o NAME,SIZE,TYPE 2>/dev/null | grep disk || true
+            
+            echo ""
+            read -p "Enter device name (e.g., sdb for /dev/sdb): " device_name
+            
+            if [ -n "$device_name" ]; then
+                USB_DEVICE="/dev/$device_name"
+            else
+                log ERROR "No device specified"
+                exit 1
+            fi
         else
-            log ERROR "Failed to extract disk number from device path"
-            exit 1
+            # Use standard detection for Linux
+            USB_DEVICE=$(select_usb_device)
         fi
     fi
-
-    if [ ! -b "$USB_DEVICE" ]; then
-        log ERROR "$USB_DEVICE is not a valid block device"
-        echo "Available devices:"
-        lsblk | grep disk
+    
+    # Store original device
+    ORIGINAL_DEVICE="$USB_DEVICE"
+    
+    # Convert device format if needed (handles PhysicalDrive → /dev/sdX)
+    if ! USB_DEVICE=$(convert_device_if_needed "$USB_DEVICE"); then
+        log ERROR "Failed to process device: $ORIGINAL_DEVICE"
+        exit 1
+    fi
+    
+    # Validate device access
+    if ! validate_device_access "$USB_DEVICE"; then
+        log ERROR "Device validation failed for: $USB_DEVICE"
+        
+        # If in WSL and device not found, provide helpful message
+        if [ "$WSL_MODE" = true ]; then
+            log INFO ""
+            log INFO "WSL Device Access Issues - Possible Solutions:"
+            log INFO "1. The device might not be accessible from WSL"
+            log INFO "2. Try running: wsl --shutdown (from PowerShell) and restart WSL"
+            log INFO "3. Ensure the USB drive is not in use by Windows"
+            log INFO "4. Check if the device appears in: lsblk"
+        fi
+        
         exit 1
     fi
 
     # Perform comprehensive safety validation
-    validate_usb_safety "$USB_DEVICE"
+    if ! validate_usb_safety "$USB_DEVICE"; then
+        log ERROR "Safety validation failed for device: $USB_DEVICE"
+        exit 1
+    fi
 
-    # Final confirmation
+    # Final confirmation with enhanced safety
     show_final_confirmation
+    
+    # Critical final confirmation before formatting
+    final_device_confirmation "$USB_DEVICE" "$NODE_NAME"
 
     # Execute main workflow
     execute_usb_creation_workflow
@@ -251,8 +375,16 @@ main() {
 show_final_confirmation() {
     echo ""
     echo -e "${YELLOW}WARNING: This will completely erase $USB_DEVICE${NC}"
+    
+    if [ "$ORIGINAL_DEVICE" != "$USB_DEVICE" ]; then
+        echo -e "${CYAN}Device conversion:${NC}"
+        echo "  Original: $ORIGINAL_DEVICE"
+        echo "  Using: $USB_DEVICE"
+    fi
+    
+    echo ""
     echo "Device information:"
-    lsblk "$USB_DEVICE"
+    lsblk "$USB_DEVICE" 2>/dev/null || echo "  Unable to show device details"
     echo ""
     echo -e "${CYAN}Node Configuration:${NC}"
     echo "• Owner Key: ${OWNER_KEY_FILE:-"Will be generated"}"
@@ -317,6 +449,7 @@ execute_usb_creation_workflow() {
     
     log INFO "[5/8] Preparing USB device..."
     
+    # Use the validated USB_DEVICE
     local usb_partition=$(prepare_usb_device "$USB_DEVICE")
     if [ $? -ne 0 ]; then
         log ERROR "Failed to prepare USB device"
@@ -339,6 +472,24 @@ execute_usb_creation_workflow() {
     
     finalize_usb_creation "$NODE_NAME" "$location_node_id" "$coordinates" \
         "$detected_city" "$detected_country"
+    
+    # Final success message
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                     USB CREATION COMPLETED!                       ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "Device used: $USB_DEVICE"
+    if [ "$ORIGINAL_DEVICE" != "$USB_DEVICE" ]; then
+        echo "Original input: $ORIGINAL_DEVICE"
+    fi
+    echo ""
+    echo "Next steps:"
+    echo "1. Safely remove the USB drive"
+    echo "2. Insert into target hardware"
+    echo "3. Boot from USB"
+    echo "4. Wait for installation (~30 minutes)"
+    echo ""
 }
 
 # Run main function with all arguments
