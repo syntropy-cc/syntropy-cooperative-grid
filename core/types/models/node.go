@@ -64,3 +64,4 @@ func (Node) TableName() string {
 	return "nodes"
 }
 
+

@@ -322,3 +322,4 @@ grep -r "cobra.Command" internal/ | wc -l
 - **Templates parametrizáveis** para deploy
 
 **A CLI agora é uma ferramenta completa e profissional para gerenciar a Syntropy Cooperative Grid! 🎉**
+

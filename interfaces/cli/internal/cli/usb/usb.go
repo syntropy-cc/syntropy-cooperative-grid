@@ -1,7 +1,7 @@
 package usb
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,8 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	// "syntropy-cc/cooperative-grid/core/services/usb" // Temporariamente comentado para compilação
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +22,9 @@ func NewUSBCommand() *cobra.Command {
 
 Este grupo de comandos permite detectar, formatar e criar USBs com boot
 para nós da Syntropy Cooperative Grid.
+
+NOTA: No WSL, os comandos utilizam PowerShell para acessar dispositivos físicos.
+      Para melhor desempenho, execute diretamente no Windows.
 `,
 	}
 
@@ -74,6 +75,7 @@ func newUSBCreateCommand() *cobra.Command {
 		label           string
 		workDir         string
 		cacheDir        string
+		isoPath         string
 	)
 
 	cmd := &cobra.Command{
@@ -86,14 +88,14 @@ Exemplos:
   # Criar USB com auto-detecção
   syntropy usb create --auto-detect --node-name "node-01"
 
-  # Criar USB especificando dispositivo
+  # Criar USB especificando dispositivo (Linux)
   syntropy usb create /dev/sdb --node-name "node-01"
 
-  # Criar USB com coordenadas específicas
-  syntropy usb create /dev/sdb --node-name "node-01" --coordinates "-23.5505,-46.6333"
+  # Criar USB especificando dispositivo (Windows/WSL)
+  syntropy usb create PHYSICALDRIVE1 --node-name "node-01"
 
-  # Criar USB usando chave de proprietário existente
-  syntropy usb create /dev/sdb --node-name "node-02" --owner-key ~/.syntropy/keys/main.key
+  # Criar USB com ISO personalizada
+  syntropy usb create --auto-detect --node-name "node-01" --iso /path/to/ubuntu.iso
 `,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -111,8 +113,16 @@ Exemplos:
 				return fmt.Errorf("especifique um dispositivo ou use --auto-detect")
 			}
 
-			return createUSB(devicePath, nodeName, nodeDescription, coordinates, 
-				ownerKeyFile, label, workDir, cacheDir)
+			config := &Config{
+				NodeName:        nodeName,
+				NodeDescription: nodeDescription,
+				Coordinates:     coordinates,
+				OwnerKeyFile:    ownerKeyFile,
+				Label:           label,
+				ISOPath:         isoPath,
+			}
+
+			return createUSB(devicePath, config, workDir, cacheDir)
 		},
 	}
 
@@ -124,6 +134,7 @@ Exemplos:
 	cmd.Flags().StringVar(&label, "label", "SYNTROPY", "Rótulo do sistema de arquivos")
 	cmd.Flags().StringVar(&workDir, "work-dir", "", "Diretório de trabalho (padrão: /tmp/syntropy-work)")
 	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", "Diretório de cache (padrão: ~/.syntropy/cache)")
+	cmd.Flags().StringVar(&isoPath, "iso", "", "Caminho para ISO Ubuntu (baixa automaticamente se não especificado)")
 
 	cmd.MarkFlagRequired("node-name")
 
@@ -145,8 +156,11 @@ func newUSBFormatCommand() *cobra.Command {
 ⚠️  ATENÇÃO: Esta operação apagará TODOS os dados do dispositivo!
 
 Exemplos:
-  # Formatar USB
+  # Formatar USB (Linux)
   syntropy usb format /dev/sdb
+
+  # Formatar USB (Windows/WSL)
+  syntropy usb format PHYSICALDRIVE1
 
   # Formatar USB com rótulo personalizado
   syntropy usb format /dev/sdb --label "MYUSB"
@@ -166,15 +180,65 @@ Exemplos:
 	return cmd
 }
 
-// listUSBDevices lista dispositivos USB disponíveis
+// Estruturas
+type USBDevice struct {
+	Path        string `json:"path"`
+	Size        string `json:"size"`
+	SizeGB      int    `json:"size_gb"`
+	Model       string `json:"model"`
+	Vendor      string `json:"vendor"`
+	Serial      string `json:"serial"`
+	Removable   bool   `json:"removable"`
+	Platform    string `json:"platform"`
+	DiskNumber  int    `json:"disk_number,omitempty"`
+	WindowsPath string `json:"windows_path,omitempty"`
+}
+
+type Config struct {
+	NodeName        string `json:"node_name"`
+	NodeDescription string `json:"node_description"`
+	Coordinates     string `json:"coordinates"`
+	OwnerKeyFile    string `json:"owner_key_file"`
+	Label           string `json:"label"`
+	ISOPath         string `json:"iso_path"`
+}
+
+// WindowsDisk estrutura para parse do JSON do PowerShell
+type WindowsDisk struct {
+	Number       int    `json:"Number"`
+	FriendlyName string `json:"FriendlyName"`
+	Size         int64  `json:"Size"`
+	SerialNumber string `json:"SerialNumber"`
+	BusType      string `json:"BusType"`
+	Model        string `json:"Model"`
+}
+
+// Funções principais
+
 func listUSBDevices(format string) error {
+	platform := detectPlatform()
+
+	// Mostrar aviso para WSL
+	if platform == "wsl" {
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println("🖥️  WSL Detectado - Acessando dispositivos via Windows")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
+	}
+
 	devices, err := ListDevices()
 	if err != nil {
 		return fmt.Errorf("falha ao detectar dispositivos: %w", err)
 	}
 
 	if len(devices) == 0 {
-		fmt.Println("Nenhum dispositivo USB encontrado.")
+		fmt.Println("❌ Nenhum dispositivo USB encontrado.")
+		if platform == "wsl" {
+			fmt.Println("\n💡 Dicas para WSL:")
+			fmt.Println("  • Certifique-se de que o USB está conectado")
+			fmt.Println("  • Execute o PowerShell como Administrador")
+			fmt.Println("  • Tente executar: powershell.exe Get-Disk")
+		}
 		return nil
 	}
 
@@ -188,76 +252,51 @@ func listUSBDevices(format string) error {
 	}
 }
 
-// createUSB cria um USB com boot
-func createUSB(devicePath, nodeName, nodeDescription, coordinates, ownerKeyFile, 
-	label, workDir, cacheDir string) error {
-	
-	// Configurar diretórios padrão se não especificados
+func createUSB(devicePath string, config *Config, workDir, cacheDir string) error {
+	platform := detectPlatform()
+
+	// Configurar diretórios padrão
 	if workDir == "" {
-		workDir = "/tmp/syntropy-work"
+		if platform == "windows" || platform == "wsl" {
+			workDir = os.TempDir()
+		} else {
+			workDir = "/tmp/syntropy-work"
+		}
 	}
 	if cacheDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("erro ao obter diretório home: %w", err)
-		}
+		homeDir, _ := os.UserHomeDir()
 		cacheDir = filepath.Join(homeDir, ".syntropy", "cache")
 	}
 
-	// Criar instância do creator
-	creator := NewCreator(workDir, cacheDir)
-	defer creator.Cleanup()
-
-	// Configurar criação
-	config := &Config{
-		NodeName:        nodeName,
-		NodeDescription: nodeDescription,
-		Coordinates:     coordinates,
-		OwnerKeyFile:    ownerKeyFile,
-		Label:           label,
-	}
-
-	fmt.Printf("Iniciando criação de USB para nó: %s\n", nodeName)
-	fmt.Printf("Dispositivo: %s\n", devicePath)
-	fmt.Printf("Diretório de trabalho: %s\n", workDir)
-	fmt.Printf("Diretório de cache: %s\n", cacheDir)
+	fmt.Printf("🚀 Iniciando criação de USB para nó: %s\n", config.NodeName)
+	fmt.Printf("📍 Plataforma: %s\n", platform)
+	fmt.Printf("💾 Dispositivo: %s\n", devicePath)
+	fmt.Printf("📂 Diretório de trabalho: %s\n", workDir)
+	fmt.Printf("📂 Diretório de cache: %s\n", cacheDir)
 	fmt.Println()
 
-	// Executar criação
-	if err := creator.CreateUSB(devicePath, config); err != nil {
-		return fmt.Errorf("falha na criação do USB: %w", err)
+	// Criar diretórios necessários
+	os.MkdirAll(workDir, 0755)
+	os.MkdirAll(cacheDir, 0755)
+
+	switch platform {
+	case "wsl":
+		return createUSBWSL(devicePath, config, workDir, cacheDir)
+	case "windows":
+		return createUSBWindows(devicePath, config, workDir, cacheDir)
+	default:
+		return createUSBLinux(devicePath, config, workDir, cacheDir)
 	}
-
-	fmt.Println("✅ USB criado com sucesso!")
-	fmt.Printf("Nó: %s\n", nodeName)
-	fmt.Printf("Dispositivo: %s\n", devicePath)
-	fmt.Println()
-	fmt.Println("Próximos passos:")
-	fmt.Println("1. Remova o USB com segurança")
-	fmt.Println("2. Insira no hardware alvo")
-	fmt.Println("3. Configure boot para USB no BIOS/UEFI")
-	fmt.Println("4. A instalação será automática (~30 minutos)")
-
-	return nil
 }
 
-// formatUSB formata um dispositivo USB
 func formatUSB(devicePath, label string, force bool) error {
-	// Validações de segurança
-	detector := NewDetector()
-	if err := detector.ValidateDevice(devicePath); err != nil {
-		return fmt.Errorf("dispositivo inválido: %w", err)
-	}
-
-	if detector.IsSystemDisk(devicePath) {
-		return fmt.Errorf("ERRO: Dispositivo parece ser um disco do sistema: %s", devicePath)
-	}
+	platform := detectPlatform()
 
 	// Confirmação do usuário
 	if !force {
 		fmt.Printf("⚠️  ATENÇÃO: Esta operação apagará TODOS os dados em %s!\n", devicePath)
 		fmt.Print("Tem certeza que deseja continuar? (y/N): ")
-		
+
 		var response string
 		fmt.Scanln(&response)
 		if response != "y" && response != "Y" && response != "yes" {
@@ -266,113 +305,43 @@ func formatUSB(devicePath, label string, force bool) error {
 		}
 	}
 
-	// Formatar dispositivo
-	formatter := NewFormatter()
-	if err := formatter.FormatDevice(devicePath, label); err != nil {
-		return fmt.Errorf("falha ao formatar dispositivo: %w", err)
+	fmt.Printf("🔧 Formatando dispositivo %s...\n", devicePath)
+
+	switch platform {
+	case "wsl":
+		return formatUSBWSL(devicePath, label)
+	case "windows":
+		return formatUSBWindows(devicePath, label)
+	default:
+		return formatUSBLinux(devicePath, label)
 	}
-
-	fmt.Printf("✅ Dispositivo %s formatado com sucesso!\n", devicePath)
-	fmt.Printf("Rótulo: %s\n", label)
-
-	return nil
 }
 
-// Funções de saída em diferentes formatos
+// Funções específicas por plataforma
 
-func outputTable(devices []USBDevice) error {
-	fmt.Printf("%-12s %-8s %-20s %-15s %-10s %s\n", 
-		"DISPOSITIVO", "TAMANHO", "MODELO", "FABRICANTE", "REMOVÍVEL", "PLATAFORMA")
-	fmt.Println(strings.Repeat("-", 80))
-
-	for _, device := range devices {
-		removable := "Não"
-		if device.Removable {
-			removable = "Sim"
-		}
-		fmt.Printf("%-12s %-8s %-20s %-15s %-10s %s\n",
-			device.Path, device.Size, device.Model, device.Vendor, removable, device.Platform)
-	}
-
-	return nil
-}
-
-func outputJSON(devices []USBDevice) error {
-	// Implementação simples de JSON
-	fmt.Println("[")
-	for i, device := range devices {
-		fmt.Printf("  {\n")
-		fmt.Printf("    \"path\": \"%s\",\n", device.Path)
-		fmt.Printf("    \"size\": \"%s\",\n", device.Size)
-		fmt.Printf("    \"size_gb\": %d,\n", device.SizeGB)
-		fmt.Printf("    \"model\": \"%s\",\n", device.Model)
-		fmt.Printf("    \"vendor\": \"%s\",\n", device.Vendor)
-		fmt.Printf("    \"serial\": \"%s\",\n", device.Serial)
-		fmt.Printf("    \"removable\": %t,\n", device.Removable)
-		fmt.Printf("    \"platform\": \"%s\"\n", device.Platform)
-		fmt.Printf("  }")
-		if i < len(devices)-1 {
-			fmt.Print(",")
-		}
-		fmt.Println()
-	}
-	fmt.Println("]")
-	return nil
-}
-
-func outputYAML(devices []USBDevice) error {
-	fmt.Println("devices:")
-	for _, device := range devices {
-		fmt.Printf("- path: %s\n", device.Path)
-		fmt.Printf("  size: %s\n", device.Size)
-		fmt.Printf("  size_gb: %d\n", device.SizeGB)
-		fmt.Printf("  model: %s\n", device.Model)
-		fmt.Printf("  vendor: %s\n", device.Vendor)
-		fmt.Printf("  serial: %s\n", device.Serial)
-		fmt.Printf("  removable: %t\n", device.Removable)
-		fmt.Printf("  platform: %s\n", device.Platform)
-	}
-	return nil
-}
-
-// Estruturas mock para substituir o core USB service
-type USBDevice struct {
-	Path      string `json:"path"`
-	Size      string `json:"size"`
-	SizeGB    int    `json:"size_gb"`
-	Model     string `json:"model"`
-	Vendor    string `json:"vendor"`
-	Serial    string `json:"serial"`
-	Removable bool   `json:"removable"`
-	Platform  string `json:"platform"`
-}
-
-type Config struct {
-	NodeName        string `json:"node_name"`
-	NodeDescription string `json:"node_description"`
-	Coordinates     string `json:"coordinates"`
-	OwnerKeyFile    string `json:"owner_key_file"`
-	Label           string `json:"label"`
-}
-
-// detectPlatform detecta a plataforma atual
 func detectPlatform() string {
 	if runtime.GOOS == "windows" {
 		return "windows"
 	}
-	
+
 	// Verificar se está rodando no WSL
 	if _, err := os.Stat("/proc/sys/fs/binfmt_misc/WSLInterop"); err == nil {
 		return "wsl"
 	}
-	
+
+	// Verificar outra forma de detectar WSL
+	if data, err := os.ReadFile("/proc/version"); err == nil {
+		if strings.Contains(strings.ToLower(string(data)), "microsoft") {
+			return "wsl"
+		}
+	}
+
 	return "linux"
 }
 
-// ListDevices lista dispositivos USB reais baseado na plataforma
 func ListDevices() ([]USBDevice, error) {
 	platform := detectPlatform()
-	
+
 	switch platform {
 	case "windows":
 		return listDevicesWindows()
@@ -385,339 +354,561 @@ func ListDevices() ([]USBDevice, error) {
 	}
 }
 
-// listDevicesLinux lista dispositivos USB no Linux
-func listDevicesLinux() ([]USBDevice, error) {
-	var devices []USBDevice
-	
-	// Ler /proc/partitions para encontrar dispositivos de bloco
-	file, err := os.Open("/proc/partitions")
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler /proc/partitions: %w", err)
-	}
-	defer file.Close()
-	
-	scanner := bufio.NewScanner(file)
-	scanner.Scan() // Pular cabeçalho
-	
-	for scanner.Scan() {
-		line := strings.Fields(scanner.Text())
-		if len(line) < 4 {
-			continue
-		}
-		
-		deviceName := line[3]
-		// Filtrar apenas dispositivos que parecem ser USB (sd*, mmcblk*, etc.)
-		if !strings.HasPrefix(deviceName, "sd") && !strings.HasPrefix(deviceName, "mmcblk") {
-			continue
-		}
-		
-		// Verificar se é um dispositivo USB
-		if isUSBDevice(deviceName) {
-			device, err := getDeviceInfo(deviceName)
-			if err != nil {
-				continue // Pular dispositivos com erro
-			}
-			devices = append(devices, *device)
-		}
-	}
-	
-	// Se não encontrou dispositivos USB, tentar listar todos os dispositivos removíveis
-	if len(devices) == 0 {
-		return listRemovableDevices()
-	}
-	
-	return devices, nil
-}
+// WSL Functions
 
-// listRemovableDevices lista todos os dispositivos removíveis como fallback
-func listRemovableDevices() ([]USBDevice, error) {
-	var devices []USBDevice
-	
-	// Ler /proc/partitions para encontrar dispositivos de bloco
-	file, err := os.Open("/proc/partitions")
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler /proc/partitions: %w", err)
-	}
-	defer file.Close()
-	
-	scanner := bufio.NewScanner(file)
-	scanner.Scan() // Pular cabeçalho
-	
-	for scanner.Scan() {
-		line := strings.Fields(scanner.Text())
-		if len(line) < 4 {
-			continue
-		}
-		
-		deviceName := line[3]
-		// Filtrar apenas dispositivos que parecem ser removíveis (sd*, mmcblk*, etc.)
-		if !strings.HasPrefix(deviceName, "sd") && !strings.HasPrefix(deviceName, "mmcblk") {
-			continue
-		}
-		
-		// Verificar se é removível
-		removablePath := fmt.Sprintf("/sys/block/%s/removable", deviceName)
-		if data, err := os.ReadFile(removablePath); err == nil {
-			if strings.TrimSpace(string(data)) == "1" {
-				device, err := getDeviceInfo(deviceName)
-				if err != nil {
-					continue // Pular dispositivos com erro
-				}
-				devices = append(devices, *device)
-			}
-		}
-	}
-	
-	// Se ainda não encontrou dispositivos removíveis, listar todos os dispositivos de armazenamento
-	// (útil para ambientes virtuais como WSL)
-	if len(devices) == 0 {
-		return listAllStorageDevices()
-	}
-	
-	return devices, nil
-}
-
-// listAllStorageDevices lista todos os dispositivos de armazenamento como último recurso
-func listAllStorageDevices() ([]USBDevice, error) {
-	var devices []USBDevice
-	
-	// Ler /proc/partitions para encontrar dispositivos de bloco
-	file, err := os.Open("/proc/partitions")
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler /proc/partitions: %w", err)
-	}
-	defer file.Close()
-	
-	scanner := bufio.NewScanner(file)
-	scanner.Scan() // Pular cabeçalho
-	
-	for scanner.Scan() {
-		line := strings.Fields(scanner.Text())
-		if len(line) < 4 {
-			continue
-		}
-		
-		deviceName := line[3]
-		// Filtrar apenas dispositivos de armazenamento (sd*, mmcblk*, etc.)
-		if !strings.HasPrefix(deviceName, "sd") && !strings.HasPrefix(deviceName, "mmcblk") {
-			continue
-		}
-		
-		// Pular dispositivos do sistema (sda geralmente é o disco principal)
-		if deviceName == "sda" {
-			continue
-		}
-		
-		device, err := getDeviceInfo(deviceName)
-		if err != nil {
-			continue // Pular dispositivos com erro
-		}
-		
-		// Marcar como não removível se não for detectado como tal
-		removablePath := fmt.Sprintf("/sys/block/%s/removable", deviceName)
-		if data, err := os.ReadFile(removablePath); err == nil {
-			device.Removable = strings.TrimSpace(string(data)) == "1"
-		}
-		
-		devices = append(devices, *device)
-	}
-	
-	return devices, nil
-}
-
-// listDevicesWSL lista dispositivos USB no WSL
 func listDevicesWSL() ([]USBDevice, error) {
-	// No WSL, tentar usar lsusb se disponível
-	cmd := exec.Command("lsusb")
-	output, err := cmd.Output()
+	// PowerShell script para listar USBs físicos
+	psScript := `
+	Get-Disk | Where-Object {
+		$_.BusType -eq 'USB' -or 
+		($_.BusType -eq 'SCSI' -and $_.Size -lt 500GB -and $_.Size -gt 1GB)
+	} | Select-Object Number, FriendlyName, Size, SerialNumber, BusType, Model | 
+	ConvertTo-Json -Compress
+	`
+
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Se lsusb não estiver disponível, usar método Linux
-		return listDevicesLinux()
+		// Tentar método alternativo
+		return listDevicesWSLAlternative()
 	}
-	
-	// Parse do output do lsusb
+
+	// Limpar output do PowerShell
+	jsonStr := strings.TrimSpace(string(output))
+	if jsonStr == "" {
+		return []USBDevice{}, nil
+	}
+
+	// Parse JSON
+	var disks []WindowsDisk
+
+	// Verificar se é array ou objeto único
+	if strings.HasPrefix(jsonStr, "[") {
+		if err := json.Unmarshal([]byte(jsonStr), &disks); err != nil {
+			return nil, fmt.Errorf("erro ao fazer parse do JSON (array): %w", err)
+		}
+	} else {
+		var disk WindowsDisk
+		if err := json.Unmarshal([]byte(jsonStr), &disk); err != nil {
+			return nil, fmt.Errorf("erro ao fazer parse do JSON (objeto): %w", err)
+		}
+		disks = []WindowsDisk{disk}
+	}
+
+	// Converter para USBDevice
+	var devices []USBDevice
+	for _, disk := range disks {
+		device := USBDevice{
+			Path:        fmt.Sprintf("PHYSICALDRIVE%d", disk.Number),
+			WindowsPath: fmt.Sprintf("\\\\.\\PHYSICALDRIVE%d", disk.Number),
+			DiskNumber:  disk.Number,
+			Size:        formatSize(disk.Size),
+			SizeGB:      int(disk.Size / (1024 * 1024 * 1024)),
+			Model:       disk.Model,
+			Vendor:      "Unknown",
+			Serial:      disk.SerialNumber,
+			Removable:   true,
+			Platform:    "wsl",
+		}
+
+		if disk.FriendlyName != "" {
+			device.Model = disk.FriendlyName
+		}
+
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
+func listDevicesWSLAlternative() ([]USBDevice, error) {
+	// Método alternativo usando WMIC
+	cmd := exec.Command("cmd.exe", "/c", "wmic diskdrive where \"InterfaceType='USB'\" get Model,Size,SerialNumber,Index /format:csv")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao executar WMIC: %w", err)
+	}
+
 	var devices []USBDevice
 	lines := strings.Split(string(output), "\n")
-	
+
 	for _, line := range lines {
-		if strings.Contains(line, "Mass Storage") || strings.Contains(line, "Storage") {
-			// Extrair informações básicas do lsusb
-			parts := strings.Fields(line)
-			if len(parts) >= 6 {
-				vendor := strings.Join(parts[5:], " ")
-				device := USBDevice{
-					Path:      "/dev/sdX", // Placeholder
-					Size:      "Unknown",
-					SizeGB:    0,
-					Model:     "USB Storage",
-					Vendor:    vendor,
-					Serial:    "Unknown",
-					Removable: true,
-					Platform:  "wsl",
-				}
-				devices = append(devices, device)
-			}
+		parts := strings.Split(line, ",")
+		if len(parts) >= 5 && parts[1] != "Index" && parts[1] != "" {
+			index, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
+			size, _ := strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
+
+			devices = append(devices, USBDevice{
+				Path:        fmt.Sprintf("PHYSICALDRIVE%d", index),
+				WindowsPath: fmt.Sprintf("\\\\.\\PHYSICALDRIVE%d", index),
+				DiskNumber:  index,
+				Model:       strings.TrimSpace(parts[2]),
+				Size:        formatSize(size),
+				SizeGB:      int(size / (1024 * 1024 * 1024)),
+				Serial:      strings.TrimSpace(parts[4]),
+				Removable:   true,
+				Platform:    "wsl",
+			})
 		}
 	}
-	
-	// Se não encontrou nada via lsusb, tentar método Linux
-	if len(devices) == 0 {
-		return listDevicesLinux()
-	}
-	
+
 	return devices, nil
 }
 
-// listDevicesWindows lista dispositivos USB no Windows
+// createUSBWSL reescrito: grava a ISO bit-a-bit usando wsl --mount --bare + dd
+func createUSBWSL(devicePath string, config *Config, workDir, cacheDir string) error {
+	// 1) Extrai número do disco Windows (PHYSICALDRIVE<N>)
+	var diskNum int
+	switch {
+	case strings.HasPrefix(devicePath, "PHYSICALDRIVE"):
+		fmt.Sscanf(devicePath, "PHYSICALDRIVE%d", &diskNum)
+	case strings.HasPrefix(devicePath, "\\\\.\\PHYSICALDRIVE"):
+		fmt.Sscanf(devicePath, "\\\\.\\PHYSICALDRIVE%d", &diskNum)
+	default:
+		return fmt.Errorf("formato de dispositivo inválido para WSL: %s", devicePath)
+	}
+	winPhysical := fmt.Sprintf("\\\\.\\PHYSICALDRIVE%d", diskNum)
+
+	// 2) Garante ISO no cache (ou usa a fornecida) e converte caminho p/ WSL
+	isoPath := config.ISOPath
+	if isoPath == "" {
+		var err error
+		isoPath, err = manageISOCache(cacheDir)
+		if err != nil {
+			return fmt.Errorf("erro ao gerenciar ISO: %w", err)
+		}
+	}
+	isoWSL := convertAnyToWSLPath(isoPath) // aceita /mnt/c/... ou C:\...
+
+	fmt.Printf("📀 ISO (WSL): %s\n", isoWSL)
+	fmt.Printf("🧱 Disco: %s (nº %d)\n\n", winPhysical, diskNum)
+
+	// 3) Script PowerShell elevando privilégios e orquestrando o fluxo
+	psScript := fmt.Sprintf(`
+$ErrorActionPreference = "Stop"
+
+Write-Host "Colocando disco offline no Windows..." -ForegroundColor Cyan
+Set-Disk -Number %d -IsReadOnly $false -IsOffline $true
+
+try {
+    Write-Host "Montando o disco cru no WSL (--bare)..." -ForegroundColor Cyan
+    wsl --mount %s --bare
+
+    Write-Host "Gravando ISO no dispositivo via WSL (dd)..." -ForegroundColor Cyan
+    # Descobrir o device recém-montado com segurança: compara antes/depois
+    wsl bash -lc 'set -euo pipefail
+before=($(ls /dev/sd? 2>/dev/null || true))
+sleep 0.5
+# Confirma que o device apareceu (em algumas máquinas demora um pouco)
+tries=0
+while [ $tries -lt 20 ]; do
+  after=($(ls /dev/sd? 2>/dev/null || true))
+  # encontra item de after que não está em before
+  dev=""
+  for d in "${after[@]}"; do
+    found=0
+    for b in "${before[@]}"; do [ "$d" = "$b" ] && found=1 && break; done
+    [ $found -eq 0 ] && dev="$d" && break
+  done
+  if [ -n "$dev" ]; then
+    echo "Dispositivo WSL detectado: $dev"
+    ISO="%s"
+    sudo dd if="$ISO" of="$dev" bs=4M status=progress conv=fsync
+    sync
+    exit 0
+  fi
+  tries=$((tries+1))
+  sleep 0.5
+done
+echo "Falha ao detectar o device no WSL." 1>&2
+exit 1
+'
+
+} finally {
+    Write-Host "Desmontando do WSL e voltando disco online no Windows..." -ForegroundColor Cyan
+    try { wsl --unmount %s } catch { Write-Host "Aviso: unmount falhou ou já desmontado." -ForegroundColor Yellow }
+    Set-Disk -Number %d -IsOffline $false
+}
+
+Write-Host "✅ USB criado (modo dd). Pronto para boot." -ForegroundColor Green
+`, diskNum, winPhysical, isoWSL, winPhysical, diskNum)
+
+	// 4) Grava e executa o script elevado
+	os.MkdirAll(workDir, 0755)
+	scriptPath := filepath.Join(workDir, "create_usb_dd.ps1")
+	if err := os.WriteFile(scriptPath, []byte(psScript), 0644); err != nil {
+		return fmt.Errorf("erro ao criar script temporário: %w", err)
+	}
+	winScriptPath := convertWSLToWindowsPath(scriptPath)
+
+	fmt.Println("📝 Solicitando permissões de administrador...")
+	cmd := exec.Command("powershell.exe", "-Command",
+		fmt.Sprintf(`Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "%s"' -Verb RunAs -Wait`, winScriptPath))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao executar criação do USB (dd): %w", err)
+	}
+
+	return nil
+}
+
+// Helper novo: aceita caminho Windows (C:\...) ou já em WSL (/mnt/c/...)
+// e devolve SEMPRE um caminho válido no WSL.
+func convertAnyToWSLPath(p string) string {
+	// Se já parece WSL (começa com /), mantém
+	if strings.HasPrefix(p, "/") {
+		return p
+	}
+	// Tenta converter via wslpath -u
+	out, err := exec.Command("wslpath", "-u", p).Output()
+	if err == nil && len(out) > 0 {
+		return strings.TrimSpace(string(out))
+	}
+	// Fallback: tentativa simples C:\ -> /mnt/c/
+	if len(p) >= 3 && p[1] == ':' {
+		drive := strings.ToLower(string(p[0]))
+		rest := strings.ReplaceAll(p[2:], `\`, `/`)
+		return fmt.Sprintf("/mnt/%s/%s", drive, strings.TrimLeft(rest, `/`))
+	}
+	return p
+}
+
+func formatUSBWSL(devicePath, label string) error {
+	// Extrair número do disco
+	var diskNum int
+	if strings.HasPrefix(devicePath, "PHYSICALDRIVE") {
+		fmt.Sscanf(devicePath, "PHYSICALDRIVE%d", &diskNum)
+	} else {
+		return fmt.Errorf("formato de dispositivo inválido: %s", devicePath)
+	}
+
+	// Script PowerShell para formatar
+	psScript := fmt.Sprintf(`
+	$ErrorActionPreference = "Stop"
+	Clear-Disk -Number %d -RemoveData -Confirm:$false
+	New-Partition -DiskNumber %d -UseMaximumSize -AssignDriveLetter |
+		Format-Volume -FileSystem FAT32 -NewFileSystemLabel "%s" -Confirm:$false
+	Write-Host "Formatação concluída!" -ForegroundColor Green
+	`, diskNum, diskNum, label)
+
+	cmd := exec.Command("powershell.exe", "-Command",
+		fmt.Sprintf(`Start-Process powershell -ArgumentList '-NoProfile -Command "%s"' -Verb RunAs -Wait`,
+			strings.ReplaceAll(psScript, "\n", "; ")))
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao formatar: %w", err)
+	}
+
+	fmt.Printf("✅ Dispositivo %s formatado com sucesso!\n", devicePath)
+	return nil
+}
+
+// Windows Functions
+
 func listDevicesWindows() ([]USBDevice, error) {
-	// Usar PowerShell para listar dispositivos USB via WMI
-	psCmd := `Get-WmiObject -Class Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | Select-Object DeviceID, Size, VolumeName | ConvertTo-Json`
-	
-	cmd := exec.Command("powershell", "-Command", psCmd)
+	// Similar ao WSL mas sem necessidade de conversões
+	psScript := `
+	Get-Disk | Where-Object {$_.BusType -eq 'USB'} | 
+	Select-Object Number, FriendlyName, Size, SerialNumber, BusType, Model | 
+	ConvertTo-Json -Compress
+	`
+
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao executar PowerShell: %w", err)
 	}
-	
-	// Parse básico do JSON (implementação simplificada)
-	var devices []USBDevice
-	lines := strings.Split(string(output), "\n")
-	
-	for _, line := range lines {
-		if strings.Contains(line, "DeviceID") {
-			// Extrair informações básicas
-			device := USBDevice{
-				Path:      "Unknown",
-				Size:      "Unknown",
-				SizeGB:    0,
-				Model:     "USB Storage",
-				Vendor:    "Unknown",
-				Serial:    "Unknown",
-				Removable: true,
-				Platform:  "windows",
-			}
-			devices = append(devices, device)
+
+	var disks []WindowsDisk
+	if err := json.Unmarshal(output, &disks); err != nil {
+		// Tentar parse de objeto único
+		var disk WindowsDisk
+		if err := json.Unmarshal(output, &disk); err != nil {
+			return nil, fmt.Errorf("erro ao fazer parse: %w", err)
 		}
+		disks = []WindowsDisk{disk}
 	}
-	
+
+	var devices []USBDevice
+	for _, disk := range disks {
+		devices = append(devices, USBDevice{
+			Path:       fmt.Sprintf("\\\\.\\PHYSICALDRIVE%d", disk.Number),
+			DiskNumber: disk.Number,
+			Size:       formatSize(disk.Size),
+			SizeGB:     int(disk.Size / (1024 * 1024 * 1024)),
+			Model:      disk.FriendlyName,
+			Serial:     disk.SerialNumber,
+			Removable:  true,
+			Platform:   "windows",
+		})
+	}
+
 	return devices, nil
 }
 
-// isUSBDevice verifica se um dispositivo é USB
-func isUSBDevice(deviceName string) bool {
-	// Verificar se o dispositivo está em /sys/block/
-	sysPath := fmt.Sprintf("/sys/block/%s", deviceName)
-	if _, err := os.Stat(sysPath); err != nil {
-		return false
-	}
-	
-	// Verificar se é removível
-	removablePath := fmt.Sprintf("/sys/block/%s/removable", deviceName)
-	if data, err := os.ReadFile(removablePath); err == nil {
-		return strings.TrimSpace(string(data)) == "1"
-	}
-	
-	// Verificar se tem informações USB
-	ueventPath := fmt.Sprintf("/sys/block/%s/device/uevent", deviceName)
-	if data, err := os.ReadFile(ueventPath); err == nil {
-		content := string(data)
-		return strings.Contains(content, "USB") || strings.Contains(content, "usb")
-	}
-	
-	return false
+func createUSBWindows(devicePath string, config *Config, workDir, cacheDir string) error {
+	// Implementação similar ao WSL mas sem conversão de caminhos
+	return fmt.Errorf("implementação Windows nativa pendente")
 }
 
-// getDeviceInfo obtém informações detalhadas de um dispositivo
-func getDeviceInfo(deviceName string) (*USBDevice, error) {
-	device := &USBDevice{
-		Path:      fmt.Sprintf("/dev/%s", deviceName),
-		Platform:  detectPlatform(),
-		Removable: true,
-	}
-	
-	// Obter tamanho
-	if size, err := getDeviceSize(deviceName); err == nil {
-		device.Size = formatSize(size)
-		device.SizeGB = int(size / (1024 * 1024 * 1024))
-	}
-	
-	// Obter modelo e fabricante
-	if model, vendor, err := getDeviceModel(deviceName); err == nil {
-		device.Model = model
-		device.Vendor = vendor
-	}
-	
-	// Obter serial
-	if serial, err := getDeviceSerial(deviceName); err == nil {
-		device.Serial = serial
-	}
-	
-	return device, nil
+func formatUSBWindows(devicePath, label string) error {
+	// Implementação similar ao WSL mas sem conversão
+	return fmt.Errorf("implementação Windows nativa pendente")
 }
 
-// getDeviceSize obtém o tamanho do dispositivo em bytes
-func getDeviceSize(deviceName string) (int64, error) {
-	sizePath := fmt.Sprintf("/sys/block/%s/size", deviceName)
-	data, err := os.ReadFile(sizePath)
-	if err != nil {
-		return 0, err
+// Linux Functions
+
+func listDevicesLinux() ([]USBDevice, error) {
+	var devices []USBDevice
+
+	// Listar dispositivos de bloco
+	blockDevs, _ := filepath.Glob("/sys/block/sd*")
+	for _, blockDev := range blockDevs {
+		devName := filepath.Base(blockDev)
+
+		// Verificar se é removível
+		removableData, _ := os.ReadFile(filepath.Join(blockDev, "removable"))
+		if strings.TrimSpace(string(removableData)) != "1" {
+			continue
+		}
+
+		// Obter informações do dispositivo
+		device := USBDevice{
+			Path:      "/dev/" + devName,
+			Removable: true,
+			Platform:  "linux",
+		}
+
+		// Tamanho
+		if sizeData, err := os.ReadFile(filepath.Join(blockDev, "size")); err == nil {
+			if sectors, err := strconv.ParseInt(strings.TrimSpace(string(sizeData)), 10, 64); err == nil {
+				sizeBytes := sectors * 512
+				device.Size = formatSize(sizeBytes)
+				device.SizeGB = int(sizeBytes / (1024 * 1024 * 1024))
+			}
+		}
+
+		// Modelo e Vendor
+		if modelData, err := os.ReadFile(filepath.Join(blockDev, "device/model")); err == nil {
+			device.Model = strings.TrimSpace(string(modelData))
+		}
+		if vendorData, err := os.ReadFile(filepath.Join(blockDev, "device/vendor")); err == nil {
+			device.Vendor = strings.TrimSpace(string(vendorData))
+		}
+
+		devices = append(devices, device)
 	}
-	
-	sizeStr := strings.TrimSpace(string(data))
-	size, err := strconv.ParseInt(sizeStr, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	
-	// Tamanho em setores de 512 bytes
-	return size * 512, nil
+
+	return devices, nil
 }
 
-// getDeviceModel obtém modelo e fabricante do dispositivo
-func getDeviceModel(deviceName string) (string, string, error) {
-	modelPath := fmt.Sprintf("/sys/block/%s/device/model", deviceName)
-	vendorPath := fmt.Sprintf("/sys/block/%s/device/vendor", deviceName)
-	
-	model := "Unknown"
-	vendor := "Unknown"
-	
-	if data, err := os.ReadFile(modelPath); err == nil {
-		model = strings.TrimSpace(string(data))
+func createUSBLinux(devicePath string, config *Config, workDir, cacheDir string) error {
+	// Verificar se tem permissões de root
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("este comando requer privilégios de root (use sudo)")
 	}
-	
-	if data, err := os.ReadFile(vendorPath); err == nil {
-		vendor = strings.TrimSpace(string(data))
+
+	// Gerenciar ISO com cache inteligente
+	isoPath := config.ISOPath
+	if isoPath == "" {
+		var err error
+		isoPath, err = manageISOCache(cacheDir)
+		if err != nil {
+			return fmt.Errorf("erro ao gerenciar ISO: %w", err)
+		}
 	}
-	
-	return model, vendor, nil
+
+	fmt.Println("📝 Criando USB bootável com dd...")
+
+	// Usar dd para gravar ISO no USB
+	cmd := exec.Command("dd",
+		fmt.Sprintf("if=%s", isoPath),
+		fmt.Sprintf("of=%s", devicePath),
+		"bs=4M",
+		"status=progress",
+		"oflag=sync")
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao gravar ISO: %w", err)
+	}
+
+	// Sync para garantir que tudo foi gravado
+	exec.Command("sync").Run()
+
+	fmt.Println("\n✅ USB criado com sucesso!")
+	return nil
 }
 
-// getDeviceSerial obtém o serial do dispositivo
-func getDeviceSerial(deviceName string) (string, error) {
-	serialPath := fmt.Sprintf("/sys/block/%s/device/serial", deviceName)
-	data, err := os.ReadFile(serialPath)
-	if err != nil {
-		return "Unknown", err
+func formatUSBLinux(devicePath, label string) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("este comando requer privilégios de root (use sudo)")
 	}
-	
-	return strings.TrimSpace(string(data)), nil
+
+	// Desmontar partições se estiverem montadas
+	exec.Command("umount", devicePath+"*").Run()
+
+	// Criar nova tabela de partições
+	cmd := exec.Command("parted", "-s", devicePath, "mklabel", "msdos")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao criar tabela de partições: %w", err)
+	}
+
+	// Criar partição primária
+	cmd = exec.Command("parted", "-s", devicePath, "mkpart", "primary", "fat32", "0%", "100%")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao criar partição: %w", err)
+	}
+
+	// Formatar partição
+	partition := devicePath + "1"
+	if strings.Contains(devicePath, "nvme") || strings.Contains(devicePath, "mmcblk") {
+		partition = devicePath + "p1"
+	}
+
+	cmd = exec.Command("mkfs.vfat", "-F", "32", "-n", label, partition)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("erro ao formatar partição: %w", err)
+	}
+
+	fmt.Printf("✅ Dispositivo %s formatado com sucesso!\n", devicePath)
+	return nil
 }
 
-// formatSize formata o tamanho em bytes para string legível
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+// Funções auxiliares
+
+// manageISOCache gerencia o download e cache de ISOs Ubuntu
+func manageISOCache(cacheDir string) (string, error) {
+	// Criar diretório de cache para ISOs
+	isoDir := filepath.Join(cacheDir, "iso")
+	if err := os.MkdirAll(isoDir, 0755); err != nil {
+		return "", fmt.Errorf("erro ao criar diretório de cache: %w", err)
 	}
-	
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+
+	// Lista de URLs para tentar (do mais recente para o mais antigo)
+	isoOptions := []struct {
+		url      string
+		filename string
+		name     string
+	}{
+		{
+			url:      "https://releases.ubuntu.com/24.04/ubuntu-24.04-live-server-amd64.iso",
+			filename: "ubuntu-24.04-server.iso",
+			name:     "Ubuntu 24.04 LTS Server",
+		},
+		{
+			url:      "https://releases.ubuntu.com/22.04.5/ubuntu-22.04.4-live-server-amd64.iso",
+			filename: "ubuntu-22.04.5-server-amd64.iso",
+			name:     "Ubuntu 22.04.5 LTS Server",
+		},
+		{
+			url:      "https://releases.ubuntu.com/22.04/ubuntu-22.04.4-live-server-amd64.iso",
+			filename: "ubuntu-22.04-server.iso",
+			name:     "Ubuntu 22.04 LTS Server",
+		},
+		{
+			url:      "https://releases.ubuntu.com/20.04/ubuntu-20.04.6-live-server-amd64.iso",
+			filename: "ubuntu-20.04-server.iso",
+			name:     "Ubuntu 20.04.6 LTS Server",
+		},
 	}
-	
-	units := []string{"KB", "MB", "GB", "TB"}
-	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
+
+	// Verificar se alguma ISO já existe no cache
+	fmt.Println("🔍 Verificando cache de ISOs...")
+	for _, iso := range isoOptions {
+		isoPath := filepath.Join(isoDir, iso.filename)
+		if fileInfo, err := os.Stat(isoPath); err == nil {
+			// Verificar se o arquivo tem tamanho razoável (> 500MB)
+			if fileInfo.Size() > 500*1024*1024 {
+				fmt.Printf("✅ ISO encontrada no cache: %s\n", iso.name)
+				fmt.Printf("   Arquivo: %s\n", isoPath)
+				fmt.Printf("   Tamanho: %.2f GB\n", float64(fileInfo.Size())/(1024*1024*1024))
+				return isoPath, nil
+			} else {
+				fmt.Printf("⚠️  ISO corrompida encontrada (tamanho: %d bytes), removendo...\n", fileInfo.Size())
+				os.Remove(isoPath)
+			}
+		}
+	}
+
+	// Nenhuma ISO no cache, tentar baixar
+	fmt.Println("\n📥 Nenhuma ISO encontrada no cache. Iniciando download...")
+	fmt.Println("   Cache: " + isoDir)
+
+	for _, iso := range isoOptions {
+		isoPath := filepath.Join(isoDir, iso.filename)
+		fmt.Printf("\n🌐 Tentando baixar: %s\n", iso.name)
+		fmt.Printf("   URL: %s\n", iso.url)
+
+		// Verificar se a URL existe antes de baixar (HEAD request)
+		if !checkURLExists(iso.url) {
+			fmt.Printf("   ❌ URL não disponível, tentando próxima opção...\n")
+			continue
+		}
+
+		// Baixar com progresso
+		if err := downloadWithProgress(iso.url, isoPath); err != nil {
+			fmt.Printf("   ❌ Erro ao baixar: %v\n", err)
+			// Remover arquivo parcial se existir
+			os.Remove(isoPath)
+			continue
+		}
+
+		// Verificar tamanho do arquivo baixado
+		if fileInfo, err := os.Stat(isoPath); err == nil {
+			if fileInfo.Size() > 500*1024*1024 {
+				fmt.Printf("\n✅ ISO baixada com sucesso!\n")
+				fmt.Printf("   Arquivo: %s\n", isoPath)
+				fmt.Printf("   Tamanho: %.2f GB\n", float64(fileInfo.Size())/(1024*1024*1024))
+				return isoPath, nil
+			} else {
+				fmt.Printf("   ❌ Arquivo baixado muito pequeno, tentando próxima opção...\n")
+				os.Remove(isoPath)
+			}
+		}
+	}
+
+	return "", fmt.Errorf("não foi possível baixar nenhuma ISO Ubuntu. Verifique sua conexão ou forneça uma ISO com --iso")
+}
+
+// checkURLExists verifica se uma URL existe fazendo um HEAD request
+func checkURLExists(url string) bool {
+	cmd := exec.Command("curl", "-I", "--silent", "--head", "--fail", url)
+	err := cmd.Run()
+	return err == nil
+}
+
+// downloadWithProgress baixa um arquivo com indicador de progresso
+func downloadWithProgress(url, destPath string) error {
+	// Criar arquivo temporário
+	tmpPath := destPath + ".tmp"
+
+	// Usar wget com barra de progresso
+	cmd := exec.Command("wget",
+		"--progress=bar:force:noscroll",
+		"--tries=3",
+		"--timeout=30",
+		"--continue",
+		"-O", tmpPath,
+		url)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// Mover arquivo temporário para destino final
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		return fmt.Errorf("erro ao mover arquivo: %w", err)
+	}
+
+	return nil
 }
 
 func SelectDevice() (*USBDevice, error) {
@@ -725,59 +916,129 @@ func SelectDevice() (*USBDevice, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(devices) == 0 {
 		return nil, fmt.Errorf("nenhum dispositivo USB encontrado")
 	}
-	return &devices[0], nil
-}
 
-func NewDetector() *Detector {
-	return &Detector{}
-}
-
-func NewFormatter() *Formatter {
-	return &Formatter{}
-}
-
-func NewCreator(workDir, cacheDir string) *Creator {
-	return &Creator{
-		workDir:  workDir,
-		cacheDir: cacheDir,
+	// Se houver apenas um dispositivo, seleciona automaticamente
+	if len(devices) == 1 {
+		fmt.Printf("Auto-selecionado: %s (%s)\n", devices[0].Path, devices[0].Model)
+		return &devices[0], nil
 	}
+
+	// Mostrar opções para o usuário
+	fmt.Println("\n🔍 Dispositivos USB detectados:")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	for i, device := range devices {
+		fmt.Printf("[%d] %s - %s (%s)\n", i+1, device.Path, device.Model, device.Size)
+	}
+
+	fmt.Print("\nSelecione o dispositivo (1-", len(devices), "): ")
+	var choice int
+	fmt.Scanln(&choice)
+
+	if choice < 1 || choice > len(devices) {
+		return nil, fmt.Errorf("seleção inválida")
+	}
+
+	return &devices[choice-1], nil
 }
 
-type Detector struct{}
+func convertWSLToWindowsPath(wslPath string) string {
+	// Converter caminho WSL para Windows
+	cmd := exec.Command("wslpath", "-w", wslPath)
+	output, err := cmd.Output()
+	if err != nil {
+		// Fallback: conversão manual
+		if strings.HasPrefix(wslPath, "/mnt/") {
+			parts := strings.Split(wslPath, "/")
+			if len(parts) > 2 {
+				drive := strings.ToUpper(parts[2])
+				remainingPath := strings.Join(parts[3:], "\\")
+				return fmt.Sprintf("%s:\\%s", drive, remainingPath)
+			}
+		}
+		return wslPath
+	}
+	return strings.TrimSpace(string(output))
+}
 
-func (d *Detector) ValidateDevice(devicePath string) error {
-	// Mock: sempre válido
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	units := []string{"KB", "MB", "GB", "TB"}
+	if exp >= len(units) {
+		exp = len(units) - 1
+	}
+
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
+}
+
+// Funções de saída
+
+func outputTable(devices []USBDevice) error {
+	platform := detectPlatform()
+
+	if platform == "wsl" || platform == "windows" {
+		fmt.Printf("%-15s %-8s %-30s %-15s %-10s\n",
+			"DISPOSITIVO", "TAMANHO", "MODELO", "SERIAL", "PLATAFORMA")
+		fmt.Println(strings.Repeat("─", 80))
+
+		for _, device := range devices {
+			fmt.Printf("%-15s %-8s %-30s %-15s %-10s\n",
+				device.Path, device.Size, device.Model, device.Serial, device.Platform)
+		}
+	} else {
+		fmt.Printf("%-12s %-8s %-20s %-15s %-10s %-10s\n",
+			"DISPOSITIVO", "TAMANHO", "MODELO", "FABRICANTE", "REMOVÍVEL", "PLATAFORMA")
+		fmt.Println(strings.Repeat("─", 80))
+
+		for _, device := range devices {
+			removable := "Não"
+			if device.Removable {
+				removable = "Sim"
+			}
+			fmt.Printf("%-12s %-8s %-20s %-15s %-10s %-10s\n",
+				device.Path, device.Size, device.Model, device.Vendor, removable, device.Platform)
+		}
+	}
+
 	return nil
 }
 
-func (d *Detector) IsSystemDisk(devicePath string) bool {
-	// Mock: nunca é disco do sistema
-	return false
+func outputJSON(devices []USBDevice) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(devices)
 }
 
-type Formatter struct{}
-
-func (f *Formatter) FormatDevice(devicePath, label string) error {
-	// Mock: simular formatação
-	fmt.Printf("Formatando dispositivo %s com rótulo %s...\n", devicePath, label)
-	return nil
-}
-
-type Creator struct {
-	workDir  string
-	cacheDir string
-}
-
-func (c *Creator) CreateUSB(devicePath string, config *Config) error {
-	// Mock: simular criação de USB
-	fmt.Printf("Criando USB em %s para nó %s...\n", devicePath, config.NodeName)
-	return nil
-}
-
-func (c *Creator) Cleanup() error {
-	// Mock: simular limpeza
+func outputYAML(devices []USBDevice) error {
+	fmt.Println("devices:")
+	for _, device := range devices {
+		fmt.Printf("  - path: %s\n", device.Path)
+		fmt.Printf("    size: %s\n", device.Size)
+		fmt.Printf("    size_gb: %d\n", device.SizeGB)
+		fmt.Printf("    model: %s\n", device.Model)
+		fmt.Printf("    vendor: %s\n", device.Vendor)
+		fmt.Printf("    serial: %s\n", device.Serial)
+		fmt.Printf("    removable: %t\n", device.Removable)
+		fmt.Printf("    platform: %s\n", device.Platform)
+		if device.DiskNumber > 0 {
+			fmt.Printf("    disk_number: %d\n", device.DiskNumber)
+		}
+		if device.WindowsPath != "" {
+			fmt.Printf("    windows_path: %s\n", device.WindowsPath)
+		}
+	}
 	return nil
 }
