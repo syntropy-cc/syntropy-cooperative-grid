@@ -598,48 +598,48 @@ func executeWindowsOnlyUSBCreation(diskNum int, isoPath string, config *WindowsO
 	$ErrorActionPreference = "Stop"
 	$ProgressPreference = "SilentlyContinue"
 	
-	Write-Host "🚀 Iniciando criação de USB Syntropy (Windows Only)" -ForegroundColor Green
-	Write-Host "📍 Nó: %s" -ForegroundColor Cyan
-	Write-Host "💾 Dispositivo: PHYSICALDRIVE%d" -ForegroundColor Cyan
-	Write-Host "📀 ISO: %s" -ForegroundColor Cyan
+	Write-Host "[INFO] Iniciando criacao de USB Syntropy (Windows Only)" -ForegroundColor Green
+	Write-Host "[NODE] No: %s" -ForegroundColor Cyan
+	Write-Host "[DISK] Dispositivo: PHYSICALDRIVE%d" -ForegroundColor Cyan
+	Write-Host "[ISO] ISO: %s" -ForegroundColor Cyan
 	Write-Host ""
 	
 	try {
 		# Verificar se dispositivo ainda existe
 		$disk = Get-Disk -Number %d -ErrorAction SilentlyContinue
 		if (-not $disk) {
-			throw "Dispositivo %d não encontrado. Verifique se o USB está conectado."
+			throw "Dispositivo %d nao encontrado. Verifique se o USB esta conectado."
 		}
 		
-		Write-Host "✅ Dispositivo verificado: $($disk.FriendlyName)" -ForegroundColor Green
+		Write-Host "[OK] Dispositivo verificado: $($disk.FriendlyName)" -ForegroundColor Green
 		
 		# Verificar se ISO existe
 		if (-not (Test-Path "%s")) {
-			throw "Arquivo ISO não encontrado: %s"
+			throw "Arquivo ISO nao encontrado: %s"
 		}
 		
-		Write-Host "✅ ISO verificada: $(Get-Item "%s").Length bytes" -ForegroundColor Green
+		Write-Host "[OK] ISO verificada: $(Get-Item \"%s\").Length bytes" -ForegroundColor Green
 		
 		# Colocar disco offline
-		Write-Host "📴 Colocando disco offline..." -ForegroundColor Yellow
+		Write-Host "[OFFLINE] Colocando disco offline..." -ForegroundColor Yellow
 		Set-Disk -Number %d -IsReadOnly $false -IsOffline $true
 		
 		# Montar no WSL
-		Write-Host "🔗 Montando disco no WSL..." -ForegroundColor Yellow
+		Write-Host "[MOUNT] Montando disco no WSL..." -ForegroundColor Yellow
 		$mountResult = wsl --mount PHYSICALDRIVE%d --bare 2>&1
 		if ($LASTEXITCODE -ne 0) {
 			throw "Falha ao montar disco no WSL: $mountResult"
 		}
 		
-		Write-Host "✅ Disco montado no WSL com sucesso" -ForegroundColor Green
+		Write-Host "[OK] Disco montado no WSL com sucesso" -ForegroundColor Green
 		
-		# Executar script de criação no WSL
-		Write-Host "🐧 Executando criação no WSL..." -ForegroundColor Yellow
+		# Executar script de criacao no WSL
+		Write-Host "[WSL] Executando criacao no WSL..." -ForegroundColor Yellow
 		$wslScript = @"
 #!/bin/bash
 set -euo pipefail
 
-echo "🔍 Detectando dispositivo WSL..."
+echo "[SEARCH] Detectando dispositivo WSL..."
 
 # Listar dispositivos antes
 before=($(ls /dev/sd? /dev/hd? /dev/nvme?n? 2>/dev/null || true))
@@ -663,34 +663,34 @@ for d in "${after[@]}"; do
 done
 
 if [ -z "$dev" ]; then
-  echo "❌ ERRO: Não foi possível detectar o dispositivo no WSL" >&2
-  echo "Dispositivos disponíveis:" >&2
+  echo "[ERROR] ERRO: Nao foi possivel detectar o dispositivo no WSL" >&2
+  echo "Dispositivos disponiveis:" >&2
   ls -la /dev/sd* /dev/hd* /dev/nvme* 2>/dev/null || true >&2
   exit 1
 fi
 
-echo "✅ Dispositivo WSL detectado: $dev"
+echo "[OK] Dispositivo WSL detectado: $dev"
 
 # Verificar se ISO existe
 ISO="%s"
 if [ ! -f "$ISO" ]; then
-  echo "❌ ERRO: ISO não encontrada: $ISO" >&2
+  echo "[ERROR] ERRO: ISO nao encontrada: $ISO" >&2
   exit 1
 fi
 
-echo "📀 Gravando ISO: $ISO -> $dev"
+echo "[ISO] Gravando ISO: $ISO -> $dev"
 sudo dd if="$ISO" of="$dev" bs=4M status=progress conv=fsync
 sync
 
-echo "⏳ Aguardando gravação finalizar..."
+echo "Aguardando gravacao finalizar..."
 sleep 3
 
-echo "🔧 Criando partição CIDATA..."
+echo "[CONFIG] Criando particao CIDATA..."
 sudo sgdisk -e "$dev"
 sudo sgdisk -n 0:0:+128MiB -t 0:0700 -c 0:CIDATA "$dev"
 sleep 2
 
-# Determinar nome da partição CIDATA
+# Determinar nome da particao CIDATA
 cidata_part=""
 if [[ "$dev" =~ nvme ]]; then
   cidata_part="${dev}p2"
@@ -698,30 +698,30 @@ else
   cidata_part="${dev}2"
 fi
 
-echo "📁 Partição CIDATA: $cidata_part"
+echo "[PARTITION] Particao CIDATA: $cidata_part"
 
-# Verificar se partição existe
+# Verificar se particao existe
 if [ ! -b "$cidata_part" ]; then
-  echo "❌ ERRO: Partição CIDATA não encontrada: $cidata_part" >&2
-  echo "Partições disponíveis:" >&2
+  echo "[ERROR] ERRO: Particao CIDATA nao encontrada: $cidata_part" >&2
+  echo "Particoes disponiveis:" >&2
   ls -la ${dev}* 2>/dev/null || true >&2
   exit 1
 fi
 
-echo "💾 Formatando partição CIDATA..."
+echo "[DISK] Formatando particao CIDATA..."
 sudo mkfs.vfat -F 32 -n CIDATA "$cidata_part"
 
-echo "📂 Montando partição CIDATA..."
+echo "[MOUNT] Montando particao CIDATA..."
 mount_point="$HOME/.syntropy/work/cidata-mount"
 sudo mkdir -p "$mount_point"
 sudo mount "$cidata_part" "$mount_point"
 
-echo "📋 Copiando arquivos cloud-init..."
+echo "[COPY] Copiando arquivos cloud-init..."
 cloud_init_dir="%s/cloud-init"
 
-# Verificar se diretório cloud-init existe
+# Verificar se diretorio cloud-init existe
 if [ ! -d "$cloud_init_dir" ]; then
-  echo "❌ ERRO: Diretório cloud-init não encontrado: $cloud_init_dir" >&2
+  echo "[ERROR] ERRO: Diretorio cloud-init nao encontrado: $cloud_init_dir" >&2
   sudo umount "$mount_point" || true
   sudo rmdir "$mount_point" || true
   exit 1
@@ -730,7 +730,7 @@ fi
 # Verificar se arquivos existem
 for file in user-data meta-data network-config; do
   if [ ! -f "$cloud_init_dir/$file" ]; then
-    echo "❌ ERRO: Arquivo cloud-init não encontrado: $cloud_init_dir/$file" >&2
+    echo "[ERROR] ERRO: Arquivo cloud-init nao encontrado: $cloud_init_dir/$file" >&2
     sudo umount "$mount_point" || true
     sudo rmdir "$mount_point" || true
     exit 1
@@ -741,15 +741,15 @@ sudo cp "$cloud_init_dir/user-data" "$mount_point/"
 sudo cp "$cloud_init_dir/meta-data" "$mount_point/"
 sudo cp "$cloud_init_dir/network-config" "$mount_point/"
 
-echo "🔍 Verificando arquivos copiados..."
+echo "[SEARCH] Verificando arquivos copiados..."
 ls -la "$mount_point/"
 
-echo "🔓 Desmontando partição..."
+echo "[UNMOUNT] Desmontando particao..."
 sudo umount "$mount_point"
 sudo rmdir "$mount_point"
 sync
 
-echo "✅ USB criado com sucesso usando estratégia NoCloud!"
+echo "[OK] USB criado com sucesso usando estrategia NoCloud!"
 "@
 
 		# Converter caminho ISO para WSL
@@ -765,45 +765,45 @@ echo "✅ USB criado com sucesso usando estratégia NoCloud!"
 		$exitCode = $LASTEXITCODE
 		
 		if ($exitCode -ne 0) {
-			Write-Host "❌ ERRO no WSL:" -ForegroundColor Red
+			Write-Host "[ERROR] ERRO no WSL:" -ForegroundColor Red
 			Write-Host $wslResult -ForegroundColor Red
-			throw "Script WSL falhou com código: $exitCode"
+			throw "Script WSL falhou com codigo: $exitCode"
 		}
 		
-		Write-Host "✅ Script WSL executado com sucesso!" -ForegroundColor Green
+		Write-Host "[OK] Script WSL executado com sucesso!" -ForegroundColor Green
 		Write-Host $wslResult -ForegroundColor White
 		
 	} catch {
-		Write-Host "❌ ERRO: $($_.Exception.Message)" -ForegroundColor Red
+		Write-Host "[ERROR] ERRO: $($_.Exception.Message)" -ForegroundColor Red
 		throw
 	} finally {
-		Write-Host "🔄 Limpando recursos..." -ForegroundColor Yellow
+		Write-Host "[CLEANUP] Limpando recursos..." -ForegroundColor Yellow
 		try { 
 			wsl --unmount PHYSICALDRIVE%d 2>$null
-			Write-Host "✅ Dispositivo desmontado do WSL" -ForegroundColor Green
+			Write-Host "[OK] Dispositivo desmontado do WSL" -ForegroundColor Green
 		} catch { 
-			Write-Host "⚠️  Aviso: Falha ao desmontar do WSL (pode já estar desmontado)" -ForegroundColor Yellow 
+			Write-Host "[WARNING] Aviso: Falha ao desmontar do WSL (pode ja estar desmontado)" -ForegroundColor Yellow 
 		}
 		
 		try {
 			Set-Disk -Number %d -IsOffline $false
-			Write-Host "✅ Disco voltou online no Windows" -ForegroundColor Green
+			Write-Host "[OK] Disco voltou online no Windows" -ForegroundColor Green
 		} catch {
-			Write-Host "⚠️  Aviso: Falha ao voltar disco online" -ForegroundColor Yellow
+			Write-Host "[WARNING] Aviso: Falha ao voltar disco online" -ForegroundColor Yellow
 		}
 	}
 	
-	Write-Host "🎉 USB criado com sucesso usando estratégia NoCloud!" -ForegroundColor Green
-	Write-Host "🔧 O USB agora contém:" -ForegroundColor Cyan
-	Write-Host "   • ISO Ubuntu original (bootável)" -ForegroundColor White
-	Write-Host "   • Partição CIDATA com configuração cloud-init" -ForegroundColor White
-	Write-Host "   • Configuração será aplicada automaticamente no boot" -ForegroundColor White
+	Write-Host "[SUCCESS] USB criado com sucesso usando estrategia NoCloud!" -ForegroundColor Green
+	Write-Host "[CONFIG] O USB agora contem:" -ForegroundColor Cyan
+	Write-Host "   - ISO Ubuntu original (bootavel)" -ForegroundColor White
+	Write-Host "   - Particao CIDATA com configuracao cloud-init" -ForegroundColor White
+	Write-Host "   - Configuracao sera aplicada automaticamente no boot" -ForegroundColor White
 	Write-Host ""
-	Write-Host "📋 Informações do nó:" -ForegroundColor Cyan
-	Write-Host "   • Nome: %s" -ForegroundColor White
-	Write-Host "   • Descrição: %s" -ForegroundColor White
-	Write-Host "   • Criado por: %s" -ForegroundColor White
-	Write-Host "   • Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
+	Write-Host "[INFO] Informacoes do no:" -ForegroundColor Cyan
+	Write-Host "   - Nome: %s" -ForegroundColor White
+	Write-Host "   - Descricao: %s" -ForegroundColor White
+	Write-Host "   - Criado por: %s" -ForegroundColor White
+	Write-Host "   - Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
 	`, config.NodeName, diskNum, isoPath, diskNum, diskNum, isoPath, isoPath, diskNum, diskNum, diskNum, diskNum, isoPath, config.TempDir, isoPath, config.TempDir, diskNum, diskNum, config.NodeName, config.NodeDescription, config.CreatedBy)
 
 	// Salvar script PowerShell

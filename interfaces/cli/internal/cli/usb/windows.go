@@ -308,81 +308,94 @@ echo "✅ USB criado com sucesso usando estratégia NoCloud!"
 	psScript := fmt.Sprintf(`
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 Iniciando criação de USB com estratégia NoCloud..." -ForegroundColor Green
-Write-Host "💾 Disco: %%s (nº %%d)" -ForegroundColor Cyan
-Write-Host "📀 ISO: %%s" -ForegroundColor Cyan
+Write-Host "[INFO] Iniciando criacao de USB com estrategia NoCloud..." -ForegroundColor Green
+Write-Host "[DISK] Disco: %s (no %d)" -ForegroundColor Cyan
+Write-Host "[ISO] ISO: %s" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "[WARNING] AVISO IMPORTANTE:" -ForegroundColor Yellow
+Write-Host "   - Este processo ira FORMATAR COMPLETAMENTE o USB selecionado" -ForegroundColor Red
+Write-Host "   - TODOS os dados no USB serao PERDIDOS permanentemente" -ForegroundColor Red
+Write-Host "   - Certifique-se de fazer backup dos dados importantes" -ForegroundColor Yellow
+Write-Host ""
 
 try {
     # Verificar se o disco existe
     Write-Host "Verificando disco..." -ForegroundColor Yellow
-    $disk = Get-Disk -Number %%d -ErrorAction SilentlyContinue
+    $disk = Get-Disk -Number %d -ErrorAction SilentlyContinue
     if (-not $disk) {
-        throw "Disco %%d não encontrado. Verifique se o USB está conectado e tente novamente."
+        throw "Disco %s nao encontrado. Verifique se o USB esta conectado e tente novamente."
     }
     
     Write-Host "Disco encontrado: $($disk.FriendlyName) - Tamanho: $([math]::Round($disk.Size/1GB, 2)) GB" -ForegroundColor Green
     
-    # Verificar se o disco já está offline
+    # Prosseguir automaticamente com a formatacao
+    Write-Host ""
+    Write-Host "[INFO] Prosseguindo automaticamente com a formatacao..." -ForegroundColor Green
+    Write-Host "   Disco: $($disk.FriendlyName)" -ForegroundColor Yellow
+    Write-Host "   Tamanho: $([math]::Round($disk.Size/1GB, 2)) GB" -ForegroundColor Yellow
+    Write-Host ""
+    
+    # Verificar se o disco ja esta offline
     if ($disk.IsOffline) {
-        Write-Host "Disco já está offline" -ForegroundColor Yellow
+        Write-Host "Disco ja esta offline" -ForegroundColor Yellow
     } else {
-        Write-Host "📴 Colocando disco offline no Windows..." -ForegroundColor Yellow
+        Write-Host "[OFFLINE] Colocando disco offline no Windows..." -ForegroundColor Yellow
         try {
-            Set-Disk -Number %%d -IsReadOnly $false -IsOffline $true -ErrorAction Stop
+            Set-Disk -Number %d -IsReadOnly $false -IsOffline $true -ErrorAction Stop
             Write-Host "Disco colocado offline com sucesso" -ForegroundColor Green
         } catch {
-            Write-Host "Aviso: Não foi possível colocar o disco offline: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "Aviso: Nao foi possivel colocar o disco offline: $($_.Exception.Message)" -ForegroundColor Yellow
             Write-Host "Tentando continuar..." -ForegroundColor Yellow
         }
     }
     
-    Write-Host "🔗 Montando disco cru no WSL..." -ForegroundColor Yellow
+    Write-Host "[MOUNT] Montando disco cru no WSL..." -ForegroundColor Yellow
     $mountResult = wsl --mount %s --bare 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao montar disco no WSL: $mountResult"
     }
     
-    Write-Host "🐧 Executando script de criação no WSL..." -ForegroundColor Yellow
-    $bashScript = "%%s"
+    Write-Host "[WSL] Executando script de criacao no WSL..." -ForegroundColor Yellow
+    $bashScript = "%s"
     $wslResult = wsl bash -lc "bash '$bashScript'" 2>&1
     $exitCode = $LASTEXITCODE
     
     if ($exitCode -ne 0) {
-        Write-Host "❌ ERRO no WSL:" -ForegroundColor Red
+        Write-Host "[ERROR] ERRO no WSL:" -ForegroundColor Red
         Write-Host $wslResult -ForegroundColor Red
-        throw "Script WSL falhou com código: $exitCode"
+        throw "Script WSL falhou com codigo: $exitCode"
     }
     
-    Write-Host "✅ Script WSL executado com sucesso!" -ForegroundColor Green
+    Write-Host "[OK] Script WSL executado com sucesso!" -ForegroundColor Green
     Write-Host $wslResult -ForegroundColor White
     
 } catch {
-    Write-Host "❌ ERRO: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "[ERROR] ERRO: $($_.Exception.Message)" -ForegroundColor Red
     throw
 } finally {
-    Write-Host "🔄 Limpando recursos..." -ForegroundColor Yellow
+    Write-Host "[CLEANUP] Limpando recursos..." -ForegroundColor Yellow
     try { 
-        wsl --unmount %%s 2>$null
-        Write-Host "✅ Dispositivo desmontado do WSL" -ForegroundColor Green
+        wsl --unmount %s 2>$null
+        Write-Host "[OK] Dispositivo desmontado do WSL" -ForegroundColor Green
     } catch { 
-        Write-Host "⚠️  Aviso: Falha ao desmontar do WSL (pode já estar desmontado)" -ForegroundColor Yellow 
+        Write-Host "[WARNING] Aviso: Falha ao desmontar do WSL (pode ja estar desmontado)" -ForegroundColor Yellow 
     }
     
     try {
-        Set-Disk -Number %%d -IsOffline $false -ErrorAction Stop
-        Write-Host "✅ Disco voltou online no Windows" -ForegroundColor Green
+        Set-Disk -Number %d -IsOffline $false -ErrorAction Stop
+        Write-Host "[OK] Disco voltou online no Windows" -ForegroundColor Green
     } catch {
-        Write-Host "⚠️  Aviso: Falha ao voltar disco online: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "Você pode precisar reiniciar o computador ou remover/reconectar o USB" -ForegroundColor Yellow
+        Write-Host "[WARNING] Aviso: Falha ao voltar disco online: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Voce pode precisar reiniciar o computador ou remover/reconectar o USB" -ForegroundColor Yellow
     }
 }
 
-Write-Host "🎉 USB criado com sucesso usando estratégia NoCloud!" -ForegroundColor Green
-Write-Host "🔧 O USB agora contém:" -ForegroundColor Cyan
-Write-Host "   • ISO Ubuntu original (bootável)" -ForegroundColor White
-Write-Host "   • Partição CIDATA com configuração cloud-init" -ForegroundColor White
-Write-Host "   • Configuração será aplicada automaticamente no boot" -ForegroundColor White
-`, winPhysical, diskNum, isoWSL, diskNum, winPhysical, convertAnyToWSLPath(bashScriptPath), winPhysical, winPhysical, diskNum)
+Write-Host "[SUCCESS] USB criado com sucesso usando estrategia NoCloud!" -ForegroundColor Green
+Write-Host "[CONFIG] O USB agora contem:" -ForegroundColor Cyan
+Write-Host "   - ISO Ubuntu original (bootavel)" -ForegroundColor White
+Write-Host "   - Particao CIDATA com configuracao cloud-init" -ForegroundColor White
+Write-Host "   - Configuracao sera aplicada automaticamente no boot" -ForegroundColor White
+`, winPhysical, diskNum, isoWSL, diskNum, winPhysical, convertAnyToWSLPath(bashScriptPath), winPhysical, diskNum)
 
 	// Gravar e executar o script elevado
 	os.MkdirAll(workDir, 0755)
@@ -480,29 +493,42 @@ func createUSBWithNoCloudWindows(devicePath string, config *Config, workDir, cac
 	psScript := fmt.Sprintf(`
 $ErrorActionPreference = "Stop"
 
-Write-Host "Criando USB com estratégia NoCloud..." -ForegroundColor Cyan
-Write-Host "Disco: %%s (nº %%d)" -ForegroundColor Cyan
-Write-Host "ISO: %%s" -ForegroundColor Cyan
+Write-Host "Criando USB com estrategia NoCloud..." -ForegroundColor Cyan
+Write-Host "Disco: %s (no %d)" -ForegroundColor Cyan
+Write-Host "ISO: %s" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "[WARNING] AVISO IMPORTANTE:" -ForegroundColor Yellow
+Write-Host "   - Este processo ira FORMATAR COMPLETAMENTE o USB selecionado" -ForegroundColor Red
+Write-Host "   - TODOS os dados no USB serao PERDIDOS permanentemente" -ForegroundColor Red
+Write-Host "   - Certifique-se de fazer backup dos dados importantes" -ForegroundColor Yellow
+Write-Host ""
 
-# Verificar se o disco existe e obter informações
+# Verificar se o disco existe e obter informacoes
 Write-Host "Verificando disco..." -ForegroundColor Cyan
-$disk = Get-Disk -Number %%d -ErrorAction SilentlyContinue
+$disk = Get-Disk -Number %d -ErrorAction SilentlyContinue
 if (-not $disk) {
-    throw "Disco %%d não encontrado. Verifique se o USB está conectado e tente novamente."
+    throw "Disco %d nao encontrado. Verifique se o USB esta conectado e tente novamente."
 }
 
 Write-Host "Disco encontrado: $($disk.FriendlyName) - Tamanho: $([math]::Round($disk.Size/1GB, 2)) GB" -ForegroundColor Green
 
-# Verificar se o disco já está offline
+# Prosseguir automaticamente com a formatacao
+Write-Host ""
+Write-Host "[INFO] Prosseguindo automaticamente com a formatacao..." -ForegroundColor Green
+Write-Host "   Disco: $($disk.FriendlyName)" -ForegroundColor Yellow
+Write-Host "   Tamanho: $([math]::Round($disk.Size/1GB, 2)) GB" -ForegroundColor Yellow
+Write-Host ""
+
+# Verificar se o disco ja esta offline
 if ($disk.IsOffline) {
-    Write-Host "Disco já está offline" -ForegroundColor Yellow
+    Write-Host "Disco ja esta offline" -ForegroundColor Yellow
 } else {
     Write-Host "Colocando disco offline..." -ForegroundColor Cyan
     try {
-        Set-Disk -Number %%d -IsReadOnly $false -IsOffline $true -ErrorAction Stop
+        Set-Disk -Number %d -IsReadOnly $false -IsOffline $true -ErrorAction Stop
         Write-Host "Disco colocado offline com sucesso" -ForegroundColor Green
     } catch {
-        Write-Host "Aviso: Não foi possível colocar o disco offline: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Aviso: Nao foi possivel colocar o disco offline: $($_.Exception.Message)" -ForegroundColor Yellow
         Write-Host "Tentando continuar..." -ForegroundColor Yellow
     }
 }
@@ -511,20 +537,20 @@ try {
     # Usar dd para gravar ISO (via WSL ou ferramenta Windows)
     Write-Host "Gravando ISO no dispositivo..." -ForegroundColor Cyan
     
-    # Verificar se WSL está disponível
+    # Verificar se WSL esta disponivel
     $wslAvailable = $false
     try {
         wsl --version | Out-Null
         $wslAvailable = $true
     } catch {
-        Write-Host "WSL não disponível, usando método alternativo..." -ForegroundColor Yellow
+        Write-Host "WSL nao disponivel, usando metodo alternativo..." -ForegroundColor Yellow
     }
     
     if ($wslAvailable) {
         # Usar WSL para todo o processo
-        Write-Host "Usando WSL para gravação completa..." -ForegroundColor Cyan
+        Write-Host "Usando WSL para gravacao completa..." -ForegroundColor Cyan
         
-        # Criar script bash temporário para evitar problemas com aspas
+        # Criar script bash temporario para evitar problemas com aspas
         $bashScriptPath = "$env:TEMP\syntropy_usb_script.sh"
         $bashScriptContent = @'
 set -euo pipefail
@@ -545,7 +571,7 @@ while [ $tries -lt 20 ]; do
     sudo dd if="$ISO" of="$dev" bs=4M status=progress conv=fsync
     sync
     sleep 2
-    echo "Criando partição CIDATA..."
+    echo "Criando particao CIDATA..."
     sudo sgdisk -e "$dev"
     sudo sgdisk -n 0:0:+128MiB -t 0:0700 -c 0:CIDATA "$dev"
     sleep 1
@@ -566,7 +592,7 @@ while [ $tries -lt 20 ]; do
     sudo umount "$mount_point"
     sudo rmdir "$mount_point"
     sync
-    echo "USB criado com sucesso usando estratégia NoCloud!"
+    echo "USB criado com sucesso usando estrategia NoCloud!"
     exit 0
   fi
   tries=$((tries+1))
@@ -578,9 +604,9 @@ exit 1
         $bashScriptContent | Out-File -FilePath $bashScriptPath -Encoding UTF8
         wsl bash $bashScriptPath
     } else {
-        # Método alternativo usando PowerShell (limitado)
-        Write-Host "Método alternativo não implementado ainda." -ForegroundColor Red
-        throw "WSL necessário para gravação de ISO"
+        # Metodo alternativo usando PowerShell (limitado)
+        Write-Host "Metodo alternativo nao implementado ainda." -ForegroundColor Red
+        throw "WSL necessario para gravacao de ISO"
     }
     
     Write-Host "USB criado com sucesso via WSL!" -ForegroundColor Green
@@ -588,20 +614,20 @@ exit 1
 } finally {
     Write-Host "Voltando disco online..." -ForegroundColor Cyan
     try {
-        Set-Disk -Number %%d -IsOffline $false -ErrorAction Stop
+        Set-Disk -Number %d -IsOffline $false -ErrorAction Stop
         Write-Host "Disco voltou online com sucesso" -ForegroundColor Green
     } catch {
-        Write-Host "Aviso: Não foi possível voltar o disco online: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "Você pode precisar reiniciar o computador ou remover/reconectar o USB" -ForegroundColor Yellow
+        Write-Host "Aviso: Nao foi possivel voltar o disco online: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "Voce pode precisar reiniciar o computador ou remover/reconectar o USB" -ForegroundColor Yellow
     }
 }
 
-Write-Host "✅ USB criado com sucesso usando estratégia NoCloud!" -ForegroundColor Green
-Write-Host "🔧 O USB agora contém:" -ForegroundColor Cyan
-Write-Host "   • ISO Ubuntu original (bootável)" -ForegroundColor White
-Write-Host "   • Partição CIDATA com configuração cloud-init" -ForegroundColor White
-Write-Host "   • Configuração será aplicada automaticamente no boot" -ForegroundColor White
-`, devicePath, diskNum, isoPath, diskNum, isoPath, workDir, diskNum)
+Write-Host "[OK] USB criado com sucesso usando estrategia NoCloud!" -ForegroundColor Green
+Write-Host "[CONFIG] O USB agora contem:" -ForegroundColor Cyan
+Write-Host "   - ISO Ubuntu original (bootavel)" -ForegroundColor White
+Write-Host "   - Particao CIDATA com configuracao cloud-init" -ForegroundColor White
+Write-Host "   - Configuracao sera aplicada automaticamente no boot" -ForegroundColor White
+`, devicePath, diskNum, isoPath, diskNum, diskNum, workDir, diskNum)
 
 	// Gravar e executar o script elevado
 	os.MkdirAll(workDir, 0755)
@@ -978,7 +1004,7 @@ try {
     }
     
     # Verificar se dispositivo existe
-    $disk = Get-Disk -Number %%d -ErrorAction SilentlyContinue
+    $disk = Get-Disk -Number %d -ErrorAction SilentlyContinue
     if (-not $disk) {
         throw "Dispositivo %s não encontrado. Verifique se o USB está conectado."
     }
@@ -1131,7 +1157,7 @@ echo "✅ USB criado com sucesso usando estratégia NoCloud!"
 } finally {
     Write-Host "🔄 Limpando recursos..." -ForegroundColor Yellow
     try { 
-        wsl --unmount %d 2>$null
+        wsl --unmount %s 2>$null
         Write-Host "✅ Dispositivo desmontado do WSL" -ForegroundColor Green
     } catch { 
         Write-Host "⚠️  Aviso: Falha ao desmontar do WSL (pode já estar desmontado)" -ForegroundColor Yellow 
