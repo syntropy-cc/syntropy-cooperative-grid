@@ -1,20 +1,44 @@
-instance-id: syntropy-node-{{.NodeID}}
-local-hostname: {{.NodeName}}
-public-keys:
-  {{.NodeName}}-owner: {{.OwnerPublicKey}}
-  {{.NodeName}}-community: {{.CommunityPublicKey}}
-network:
-  version: 2
-  ethernets:
-    en*:
-      dhcp4: true
-      dhcp4-overrides:
-        hostname: {{.NodeName}}
-    eth*:
-      dhcp4: true
-      dhcp4-overrides:
-        hostname: {{.NodeName}}
-    enp*:
-      dhcp4: true
-      dhcp4-overrides:
-        hostname: {{.NodeName}}
+# Syntropy Cooperative Grid - Node Metadata
+# Gerado automaticamente pelo PC de trabalho (Quartel General)
+
+instance-id: ${NODE_NAME}-${INSTANCE_ID}
+local-hostname: ${NODE_NAME}
+
+# Informações do nó Syntropy
+syntropy:
+  node:
+    name: ${NODE_NAME}
+    type: ${NODE_TYPE}
+    description: ${NODE_DESCRIPTION}
+    coordinates: ${COORDINATES}
+    owner_key: ${OWNER_KEY}
+    created_at: ${CREATED_AT}
+    created_by: ${CREATED_BY}
+  
+  network:
+    discovery_server: ${DISCOVERY_SERVER}
+    mesh_port: 51820
+    api_port: 8080
+    metrics_port: 9090
+  
+  security:
+    ca_cert: ${CA_CERT_PATH}
+    node_cert: ${NODE_CERT_PATH}
+    node_key: ${NODE_KEY_PATH}
+    ssh_public_key: ${SSH_PUBLIC_KEY}
+  
+  hardware:
+    detected_type: ${DETECTED_HARDWARE_TYPE}
+    cpu_cores: ${CPU_CORES}
+    memory_gb: ${MEMORY_GB}
+    storage_gb: ${STORAGE_GB}
+  
+  role:
+    initial_role: ${INITIAL_ROLE}
+    can_be_leader: ${CAN_BE_LEADER}
+    can_be_worker: ${CAN_BE_WORKER}
+  
+  audit:
+    enabled: true
+    log_level: info
+    retention_days: 90

@@ -74,7 +74,7 @@ infrastructure/               # ✅ Infrastructure as Code (novo)
 
 ### **1. Reorganização Estrutural**
 - ✅ **Movido**: `core/usb/` → `core/services/usb/` (alinhado com arquitetura)
-- ✅ **Criado**: `core/iac/` para Infrastructure as Code
+- ✅ **Criado**: `infrastructure/` para Infrastructure as Code
 - ✅ **Atualizado**: Imports da CLI para nova estrutura
 - ✅ **Criado**: Módulos Go independentes com go.mod
 
@@ -186,7 +186,8 @@ ansible-playbook -i ../terraform/inventory/hosts.yml playbooks/setup.yml
 7. ✅ **Observable**: Monitoramento e observabilidade completos
 
 ### **Estrutura de Diretórios Conforme Documentação**
-- ✅ **Core Layer**: `core/services/`, `core/iac/`, `core/types/`
+- ✅ **Core Layer**: `core/services/`, `core/types/`
+- ✅ **Infrastructure Layer**: `infrastructure/` (IaC)
 - ✅ **Interfaces Layer**: `interfaces/cli/`, `interfaces/web/`, etc.
 - ✅ **Infrastructure Layer**: `infrastructure/cloud-init/`, `infrastructure/packer/`, etc.
 

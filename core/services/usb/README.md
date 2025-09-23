@@ -196,7 +196,7 @@ type Config struct {
 ### **Infrastructure as Code**
 - **Templates**: Usa templates parametrizáveis em `infrastructure/cloud-init/`
 - **Geração dinâmica**: user-data, meta-data, network-config
-- **Chaves SSH**: Integração com `core/iac/key_manager`
+- **Chaves SSH**: Integração com `infrastructure/key_manager`
 - **Metadados**: JSON estruturado com informações do nó
 
 ## 📁 **Arquivos Gerados**
@@ -288,7 +288,7 @@ go run formatter_test.go
 ```
 
 ### **Dependências**
-- `syntropy-cc/cooperative-grid/core/iac`: Gerenciamento de templates e chaves
+- `syntropy-cc/cooperative-grid/infrastructure`: Gerenciamento de templates e chaves
 - `golang.org/x/crypto/ssh`: Geração de chaves SSH
 - Sistema: `lsblk`, `parted`, `mkfs.fat`, `wipefs`, `sgdisk`
 

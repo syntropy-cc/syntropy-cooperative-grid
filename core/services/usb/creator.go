@@ -4,15 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"syntropy-cc/cooperative-grid/core/iac"
+	"syntropy-cc/cooperative-grid/infrastructure"
 )
 
 // Config contém configurações para criação de USB
@@ -32,11 +29,11 @@ type Creator interface {
 
 // USBCreator implementa a criação de USB com boot seguindo a arquitetura do projeto
 type USBCreator struct {
-	workDir       string
-	cacheDir      string
-	formatter     Formatter
-	templateMgr   *iac.TemplateManager
-	keyMgr        *iac.KeyManager
+	workDir     string
+	cacheDir    string
+	formatter   Formatter
+	templateMgr *infrastructure.TemplateManager
+	keyMgr      *infrastructure.KeyManager
 }
 
 // NewCreator cria uma nova instância do criador de USB
@@ -47,16 +44,16 @@ func NewCreator(workDir, cacheDir string) *USBCreator {
 		// Se não existe no diretório atual, tentar relativo ao projeto
 		templateDir = "../../infrastructure"
 	}
-	
+
 	// Criar diretório de chaves dentro do workDir
 	keyDir := filepath.Join(workDir, "keys")
-	
+
 	return &USBCreator{
 		workDir:     workDir,
 		cacheDir:    cacheDir,
 		formatter:   NewFormatter(),
-		templateMgr: iac.NewTemplateManager(templateDir),
-		keyMgr:      iac.NewKeyManager(keyDir),
+		templateMgr: infrastructure.NewTemplateManager(templateDir),
+		keyMgr:      infrastructure.NewKeyManager(keyDir),
 	}
 }
 
@@ -71,7 +68,7 @@ func (c *USBCreator) CreateUSB(devicePath string, config *Config) error {
 	if err := detector.ValidateDevice(devicePath); err != nil {
 		return fmt.Errorf("dispositivo inválido: %w", err)
 	}
-	
+
 	if detector.IsSystemDisk(devicePath) {
 		return fmt.Errorf("dispositivo %s parece ser um disco do sistema", devicePath)
 	}
@@ -200,36 +197,36 @@ func (c *USBCreator) createCloudInitWithIAC(mountPoint string, config *Config) e
 	}
 
 	// Gerar ou carregar chaves SSH
-	ownerKey, ownerPub, err := c.generateOrLoadSSHKeys(config.OwnerKeyFile, config.NodeName, iac.OwnerKey)
+	ownerKey, ownerPub, err := c.generateOrLoadSSHKeys(config.OwnerKeyFile, config.NodeName, infrastructure.OwnerKey)
 	if err != nil {
 		return fmt.Errorf("falha ao gerar chaves do proprietário: %w", err)
 	}
 
-	communityKey, communityPub, err := c.generateOrLoadSSHKeys("", config.NodeName, iac.CommunityKey)
+	communityKey, communityPub, err := c.generateOrLoadSSHKeys("", config.NodeName, infrastructure.CommunityKey)
 	if err != nil {
 		return fmt.Errorf("falha ao gerar chaves da comunidade: %w", err)
 	}
 
 	// Preparar dados para o template
-	templateData := &iac.TemplateData{
-		NodeName:              config.NodeName,
-		NodeDescription:       config.NodeDescription,
-		Coordinates:           config.Coordinates,
-		CreatedAt:             time.Now().Format(time.RFC3339),
-		AdminPasswordHash:     "$6$rounds=4096$syntropy$N8mVzFK0Y1OelT1SKEjg0jIXzKMzL3ZcOGcE5xR8nS6E8qSO5qFV6eJs1g7T6E0cC7w.kfNO3FqC3YhE9Gz19.",
-		OwnerPublicKey:        ownerPub.PublicKey,
-		CommunityPublicKey:    communityPub.PublicKey,
-		KeyInstallationCommands: c.keyMgr.GenerateKeyInstallationCommands(ownerKey, ownerPub, communityKey, communityPub),
+	templateData := &infrastructure.TemplateData{
+		NodeName:                 config.NodeName,
+		NodeDescription:          config.NodeDescription,
+		Coordinates:              config.Coordinates,
+		CreatedAt:                time.Now().Format(time.RFC3339),
+		AdminPasswordHash:        "$6$rounds=4096$syntropy$N8mVzFK0Y1OelT1SKEjg0jIXzKMzL3ZcOGcE5xR8nS6E8qSO5qFV6eJs1g7T6E0cC7w.kfNO3FqC3YhE9Gz19.",
+		OwnerPublicKey:           ownerPub.PublicKey,
+		CommunityPublicKey:       communityPub.PublicKey,
+		KeyInstallationCommands:  c.keyMgr.GenerateKeyInstallationCommands(ownerKey, ownerPub, communityKey, communityPub),
 		MetadataCreationCommands: c.keyMgr.GenerateMetadataCreationCommands(config.NodeName, config.Coordinates, config.NodeDescription),
 		TemplateCreationCommands: c.generateTemplateCreationCommands(),
-		StartupServiceCommands: c.generateStartupServiceCommands(config.NodeName),
-		NodeID:                generateInstanceID(),
-		LocationNodeID:        generateInstanceID(),
-		DetectionMethod:       "manual",
-		DetectedCity:          "Unknown",
-		DetectedCountry:       "Unknown",
-		OwnerFingerprint:      ownerKey.Fingerprint,
-		CommunityFingerprint:  communityKey.Fingerprint,
+		StartupServiceCommands:   c.generateStartupServiceCommands(config.NodeName),
+		NodeID:                   generateInstanceID(),
+		LocationNodeID:           generateInstanceID(),
+		DetectionMethod:          "manual",
+		DetectedCity:             "Unknown",
+		DetectedCountry:          "Unknown",
+		OwnerFingerprint:         ownerKey.Fingerprint,
+		CommunityFingerprint:     communityKey.Fingerprint,
 	}
 
 	// Gerar arquivos cloud-init usando templates IaC
@@ -246,10 +243,10 @@ func (c *USBCreator) createCloudInitWithIAC(mountPoint string, config *Config) e
 }
 
 // generateOrLoadSSHKeys gera ou carrega chaves SSH
-func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose iac.KeyPurpose) (*iac.KeyPair, *iac.KeyPair, error) {
-	var keyPair *iac.KeyPair
+func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose infrastructure.KeyPurpose) (*infrastructure.KeyPair, *infrastructure.KeyPair, error) {
+	var keyPair *infrastructure.KeyPair
 	var err error
-	
+
 	if keyFilePath != "" && keyFilePath != "" {
 		// Carregar chaves existentes
 		keyPair, err = c.keyMgr.LoadExistingKeyPair(keyFilePath)
@@ -262,13 +259,13 @@ func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose
 		if err != nil {
 			return nil, nil, fmt.Errorf("falha ao gerar novas chaves: %w", err)
 		}
-		
+
 		// Salvar chaves geradas
 		if err := c.keyMgr.SaveKeyPair(keyPair, purpose, nodeName); err != nil {
 			return nil, nil, fmt.Errorf("falha ao salvar chaves geradas: %w", err)
 		}
 	}
-	
+
 	// Retornar o mesmo par como privada e pública (estrutura do KeyPair já contém ambas)
 	return keyPair, keyPair, nil
 }

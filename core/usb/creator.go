@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"syntropy-cc/cooperative-grid/core/iac"
+	"syntropy-cc/cooperative-grid/infrastructure"
 )
 
 // Config contém configurações para criação de USB
@@ -32,11 +32,11 @@ type Creator interface {
 
 // USBCreator implementa a criação de USB com boot
 type USBCreator struct {
-	workDir       string
-	cacheDir      string
-	formatter     Formatter
-	templateMgr   *iac.TemplateManager
-	keyMgr        *iac.KeyManager
+	workDir     string
+	cacheDir    string
+	formatter   Formatter
+	templateMgr *infrastructure.TemplateManager
+	keyMgr      *infrastructure.KeyManager
 }
 
 // NewCreator cria uma nova instância do criador de USB
@@ -47,16 +47,16 @@ func NewCreator(workDir, cacheDir string) *USBCreator {
 		// Se não existe no diretório atual, tentar relativo ao projeto
 		templateDir = "../../infrastructure"
 	}
-	
+
 	// Criar diretório de chaves dentro do workDir
 	keyDir := filepath.Join(workDir, "keys")
-	
+
 	return &USBCreator{
 		workDir:     workDir,
 		cacheDir:    cacheDir,
 		formatter:   NewFormatter(),
-		templateMgr: iac.NewTemplateManager(templateDir),
-		keyMgr:      iac.NewKeyManager(keyDir),
+		templateMgr: infrastructure.NewTemplateManager(templateDir),
+		keyMgr:      infrastructure.NewKeyManager(keyDir),
 	}
 }
 
@@ -100,7 +100,7 @@ func (c *USBCreator) CreateUSB(devicePath string, config *Config) error {
 		return fmt.Errorf("falha no download do Ubuntu: %w", err)
 	}
 	defer os.Remove(isoPath)
-	
+
 	if err := c.installUbuntuToUSB(mountPoint, isoPath); err != nil {
 		return fmt.Errorf("falha na instalação do Ubuntu: %w", err)
 	}
@@ -168,7 +168,7 @@ func (c *USBCreator) validateConfig(config *Config) error {
 // setupDirectories cria os diretórios necessários
 func (c *USBCreator) setupDirectories() error {
 	dirs := []string{c.workDir, c.cacheDir}
-	
+
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("falha ao criar diretório %s: %w", dir, err)
@@ -216,7 +216,7 @@ func (c *USBCreator) unmountPartition(mountPoint string) {
 // downloadUbuntuISO baixa o Ubuntu Server ISO
 func (c *USBCreator) downloadUbuntuISO() (string, error) {
 	isoPath := filepath.Join(c.cacheDir, "ubuntu-22.04.3-live-server-amd64.iso")
-	
+
 	// Verificar se já existe
 	if _, err := os.Stat(isoPath); err == nil {
 		fmt.Printf("   ✅ ISO já existe em cache: %s\n", isoPath)
@@ -228,7 +228,7 @@ func (c *USBCreator) downloadUbuntuISO() (string, error) {
 
 	// URL do Ubuntu Server 22.04.3 LTS
 	url := "https://releases.ubuntu.com/22.04.3/ubuntu-22.04.3-live-server-amd64.iso"
-	
+
 	// Criar arquivo de destino
 	file, err := os.Create(isoPath)
 	if err != nil {
@@ -276,7 +276,7 @@ func (c *USBCreator) installUbuntuToUSB(mountPoint, isoPath string) error {
 
 	// Copiar arquivos do ISO para o USB
 	fmt.Printf("   📋 Copiando arquivos do sistema...\n")
-	
+
 	// Copiar arquivos principais
 	filesToCopy := []string{
 		"casper/",
@@ -292,7 +292,7 @@ func (c *USBCreator) installUbuntuToUSB(mountPoint, isoPath string) error {
 	for _, file := range filesToCopy {
 		src := filepath.Join(isoMountPoint, file)
 		dst := filepath.Join(mountPoint, file)
-		
+
 		if _, err := os.Stat(src); err == nil {
 			cmd := exec.Command("sudo", "cp", "-r", src, dst)
 			if err := cmd.Run(); err != nil {
@@ -311,7 +311,7 @@ func (c *USBCreator) installUbuntuToUSB(mountPoint, isoPath string) error {
 	for _, file := range bootFiles {
 		src := filepath.Join(isoMountPoint, file)
 		dst := filepath.Join(mountPoint, file)
-		
+
 		if _, err := os.Stat(src); err == nil {
 			cmd := exec.Command("sudo", "cp", src, dst)
 			cmd.Run() // Ignorar erro
@@ -335,7 +335,7 @@ func (c *USBCreator) configureBoot(mountPoint string) error {
 	// Criar configuração GRUB personalizada
 	grubCfg := filepath.Join(mountPoint, "boot/grub/grub.cfg")
 	grubConfig := c.generateGRUBConfig()
-	
+
 	if err := os.WriteFile(grubCfg, []byte(grubConfig), 0644); err != nil {
 		return fmt.Errorf("falha ao criar configuração GRUB: %w", err)
 	}
@@ -345,10 +345,10 @@ func (c *USBCreator) configureBoot(mountPoint string) error {
 }
 
 // generateOrLoadSSHKeys gera ou carrega chaves SSH
-func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose iac.KeyPurpose) (*iac.KeyPair, *iac.KeyPair, error) {
-	var keyPair *iac.KeyPair
+func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose infrastructure.KeyPurpose) (*infrastructure.KeyPair, *infrastructure.KeyPair, error) {
+	var keyPair *infrastructure.KeyPair
 	var err error
-	
+
 	if keyFilePath != "" && keyFilePath != "" {
 		// Carregar chaves existentes
 		keyPair, err = c.keyMgr.LoadExistingKeyPair(keyFilePath)
@@ -361,13 +361,13 @@ func (c *USBCreator) generateOrLoadSSHKeys(keyFilePath, nodeName string, purpose
 		if err != nil {
 			return nil, nil, fmt.Errorf("falha ao gerar novas chaves: %w", err)
 		}
-		
+
 		// Salvar chaves geradas
 		if err := c.keyMgr.SaveKeyPair(keyPair, purpose, nodeName); err != nil {
 			return nil, nil, fmt.Errorf("falha ao salvar chaves geradas: %w", err)
 		}
 	}
-	
+
 	// Retornar o mesmo par como privada e pública (estrutura do KeyPair já contém ambas)
 	return keyPair, keyPair, nil
 }
@@ -427,36 +427,36 @@ func (c *USBCreator) createCloudInitWithIAC(mountPoint string, config *Config) e
 	}
 
 	// Gerar ou carregar chaves SSH
-	ownerKey, ownerPub, err := c.generateOrLoadSSHKeys(config.OwnerKeyFile, config.NodeName, iac.OwnerKey)
+	ownerKey, ownerPub, err := c.generateOrLoadSSHKeys(config.OwnerKeyFile, config.NodeName, infrastructure.OwnerKey)
 	if err != nil {
 		return fmt.Errorf("falha ao gerar chaves do proprietário: %w", err)
 	}
 
-	communityKey, communityPub, err := c.generateOrLoadSSHKeys("", config.NodeName, iac.CommunityKey)
+	communityKey, communityPub, err := c.generateOrLoadSSHKeys("", config.NodeName, infrastructure.CommunityKey)
 	if err != nil {
 		return fmt.Errorf("falha ao gerar chaves da comunidade: %w", err)
 	}
 
 	// Preparar dados para o template
-	templateData := &iac.TemplateData{
-		NodeName:              config.NodeName,
-		NodeDescription:       config.NodeDescription,
-		Coordinates:           config.Coordinates,
-		CreatedAt:             time.Now().Format(time.RFC3339),
-		AdminPasswordHash:     "$6$rounds=4096$syntropy$N8mVzFK0Y1OelT1SKEjg0jIXzKMzL3ZcOGcE5xR8nS6E8qSO5qFV6eJs1g7T6E0cC7w.kfNO3FqC3YhE9Gz19.",
-		OwnerPublicKey:        ownerPub.PublicKey,
-		CommunityPublicKey:    communityPub.PublicKey,
-		KeyInstallationCommands: c.keyMgr.GenerateKeyInstallationCommands(ownerKey, ownerPub, communityKey, communityPub),
+	templateData := &infrastructure.TemplateData{
+		NodeName:                 config.NodeName,
+		NodeDescription:          config.NodeDescription,
+		Coordinates:              config.Coordinates,
+		CreatedAt:                time.Now().Format(time.RFC3339),
+		AdminPasswordHash:        "$6$rounds=4096$syntropy$N8mVzFK0Y1OelT1SKEjg0jIXzKMzL3ZcOGcE5xR8nS6E8qSO5qFV6eJs1g7T6E0cC7w.kfNO3FqC3YhE9Gz19.",
+		OwnerPublicKey:           ownerPub.PublicKey,
+		CommunityPublicKey:       communityPub.PublicKey,
+		KeyInstallationCommands:  c.keyMgr.GenerateKeyInstallationCommands(ownerKey, ownerPub, communityKey, communityPub),
 		MetadataCreationCommands: c.keyMgr.GenerateMetadataCreationCommands(config.NodeName, config.Coordinates, config.NodeDescription),
 		TemplateCreationCommands: c.generateTemplateCreationCommands(),
-		StartupServiceCommands: c.generateStartupServiceCommands(config.NodeName),
-		NodeID:                generateInstanceID(),
-		LocationNodeID:        generateInstanceID(),
-		DetectionMethod:       "manual",
-		DetectedCity:          "Unknown",
-		DetectedCountry:       "Unknown",
-		OwnerFingerprint:      ownerKey.Fingerprint,
-		CommunityFingerprint:  communityKey.Fingerprint,
+		StartupServiceCommands:   c.generateStartupServiceCommands(config.NodeName),
+		NodeID:                   generateInstanceID(),
+		LocationNodeID:           generateInstanceID(),
+		DetectionMethod:          "manual",
+		DetectedCity:             "Unknown",
+		DetectedCountry:          "Unknown",
+		OwnerFingerprint:         ownerKey.Fingerprint,
+		CommunityFingerprint:     communityKey.Fingerprint,
 	}
 
 	// Gerar arquivos cloud-init usando templates IaC
@@ -542,9 +542,9 @@ write_files:
     owner: root:root
 
 final_message: "Syntropy Cooperative Grid Node %s installed successfully!"
-`, config.NodeName, time.Now().Format(time.RFC3339), 
-   c.getSSHPublicKey(config), config.NodeName, config.NodeName, 
-   config.NodeDescription, config.Coordinates, time.Now().Format(time.RFC3339), config.NodeName)
+`, config.NodeName, time.Now().Format(time.RFC3339),
+		c.getSSHPublicKey(config), config.NodeName, config.NodeName,
+		config.NodeDescription, config.Coordinates, time.Now().Format(time.RFC3339), config.NodeName)
 }
 
 // generateMetaData gera meta-data
@@ -583,7 +583,7 @@ func (c *USBCreator) getSSHPublicKey(config *Config) string {
 			return strings.TrimSpace(string(pubKey))
 		}
 	}
-	
+
 	// Caso contrário, gerar uma chave temporária
 	return "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..." // Placeholder
 }
@@ -591,10 +591,10 @@ func (c *USBCreator) getSSHPublicKey(config *Config) string {
 func isValidNodeName(name string) bool {
 	// Nome deve conter apenas letras, números e hífens
 	for _, char := range name {
-		if !((char >= 'a' && char <= 'z') || 
-			 (char >= 'A' && char <= 'Z') || 
-			 (char >= '0' && char <= '9') || 
-			 char == '-') {
+		if !((char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			char == '-') {
 			return false
 		}
 	}
@@ -607,19 +607,19 @@ func isValidCoordinates(coords string) bool {
 	if len(parts) != 2 {
 		return false
 	}
-	
+
 	// Validar latitude (-90 a 90)
 	lat := strings.TrimSpace(parts[0])
 	if lat == "" {
 		return false
 	}
-	
+
 	// Validar longitude (-180 a 180)
 	lon := strings.TrimSpace(parts[1])
 	if lon == "" {
 		return false
 	}
-	
+
 	return true
 }
 

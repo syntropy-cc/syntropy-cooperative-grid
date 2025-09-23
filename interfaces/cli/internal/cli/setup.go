@@ -14,15 +14,15 @@ import (
 
 // ManagerConfig representa a configuração do gerenciador
 type ManagerConfig struct {
-	Version     string                 `json:"version"`
-	Created     string                 `json:"created"`
-	ManagerID   string                 `json:"manager_id"`
-	SystemInfo  SystemInfo             `json:"system_info"`
-	Discovery   DiscoveryConfig        `json:"discovery"`
-	Security    SecurityConfig         `json:"security"`
-	Preferences PreferencesConfig      `json:"preferences"`
-	Notifications NotificationsConfig  `json:"notifications"`
-	Backup      BackupConfig           `json:"backup"`
+	Version       string              `json:"version"`
+	Created       string              `json:"created"`
+	ManagerID     string              `json:"manager_id"`
+	SystemInfo    SystemInfo          `json:"system_info"`
+	Discovery     DiscoveryConfig     `json:"discovery"`
+	Security      SecurityConfig      `json:"security"`
+	Preferences   PreferencesConfig   `json:"preferences"`
+	Notifications NotificationsConfig `json:"notifications"`
+	Backup        BackupConfig        `json:"backup"`
 }
 
 type SystemInfo struct {
@@ -33,18 +33,18 @@ type SystemInfo struct {
 }
 
 type DiscoveryConfig struct {
-	Enabled            bool     `json:"enabled"`
-	ScanNetworks       []string `json:"scan_networks"`
-	DefaultSSHPort     int      `json:"default_ssh_port"`
-	ConnectionTimeout  int      `json:"connection_timeout"`
-	ParallelScans      int      `json:"parallel_scans"`
-	CacheResults       bool     `json:"cache_results"`
-	CacheTTLMinutes    int      `json:"cache_ttl_minutes"`
+	Enabled           bool     `json:"enabled"`
+	ScanNetworks      []string `json:"scan_networks"`
+	DefaultSSHPort    int      `json:"default_ssh_port"`
+	ConnectionTimeout int      `json:"connection_timeout"`
+	ParallelScans     int      `json:"parallel_scans"`
+	CacheResults      bool     `json:"cache_results"`
+	CacheTTLMinutes   int      `json:"cache_ttl_minutes"`
 }
 
 type SecurityConfig struct {
-	KeyRotationDays      int  `json:"key_rotation_days"`
-	RequireConfirmation  bool `json:"require_confirmation"`
+	KeyRotationDays     int  `json:"key_rotation_days"`
+	RequireConfirmation bool `json:"require_confirmation"`
 	AuditLog            bool `json:"audit_log"`
 	BackupKeys          bool `json:"backup_keys"`
 	VerifyFingerprints  bool `json:"verify_fingerprints"`
@@ -60,17 +60,17 @@ type PreferencesConfig struct {
 }
 
 type NotificationsConfig struct {
-	Enabled       bool   `json:"enabled"`
-	Email         string `json:"email"`
-	WebhookURL    string `json:"webhook_url"`
-	SlackChannel  string `json:"slack_channel"`
+	Enabled      bool   `json:"enabled"`
+	Email        string `json:"email"`
+	WebhookURL   string `json:"webhook_url"`
+	SlackChannel string `json:"slack_channel"`
 }
 
 type BackupConfig struct {
-	AutoBackup         bool `json:"auto_backup"`
-	BackupFrequencyDays int `json:"backup_frequency_days"`
-	MaxBackups         int `json:"max_backups"`
-	CompressBackups    bool `json:"compress_backups"`
+	AutoBackup          bool `json:"auto_backup"`
+	BackupFrequencyDays int  `json:"backup_frequency_days"`
+	MaxBackups          int  `json:"max_backups"`
+	CompressBackups     bool `json:"compress_backups"`
 }
 
 // NewSetupCommand cria o comando de setup
@@ -114,7 +114,7 @@ func runSetup() error {
 		fmt.Println("⚠️  Syntropy management environment already exists.")
 		fmt.Printf("Manager config: %s\n", managerConfig)
 		fmt.Println()
-		
+
 		var response string
 		fmt.Print("Reinitialize? This will preserve existing nodes but reset configuration (y/N): ")
 		fmt.Scanln(&response)
@@ -174,6 +174,7 @@ func createDirectoryStructure() error {
 		filepath.Join(syntropyDir, "keys"),
 		filepath.Join(syntropyDir, "config"),
 		filepath.Join(syntropyDir, "cache"),
+		filepath.Join(syntropyDir, "work"),
 		filepath.Join(syntropyDir, "scripts"),
 		filepath.Join(syntropyDir, "backups"),
 		filepath.Join(syntropyDir, "config", "removed"),
@@ -194,6 +195,7 @@ func createDirectoryStructure() error {
 	fmt.Printf("│   ├── keys/            # SSH keys for all managed nodes\n")
 	fmt.Printf("│   ├── config/          # Manager configuration and templates\n")
 	fmt.Printf("│   ├── cache/           # Temporary files and discovery cache\n")
+	fmt.Printf("│   ├── work/            # Working directories for operations\n")
 	fmt.Printf("│   ├── scripts/         # Custom scripts and tools\n")
 	fmt.Printf("│   └── backups/         # Node configuration backups\n")
 
@@ -206,7 +208,7 @@ func installDependencies() error {
 
 	// Verificar ferramentas necessárias
 	requiredTools := []string{"jq", "nmap", "python3", "ssh-keygen", "curl"}
-	
+
 	for _, tool := range requiredTools {
 		if !commandExists(tool) {
 			missingTools = append(missingTools, tool)
@@ -215,12 +217,12 @@ func installDependencies() error {
 
 	if len(missingTools) > 0 {
 		fmt.Printf("Installing missing dependencies: %v\n", missingTools)
-		
+
 		// Detectar gerenciador de pacotes e instalar
 		if commandExists("apt-get") {
 			cmd := exec.Command("sudo", "apt-get", "update")
 			cmd.Run()
-			
+
 			args := append([]string{"apt-get", "install", "-y"}, missingTools...)
 			cmd = exec.Command("sudo", args...)
 			if err := cmd.Run(); err != nil {
@@ -287,9 +289,9 @@ func createManagerConfig() error {
 		Security: SecurityConfig{
 			KeyRotationDays:     90,
 			RequireConfirmation: true,
-			AuditLog:           true,
-			BackupKeys:         true,
-			VerifyFingerprints: true,
+			AuditLog:            true,
+			BackupKeys:          true,
+			VerifyFingerprints:  true,
 		},
 		Preferences: PreferencesConfig{
 			DefaultEditor:         "nano",
@@ -306,10 +308,10 @@ func createManagerConfig() error {
 			SlackChannel: "",
 		},
 		Backup: BackupConfig{
-			AutoBackup:         true,
+			AutoBackup:          true,
 			BackupFrequencyDays: 7,
-			MaxBackups:         30,
-			CompressBackups:    true,
+			MaxBackups:          30,
+			CompressBackups:     true,
 		},
 	}
 
@@ -735,7 +737,7 @@ func detectLocalNetworks() []string {
 
 	lines := strings.Split(string(output), "\n")
 	networks := []string{}
-	
+
 	for _, line := range lines {
 		if strings.Contains(line, "192.168.") || strings.Contains(line, "10.") || strings.Contains(line, "172.") {
 			parts := strings.Fields(line)
@@ -780,4 +782,3 @@ func getArchitecture() string {
 	}
 	return strings.TrimSpace(string(output))
 }
-

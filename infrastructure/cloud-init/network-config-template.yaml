@@ -1,55 +1,130 @@
+# Syntropy Cooperative Grid - Network Configuration
+# Gerado automaticamente pelo PC de trabalho (Quartel General)
+
 version: 2
 ethernets:
-  # Auto-detect network interfaces and configure with DHCP
+  # Configuração automática para interfaces Ethernet
   en*:
     dhcp4: true
     dhcp6: false
     dhcp4-overrides:
-      hostname: {{.NodeName}}
-      send-hostname: true
+      hostname: ${NODE_NAME}
       use-dns: true
+      use-routes: true
       use-domains: true
     nameservers:
       addresses:
         - 8.8.8.8
         - 8.8.4.4
         - 1.1.1.1
-      search: []
+        - 1.0.0.1
+    routes:
+      - to: 0.0.0.0/0
+        via: ${GATEWAY}
+        metric: 100
   
+  # Configuração automática para interfaces Ethernet (nomenclatura alternativa)
   eth*:
     dhcp4: true
     dhcp6: false
     dhcp4-overrides:
-      hostname: {{.NodeName}}
-      send-hostname: true
+      hostname: ${NODE_NAME}
       use-dns: true
+      use-routes: true
       use-domains: true
     nameservers:
       addresses:
         - 8.8.8.8
         - 8.8.4.4
         - 1.1.1.1
-      search: []
+        - 1.0.0.1
+    routes:
+      - to: 0.0.0.0/0
+        via: ${GATEWAY}
+        metric: 100
   
+  # Configuração automática para interfaces Ethernet (nomenclatura moderna)
   enp*:
     dhcp4: true
     dhcp6: false
     dhcp4-overrides:
-      hostname: {{.NodeName}}
-      send-hostname: true
+      hostname: ${NODE_NAME}
       use-dns: true
+      use-routes: true
       use-domains: true
     nameservers:
       addresses:
         - 8.8.8.8
         - 8.8.4.4
         - 1.1.1.1
-      search: []
+        - 1.0.0.1
+    routes:
+      - to: 0.0.0.0/0
+        via: ${GATEWAY}
+        metric: 100
 
-# Configure loopback interface
-  lo:
-    match:
-      name: lo
+# Configuração de bridge para virtualização (se necessário)
+bridges:
+  br0:
+    interfaces: []
+    dhcp4: false
+    dhcp6: false
     addresses:
-      - 127.0.0.1/8
-      - ::1/128
+      - 172.20.0.${NODE_IP_SUFFIX}/24
+    gateway4: 172.20.0.1
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 1.1.1.1
+        - 1.0.0.1
+    parameters:
+      stp: false
+      forward-delay: 0
+
+# Configuração de VLAN (se necessário)
+vlans:
+  vlan100:
+    id: 100
+    link: ${PRIMARY_INTERFACE}
+    dhcp4: false
+    dhcp6: false
+    addresses:
+      - 192.168.100.${NODE_IP_SUFFIX}/24
+    gateway4: 192.168.100.1
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 1.1.1.1
+        - 1.0.0.1
+
+# Configuração de roteamento estático para redes Syntropy
+routes:
+  # Rota para rede mesh Syntropy
+  - to: 172.20.0.0/12
+    via: ${MESH_GATEWAY}
+    metric: 50
+    table: 100
+  # Rota para rede de gerenciamento
+  - to: 192.168.100.0/24
+    via: ${MGMT_GATEWAY}
+    metric: 75
+    table: 100
+
+# Configuração de regras de roteamento
+routing-policy:
+  - from: 172.20.0.0/12
+    table: 100
+  - from: 192.168.100.0/24
+    table: 100
+
+# Configuração de proxy (se necessário)
+proxy:
+  http: ${HTTP_PROXY}
+  https: ${HTTPS_PROXY}
+  no_proxy:
+    - localhost
+    - 127.0.0.1
+    - 172.20.0.0/12
+    - 192.168.100.0/24

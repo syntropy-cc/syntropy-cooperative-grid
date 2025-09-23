@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"syntropy-cc/cooperative-grid/interfaces/cli/internal/cli/usb"
+
+	"github.com/spf13/cobra"
 )
 
 // NewRootCommand cria o comando raiz da CLI
@@ -76,6 +77,7 @@ func setupDirectories() {
 		filepath.Join(syntropyDir, "keys"),
 		filepath.Join(syntropyDir, "config"),
 		filepath.Join(syntropyDir, "cache"),
+		filepath.Join(syntropyDir, "work"),
 		filepath.Join(syntropyDir, "scripts"),
 		filepath.Join(syntropyDir, "backups"),
 	}
