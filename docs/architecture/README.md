@@ -138,33 +138,33 @@ interfaces/
 #### **Comandos Principais**
 ```bash
 # Gerenciamento de Nós
-syntropy-cli node list
-syntropy-cli node create --usb /dev/sdb --name "node-01"
-syntropy-cli node status <node-id>
-syntropy-cli node update <node-id> --name "new-name"
-syntropy-cli node delete <node-id>
-syntropy-cli node restart <node-id>
+syntropy node list
+syntropy node create --usb /dev/sdb --name "node-01"
+syntropy node status <node-id>
+syntropy node update <node-id> --name "new-name"
+syntropy node delete <node-id>
+syntropy node restart <node-id>
 
 # Gerenciamento de Containers
-syntropy-cli container list
-syntropy-cli container deploy --image nginx --node node-01
-syntropy-cli container status <container-id>
-syntropy-cli container logs <container-id>
-syntropy-cli container start/stop <container-id>
+syntropy container list
+syntropy container deploy --image nginx --node node-01
+syntropy container status <container-id>
+syntropy container logs <container-id>
+syntropy container start/stop <container-id>
 
 # Gerenciamento de Rede
-syntropy-cli network status
-syntropy-cli network topology
-syntropy-cli network routes list
-syntropy-cli network routes create --source node-01 --destination node-02
-syntropy-cli network mesh status
+syntropy network status
+syntropy network topology
+syntropy network routes list
+syntropy network routes create --source node-01 --destination node-02
+syntropy network mesh status
 
 # Serviços Cooperativos
-syntropy-cli cooperative credits balance
-syntropy-cli cooperative credits transfer --from node-01 --to node-02 --amount 100
-syntropy-cli cooperative governance proposals
-syntropy-cli cooperative governance vote --proposal prop-01 --vote yes
-syntropy-cli cooperative reputation show
+syntropy cooperative credits balance
+syntropy cooperative credits transfer --from node-01 --to node-02 --amount 100
+syntropy cooperative governance proposals
+syntropy cooperative governance vote --proposal prop-01 --vote yes
+syntropy cooperative reputation show
 ```
 
 ### **2. Web Interface**

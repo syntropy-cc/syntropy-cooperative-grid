@@ -675,3 +675,4 @@ Este roadmap segue a metodologia ágil com sprints de 2 semanas, focando em entr
 ---
 
 **Este roadmap é um documento vivo que será atualizado conforme o progresso e feedback dos usuários.**
+

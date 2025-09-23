@@ -128,7 +128,7 @@ Criar uma interface de linha de comando funcional e robusta que permita gerencia
 - [ ] Adicionar tratamento de erros robusto
 
 #### **Entregáveis**
-- [ ] Comando `syntropy-cli node create` funcional
+- [ ] Comando `syntropy node create` funcional
 - [ ] Detecção de USB cross-platform
 - [ ] Formatação de USB com tratamento de permissões
 - [ ] Geração de chaves SSH

@@ -491,3 +491,4 @@ gh pr create --title "Sua Feature" --body "Descrição detalhada"
 ---
 
 **Bem-vindo à equipe de desenvolvimento do Syntropy Cooperative Grid! 🚀**
+

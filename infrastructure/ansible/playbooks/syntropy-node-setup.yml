@@ -1,0 +1,574 @@
+---
+# Syntropy Cooperative Grid - Node Setup Playbook
+# This playbook configures Syntropy nodes with all necessary services and configurations
+
+- name: Syntropy Cooperative Grid Node Setup
+  hosts: syntropy_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    syntropy_platform_version: "2.0.0"
+    syntropy_install_dir: "/opt/syntropy"
+    syntropy_config_dir: "{{ syntropy_install_dir }}/config"
+    syntropy_logs_dir: "{{ syntropy_install_dir }}/logs"
+    syntropy_backups_dir: "{{ syntropy_install_dir }}/backups"
+    
+  pre_tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+      tags: [system, packages]
+    
+    - name: Install essential packages
+      apt:
+        name:
+          - curl
+          - wget
+          - git
+          - vim
+          - htop
+          - jq
+          - python3
+          - python3-pip
+          - python3-venv
+          - unzip
+          - software-properties-common
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - lsb-release
+        state: present
+      tags: [system, packages]
+    
+    - name: Create Syntropy directory structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: admin
+        group: admin
+        mode: '0755'
+      loop:
+        - "{{ syntropy_install_dir }}"
+        - "{{ syntropy_config_dir }}"
+        - "{{ syntropy_logs_dir }}"
+        - "{{ syntropy_backups_dir }}"
+        - "{{ syntropy_install_dir }}/identity/owner"
+        - "{{ syntropy_install_dir }}/identity/community"
+        - "{{ syntropy_install_dir }}/platform/templates"
+        - "{{ syntropy_install_dir }}/platform/scripts"
+        - "{{ syntropy_install_dir }}/platform/data"
+        - "{{ syntropy_install_dir }}/metadata"
+      tags: [syntropy, directories]
+    
+    - name: Set up SSH directory
+      file:
+        path: /home/admin/.ssh
+        state: directory
+        owner: admin
+        group: admin
+        mode: '0700'
+      tags: [ssh, security]
+  
+  tasks:
+    # Docker Installation and Configuration
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      tags: [docker]
+    
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      tags: [docker]
+    
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+      tags: [docker]
+    
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags: [docker]
+    
+    - name: Add admin user to docker group
+      user:
+        name: admin
+        groups: docker
+        append: yes
+      tags: [docker]
+    
+    # SSH Configuration
+    - name: Configure SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?AllowUsers', line: 'AllowUsers admin' }
+      notify: restart ssh
+      tags: [ssh, security]
+    
+    # Firewall Configuration
+    - name: Reset UFW to defaults
+      ufw:
+        state: reset
+      tags: [firewall]
+    
+    - name: Configure UFW defaults
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+      tags: [firewall]
+    
+    - name: Allow SSH through firewall
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+      tags: [firewall]
+    
+    - name: Allow Prometheus Node Exporter through firewall
+      ufw:
+        rule: allow
+        port: '9100'
+        proto: tcp
+      tags: [firewall]
+    
+    - name: Enable UFW
+      ufw:
+        state: enabled
+      tags: [firewall]
+    
+    # Monitoring Configuration
+    - name: Install Prometheus Node Exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+      tags: [monitoring]
+    
+    - name: Configure Prometheus Node Exporter
+      lineinfile:
+        path: /etc/default/prometheus-node-exporter
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^ARGS=', line: 'ARGS="--collector.systemd --collector.textfile --collector.textfile.directory=/var/lib/node_exporter/textfile_collector"' }
+      notify: restart prometheus-node-exporter
+      tags: [monitoring]
+    
+    - name: Start and enable Prometheus Node Exporter
+      systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: yes
+      tags: [monitoring]
+    
+    # Fail2ban Configuration
+    - name: Install Fail2ban
+      apt:
+        name: fail2ban
+        state: present
+      tags: [security]
+    
+    - name: Configure Fail2ban for SSH
+      copy:
+        content: |
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          bantime = 3600
+          findtime = 600
+        dest: /etc/fail2ban/jail.local
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart fail2ban
+      tags: [security]
+    
+    - name: Start and enable Fail2ban
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+      tags: [security]
+    
+    # Syntropy Platform Configuration
+    - name: Create platform configuration
+      copy:
+        content: |
+          platform:
+            name: syntropy_cooperative_grid
+            version: "{{ syntropy_platform_version }}"
+            node_id: "{{ node_id | default('unknown') }}"
+            node_name: "{{ node_name | default(inventory_hostname) }}"
+            coordinates: "{{ coordinates | default('0,0') }}"
+            description: "{{ description | default('Syntropy Cooperative Grid Node') }}"
+            
+            capabilities:
+              - container_orchestration
+              - resource_sharing
+              - cooperative_computing
+              - distributed_storage
+              - service_mesh
+              - universal_applications
+            
+            services:
+              docker:
+                enabled: true
+                version: "latest"
+              ssh:
+                enabled: true
+                port: 22
+              prometheus_exporter:
+                enabled: true
+                port: 9100
+              firewall:
+                enabled: true
+                policy: "deny_incoming"
+            
+            universal_support:
+              scientific_computing: ["fortran", "python", "r", "julia", "matlab"]
+              web_applications: ["nodejs", "python", "java", "go", "php", "ruby"]
+              machine_learning: ["tensorflow", "pytorch", "scikit-learn", "keras"]
+              databases: ["postgresql", "mongodb", "redis", "mysql", "cassandra"]
+              custom_applications: "any_containerized_application"
+        dest: "{{ syntropy_config_dir }}/platform.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, config]
+    
+    - name: Create monitoring configuration
+      copy:
+        content: |
+          monitoring:
+            prometheus:
+              node_exporter:
+                enabled: true
+                port: 9100
+                collectors:
+                  - cpu
+                  - memory
+                  - disk
+                  - network
+                  - filesystem
+                  - systemd
+            
+            health_checks:
+              - name: "docker_service"
+                command: "systemctl is-active docker"
+                interval: "30s"
+              - name: "ssh_service"
+                command: "systemctl is-active ssh"
+                interval: "30s"
+              - name: "disk_space"
+                command: "df -h / | awk 'NR==2{print $5}' | sed 's/%//'"
+                threshold: 90
+                interval: "60s"
+              - name: "memory_usage"
+                command: "free | awk 'NR==2{printf \"%.2f\", $3*100/$2 }'"
+                threshold: 90
+                interval: "60s"
+        dest: "{{ syntropy_config_dir }}/monitoring.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, config, monitoring]
+    
+    - name: Create network configuration
+      copy:
+        content: |
+          network:
+            mesh:
+              enabled: true
+              encryption: true
+              port: 443
+            api:
+              port: 8080
+              ssl: true
+            discovery:
+              enabled: true
+              method: "multicast"
+        dest: "{{ syntropy_config_dir }}/network.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, config, network]
+    
+    # Kubernetes Templates
+    - name: Create Kubernetes templates directory
+      file:
+        path: "{{ syntropy_install_dir }}/platform/templates/kubernetes"
+        state: directory
+        owner: admin
+        group: admin
+        mode: '0755'
+      tags: [syntropy, templates]
+    
+    - name: Create scientific computing batch job template
+      copy:
+        content: |
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: scientific-computation
+            namespace: default
+            labels:
+              app: scientific-computing
+              platform: syntropy
+          spec:
+            template:
+              spec:
+                containers:
+                - name: computation
+                  image: ubuntu:22.04
+                  command: ["/bin/bash"]
+                  args: ["-c", "echo \"Starting computation...\" && sleep 30 && echo \"Computation complete\""]
+                  resources:
+                    requests:
+                      cpu: "100m"
+                      memory: "128Mi"
+                    limits:
+                      cpu: "2000m"
+                      memory: "2Gi"
+                restartPolicy: Never
+            backoffLimit: 3
+        dest: "{{ syntropy_install_dir }}/platform/templates/kubernetes/scientific-computing-job.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, templates]
+    
+    - name: Create web service template
+      copy:
+        content: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: web-application
+            namespace: default
+            labels:
+              app: web-application
+              platform: syntropy
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: web-application
+            template:
+              metadata:
+                labels:
+                  app: web-application
+              spec:
+                containers:
+                - name: web
+                  image: nginx:alpine
+                  ports:
+                  - containerPort: 80
+                  resources:
+                    requests:
+                      cpu: "50m"
+                      memory: "64Mi"
+                    limits:
+                      cpu: "500m"
+                      memory: "512Mi"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: web-service
+            labels:
+              platform: syntropy
+          spec:
+            selector:
+              app: web-application
+            ports:
+            - port: 80
+              targetPort: 80
+            type: ClusterIP
+        dest: "{{ syntropy_install_dir }}/platform/templates/kubernetes/web-service.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, templates]
+    
+    - name: Create database template
+      copy:
+        content: |
+          apiVersion: apps/v1
+          kind: StatefulSet
+          metadata:
+            name: database-service
+            namespace: default
+            labels:
+              app: database
+              platform: syntropy
+          spec:
+            serviceName: database
+            replicas: 1
+            selector:
+              matchLabels:
+                app: database
+            template:
+              metadata:
+                labels:
+                  app: database
+              spec:
+                containers:
+                - name: database
+                  image: postgres:15-alpine
+                  env:
+                  - name: POSTGRES_DB
+                    value: "syntropy"
+                  - name: POSTGRES_USER
+                    value: "admin"
+                  - name: POSTGRES_PASSWORD
+                    value: "changeme"
+                  ports:
+                  - containerPort: 5432
+                  volumeMounts:
+                  - name: data
+                    mountPath: /var/lib/postgresql/data
+                  resources:
+                    requests:
+                      cpu: "100m"
+                      memory: "256Mi"
+                    limits:
+                      cpu: "1000m"
+                      memory: "1Gi"
+            volumeClaimTemplates:
+            - metadata:
+                name: data
+              spec:
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 10Gi
+        dest: "{{ syntropy_install_dir }}/platform/templates/kubernetes/database-statefulset.yaml"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, templates]
+    
+    # Node metadata
+    - name: Create node metadata
+      copy:
+        content: |
+          {
+            "metadata_version": "2.0",
+            "node_info": {
+              "node_id": "{{ node_id | default('unknown') }}",
+              "node_name": "{{ node_name | default(inventory_hostname) }}",
+              "hostname": "{{ inventory_hostname }}",
+              "description": "{{ description | default('Syntropy Cooperative Grid Node') }}",
+              "installation_time": "{{ ansible_date_time.iso8601 }}",
+              "platform_version": "{{ syntropy_platform_version }}",
+              "platform_type": "syntropy_cooperative_grid"
+            },
+            "geographic_info": {
+              "coordinates": {
+                "latitude": {{ coordinates.split(',')[0] if coordinates is defined and ',' in coordinates else 0 }},
+                "longitude": {{ coordinates.split(',')[1] if coordinates is defined and ',' in coordinates else 0 }},
+                "formatted": "{{ coordinates | default('0,0') }}"
+              },
+              "detection": {
+                "method": "ansible_provisioning",
+                "timestamp": "{{ ansible_date_time.iso8601 }}",
+                "accuracy": "high"
+              }
+            },
+            "hardware": {
+              "cpu_cores": {{ ansible_processor_vcpus }},
+              "ram_gb": {{ ansible_memtotal_mb // 1024 }},
+              "architecture": "{{ ansible_architecture }}",
+              "detection_time": "{{ ansible_date_time.iso8601 }}"
+            },
+            "network": {
+              "ip_address": "{{ ansible_default_ipv4.address }}",
+              "interfaces": "{{ ansible_interfaces | join(',') }}",
+              "hostname": "{{ inventory_hostname }}",
+              "dhcp_configured": true
+            },
+            "security": {
+              "ssh_port": 22,
+              "authentication_method": "key_only",
+              "firewall_enabled": true
+            },
+            "platform": {
+              "type": "syntropy_cooperative_grid",
+              "status": "installed",
+              "services": {
+                "docker": "enabled",
+                "ssh": "enabled",
+                "prometheus_exporter": "enabled",
+                "firewall": "enabled"
+              }
+            },
+            "management": {
+              "status": "installed",
+              "installation_complete": true,
+              "ssh_ready": true,
+              "first_boot": "{{ ansible_date_time.iso8601 }}",
+              "last_update": "{{ ansible_date_time.iso8601 }}"
+            }
+          }
+        dest: "{{ syntropy_install_dir }}/metadata/node.json"
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy, metadata]
+    
+    # Create ready indicator
+    - name: Create ready indicator
+      file:
+        path: "{{ syntropy_install_dir }}/.ready"
+        state: touch
+        owner: admin
+        group: admin
+        mode: '0644'
+      tags: [syntropy]
+    
+    # Log completion
+    - name: Log installation completion
+      shell: |
+        echo "Syntropy Cooperative Grid node {{ node_name | default(inventory_hostname) }} setup completed at $(date)" | logger -t syntropy
+      tags: [syntropy, logging]
+  
+  handlers:
+    - name: restart ssh
+      systemd:
+        name: ssh
+        state: restarted
+    
+    - name: restart prometheus-node-exporter
+      systemd:
+        name: prometheus-node-exporter
+        state: restarted
+    
+    - name: restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted

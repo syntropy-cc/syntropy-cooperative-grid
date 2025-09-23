@@ -1,0 +1,55 @@
+version: 2
+ethernets:
+  # Auto-detect network interfaces and configure with DHCP
+  en*:
+    dhcp4: true
+    dhcp6: false
+    dhcp4-overrides:
+      hostname: {{.NodeName}}
+      send-hostname: true
+      use-dns: true
+      use-domains: true
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 1.1.1.1
+      search: []
+  
+  eth*:
+    dhcp4: true
+    dhcp6: false
+    dhcp4-overrides:
+      hostname: {{.NodeName}}
+      send-hostname: true
+      use-dns: true
+      use-domains: true
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 1.1.1.1
+      search: []
+  
+  enp*:
+    dhcp4: true
+    dhcp6: false
+    dhcp4-overrides:
+      hostname: {{.NodeName}}
+      send-hostname: true
+      use-dns: true
+      use-domains: true
+    nameservers:
+      addresses:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 1.1.1.1
+      search: []
+
+# Configure loopback interface
+  lo:
+    match:
+      name: lo
+    addresses:
+      - 127.0.0.1/8
+      - ::1/128

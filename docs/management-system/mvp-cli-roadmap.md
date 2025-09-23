@@ -154,7 +154,7 @@ go mod tidy
 .PHONY: build test lint clean
 
 build:
-	go build -o bin/syntropy-cli interfaces/cli/cmd/main.go
+	go build -o bin/syntropy interfaces/cli/cmd/main.go
 
 test:
 	go test ./...
@@ -397,7 +397,7 @@ func (p *ProgressBar) Update(step string, progress int) {
 ```
 
 ### **Entregáveis**
-- [ ] Comando `syntropy-cli node create` funcional
+- [ ] Comando `syntropy node create` funcional
 - [ ] Detecção de USB cross-platform
 - [ ] Formatação de USB com tratamento de permissões
 - [ ] Geração de chaves SSH

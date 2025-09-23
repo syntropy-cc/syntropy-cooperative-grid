@@ -1,0 +1,103 @@
+# Syntropy Cooperative Grid - Exemplo de Configuração
+# Este arquivo demonstra como configurar deployment de nós
+
+# Configurações globais
+global:
+  environment: "dev"
+  region: "us-west-2"
+  project_name: "syntropy-cooperative-grid"
+
+# Configurações de nós
+nodes:
+  count: 3
+  instance_type: "t3.medium"
+  node_prefix: "syntropy-node"
+  
+  # Configurações específicas por nó
+  configurations:
+    - name: "syntropy-node-01"
+      coordinates: "-23.5505,-46.6333"  # São Paulo, Brasil
+      description: "Nó principal em São Paulo"
+      type: "server"
+      
+    - name: "syntropy-node-02"
+      coordinates: "-22.9068,-43.1729"  # Rio de Janeiro, Brasil
+      description: "Nó secundário no Rio de Janeiro"
+      type: "server"
+      
+    - name: "syntropy-node-03"
+      coordinates: "-15.7801,-47.9292"  # Brasília, Brasil
+      description: "Nó de borda em Brasília"
+      type: "edge"
+
+# Configurações de rede
+network:
+  mesh:
+    enabled: true
+    encryption: true
+    port: 443
+  
+  api:
+    port: 8080
+    ssl: true
+  
+  discovery:
+    enabled: true
+    method: "multicast"
+
+# Configurações de segurança
+security:
+  ssh:
+    port: 22
+    key_algorithm: "ed25519"
+    key_size: 4096
+  
+  firewall:
+    enabled: true
+    default_policy: "deny_incoming"
+    allowed_ports:
+      - 22    # SSH
+      - 80    # HTTP
+      - 443   # HTTPS
+      - 9100  # Prometheus
+
+# Configurações de monitoramento
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9100
+    collectors:
+      - cpu
+      - memory
+      - disk
+      - network
+      - filesystem
+  
+  health_checks:
+    enabled: true
+    interval: "30s"
+    checks:
+      - name: "docker_service"
+        command: "systemctl is-active docker"
+      - name: "ssh_service"
+        command: "systemctl is-active ssh"
+      - name: "disk_space"
+        command: "df -h / | awk 'NR==2{print $5}' | sed 's/%//'"
+        threshold: 90
+
+# Configurações de plataforma
+platform:
+  capabilities:
+    - container_orchestration
+    - resource_sharing
+    - cooperative_computing
+    - distributed_storage
+    - service_mesh
+    - universal_applications
+  
+  universal_support:
+    scientific_computing: ["fortran", "python", "r", "julia", "matlab"]
+    web_applications: ["nodejs", "python", "java", "go", "php", "ruby"]
+    machine_learning: ["tensorflow", "pytorch", "scikit-learn", "keras"]
+    databases: ["postgresql", "mongodb", "redis", "mysql", "cassandra"]
+    custom_applications: "any_containerized_application"

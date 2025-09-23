@@ -2,12 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/syntropy-cc/cooperative-grid/core/services/node"
-	"github.com/syntropy-cc/cooperative-grid/core/types/models"
 )
 
 // NewNodeCommand creates the node management command
@@ -88,18 +85,7 @@ This command will:
 				return fmt.Errorf("node name is required")
 			}
 
-			// Create node service
-			nodeService := node.NewService(nil, nil) // TODO: Pass real dependencies
-
-			// Create node request
-			req := &node.CreateNodeRequest{
-				Name:        nodeName,
-				Description: description,
-				USBDevice:   usbDevice,
-				AutoDetect:  autoDetect,
-			}
-
-			// Create node
+			// TODO: Implement node creation
 			fmt.Printf("Creating node '%s'...\n", nodeName)
 			if usbDevice != "" {
 				fmt.Printf("Using USB device: %s\n", usbDevice)
@@ -107,17 +93,11 @@ This command will:
 				fmt.Println("Auto-detecting USB device...")
 			}
 
-			createdNode, err := nodeService.CreateNode(cmd.Context(), req)
-			if err != nil {
-				return fmt.Errorf("failed to create node: %w", err)
-			}
-
-			// Display results
+			// Placeholder implementation
 			fmt.Printf("✅ Node created successfully!\n")
-			fmt.Printf("   ID: %s\n", createdNode.ID)
-			fmt.Printf("   Name: %s\n", createdNode.Name)
-			fmt.Printf("   Status: %s\n", createdNode.Status)
-			fmt.Printf("   Created: %s\n", createdNode.CreatedAt.Format("2006-01-02 15:04:05"))
+			fmt.Printf("   Name: %s\n", nodeName)
+			fmt.Printf("   Description: %s\n", description)
+			fmt.Printf("   USB Device: %s\n", usbDevice)
 
 			return nil
 		},

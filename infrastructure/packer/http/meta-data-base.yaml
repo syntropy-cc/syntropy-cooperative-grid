@@ -1,0 +1,11 @@
+instance-id: syntropy-base-node-${random_id.node_id.hex}
+local-hostname: ${var.node_name}
+network:
+  version: 2
+  ethernets:
+    en*:
+      dhcp4: true
+    eth*:
+      dhcp4: true
+    enp*:
+      dhcp4: true

@@ -193,10 +193,10 @@ O **Management Core** é o coração do sistema, contendo toda a lógica de gere
 - Cross-platform nativo
 
 # Exemplos de Uso
-syntropy-cli node create --usb /dev/sdb --name "production-node-01"
-syntropy-cli container deploy --template nginx --scale 3 --node node-01
-syntropy-cli network mesh enable --encryption --monitoring
-syntropy-cli cooperative credits transfer --from node-01 --to node-02 --amount 100
+syntropy node create --usb /dev/sdb --name "production-node-01"
+syntropy container deploy --template nginx --scale 3 --node node-01
+syntropy network mesh enable --encryption --monitoring
+syntropy cooperative credits transfer --from node-01 --to node-02 --amount 100
 ```
 
 #### **Web Interface (React/Next.js)**
@@ -361,29 +361,29 @@ syntropy-cli cooperative credits transfer --from node-01 --to node-02 --amount 1
 #### **Exemplos de Comandos**
 ```bash
 # Gerenciamento de Nós
-syntropy-cli node list --format table --filter running
-syntropy-cli node create --usb /dev/sdb --name "prod-node-01" --auto-config
-syntropy-cli node status node-01 --watch --format json
-syntropy-cli node update node-01 --config-file production.yaml
-syntropy-cli node restart node-01 --force
+syntropy node list --format table --filter running
+syntropy node create --usb /dev/sdb --name "prod-node-01" --auto-config
+syntropy node status node-01 --watch --format json
+syntropy node update node-01 --config-file production.yaml
+syntropy node restart node-01 --force
 
 # Gerenciamento de Containers
-syntropy-cli container deploy --template nginx --node node-01 --scale 3
-syntropy-cli container list --node node-01 --status running
-syntropy-cli container logs container-01 --follow --tail 100
-syntropy-cli container scale container-01 --replicas 5
+syntropy container deploy --template nginx --node node-01 --scale 3
+syntropy container list --node node-01 --status running
+syntropy container logs container-01 --follow --tail 100
+syntropy container scale container-01 --replicas 5
 
 # Gerenciamento de Rede
-syntropy-cli network mesh enable --encryption --monitoring
-syntropy-cli network routes create --source node-01 --dest node-02 --priority 1
-syntropy-cli network topology --format graphviz
-syntropy-cli network health --detailed
+syntropy network mesh enable --encryption --monitoring
+syntropy network routes create --source node-01 --dest node-02 --priority 1
+syntropy network topology --format graphviz
+syntropy network health --detailed
 
 # Gerenciamento Cooperativo
-syntropy-cli cooperative credits balance --node node-01
-syntropy-cli cooperative credits transfer --from node-01 --to node-02 --amount 100
-syntropy-cli cooperative governance proposals --status active
-syntropy-cli cooperative governance vote --proposal prop-01 --vote yes
+syntropy cooperative credits balance --node node-01
+syntropy cooperative credits transfer --from node-01 --to node-02 --amount 100
+syntropy cooperative governance proposals --status active
+syntropy cooperative governance vote --proposal prop-01 --vote yes
 ```
 
 ### **2. Web Interface**
@@ -579,13 +579,13 @@ Um administrador de sistema precisa gerenciar uma grid com 1000+ nós distribuí
 #### **Solução com Management System**
 ```bash
 # Monitoramento em tempo real
-syntropy-cli node list --status unhealthy --format json | jq '.[].id' | xargs -I {} syntropy-cli node restart {}
+syntropy node list --status unhealthy --format json | jq '.[].id' | xargs -I {} syntropy node restart {}
 
 # Aplicação de atualizações
-syntropy-cli node update --all --security-patches --rollback-on-failure
+syntropy node update --all --security-patches --rollback-on-failure
 
 # Análise de performance
-syntropy-cli analytics performance --time-range 7d --export report.pdf
+syntropy analytics performance --time-range 7d --export report.pdf
 ```
 
 ### **2. Desenvolvedor de Aplicações**
@@ -602,13 +602,13 @@ Um desenvolvedor precisa fazer deploy de uma aplicação distribuída na grid.
 #### **Solução com Management System**
 ```bash
 # Deploy da aplicação
-syntropy-cli container deploy --template microservices-app --nodes "node-01,node-02,node-03"
+syntropy container deploy --template microservices-app --nodes "node-01,node-02,node-03"
 
 # Configuração de dependências
-syntropy-cli network routes create --service app-frontend --service app-backend --service app-database
+syntropy network routes create --service app-frontend --service app-backend --service app-database
 
 # Monitoramento e scaling
-syntropy-cli container scale --service app-backend --min-replicas 2 --max-replicas 10 --cpu-threshold 70
+syntropy container scale --service app-backend --min-replicas 2 --max-replicas 10 --cpu-threshold 70
 ```
 
 ### **3. Operador de Rede**
@@ -625,13 +625,13 @@ Um operador de rede precisa otimizar a conectividade e performance da grid.
 #### **Solução com Management System**
 ```bash
 # Configuração de service mesh
-syntropy-cli network mesh configure --encryption --load-balancing --monitoring
+syntropy network mesh configure --encryption --load-balancing --monitoring
 
 # Otimização de rotas
-syntropy-cli network routes optimize --algorithm shortest-path --update-existing
+syntropy network routes optimize --algorithm shortest-path --update-existing
 
 # Políticas de segurança
-syntropy-cli network security policies apply --policy-file security-policies.yaml
+syntropy network security policies apply --policy-file security-policies.yaml
 ```
 
 ### **4. Participante Cooperativo**
@@ -648,14 +648,14 @@ Um participante da cooperativa precisa gerenciar seus recursos e participar da g
 #### **Solução com Management System**
 ```bash
 # Monitoramento de créditos
-syntropy-cli cooperative credits balance --detailed --history 30d
+syntropy cooperative credits balance --detailed --history 30d
 
 # Participação na governança
-syntropy-cli cooperative governance proposals --status voting
-syntropy-cli cooperative governance vote --proposal prop-123 --vote yes --reason "Improves network efficiency"
+syntropy cooperative governance proposals --status voting
+syntropy cooperative governance vote --proposal prop-123 --vote yes --reason "Improves network efficiency"
 
 # Análise de reputação
-syntropy-cli cooperative reputation show --trend --recommendations
+syntropy cooperative reputation show --trend --recommendations
 ```
 
 ---

@@ -1,0 +1,161 @@
+# Syntropy Cooperative Grid CLI - Configuração
+# Este arquivo define configurações padrão para a CLI
+
+# Configurações globais
+global:
+  # Ambiente de execução
+  environment: "dev"  # dev, staging, prod
+  
+  # Diretórios padrão
+  work_dir: "/tmp/syntropy-work"
+  cache_dir: "~/.syntropy/cache"
+  config_dir: "~/.syntropy/config"
+  
+  # Configurações de logging
+  log_level: "info"  # debug, info, warn, error
+  log_format: "text"  # text, json
+  
+  # Configurações de output
+  output_format: "table"  # table, json, yaml
+  color_output: true
+  
+  # Configurações de rede
+  timeout: 30  # segundos
+  retry_count: 3
+
+# Configurações específicas do USB Service
+usb:
+  # Detecção automática
+  auto_detect: true
+  auto_detect_timeout: 10  # segundos
+  
+  # Formatação padrão
+  default_label: "SYNTROPY"
+  default_filesystem: "FAT32"
+  
+  # Validações de segurança
+  require_confirmation: true
+  prevent_system_disk_format: true
+  
+  # Configurações de montagem
+  mount_timeout: 30  # segundos
+  unmount_timeout: 10  # segundos
+  
+  # Templates de Infrastructure as Code
+  template_dir: "../../infrastructure"
+  
+  # Configurações de chaves SSH
+  ssh:
+    default_algorithm: "ed25519"  # ed25519, rsa
+    rsa_key_size: 4096
+    key_dir: "~/.syntropy/keys"
+
+# Configurações específicas do Node Service
+node:
+  # Configurações padrão de nós
+  default_coordinates: "0,0"
+  default_description: "Syntropy Cooperative Grid Node"
+  
+  # Configurações de monitoramento
+  monitoring:
+    prometheus_port: 9100
+    health_check_interval: 30  # segundos
+  
+  # Configurações de rede
+  network:
+    ssh_port: 22
+    api_port: 8080
+    mesh_port: 443
+
+# Configurações específicas do Container Service
+container:
+  # Runtime padrão
+  default_runtime: "docker"
+  
+  # Configurações de recursos
+  default_resources:
+    cpu: "100m"
+    memory: "128Mi"
+  
+  # Configurações de rede
+  network_mode: "bridge"
+  
+  # Configurações de armazenamento
+  storage_driver: "overlay2"
+
+# Configurações específicas do Network Service
+network:
+  # Configurações de mesh
+  mesh:
+    enabled: true
+    encryption: true
+    port: 443
+  
+  # Configurações de descoberta
+  discovery:
+    enabled: true
+    method: "multicast"
+  
+  # Configurações de roteamento
+  routing:
+    algorithm: "shortest_path"
+    metrics: ["latency", "bandwidth"]
+
+# Configurações específicas do Cooperative Service
+cooperative:
+  # Sistema de créditos
+  credits:
+    initial_balance: 1000
+    transfer_fee: 0.01
+  
+  # Sistema de governança
+  governance:
+    proposal_threshold: 100
+    voting_period: 7  # dias
+  
+  # Sistema de reputação
+  reputation:
+    initial_score: 100
+    decay_rate: 0.01
+
+# Configurações de API
+api:
+  # Endpoints
+  base_url: "https://api.syntropy.coop"
+  version: "v1"
+  
+  # Autenticação
+  auth:
+    token_file: "~/.syntropy/token"
+    refresh_threshold: 300  # segundos
+  
+  # Configurações de requisição
+  request:
+    timeout: 30  # segundos
+    retry_count: 3
+    retry_delay: 1  # segundos
+
+# Configurações de desenvolvimento
+development:
+  # Debug
+  debug: false
+  verbose: false
+  
+  # Mock services
+  mock_services: false
+  
+  # Test data
+  use_test_data: false
+
+# Configurações de segurança
+security:
+  # Validação de certificados SSL
+  verify_ssl: true
+  
+  # Configurações de chaves
+  key_validation: true
+  key_rotation: false
+  
+  # Configurações de auditoria
+  audit_logging: true
+  audit_file: "~/.syntropy/audit.log"

@@ -1,0 +1,287 @@
+# Syntropy Cooperative Grid - Configuração de Exemplo
+# Copie este arquivo para config.yaml e ajuste conforme necessário
+
+# Configurações globais
+global:
+  # Diretório de trabalho
+  work_dir: "/tmp/syntropy-work"
+  
+  # Diretório de cache
+  cache_dir: "~/.syntropy/cache"
+  
+  # Modo debug
+  debug: false
+  
+  # Timeout para operações (em segundos)
+  timeout: 300
+
+# Configurações de USB
+usb:
+  # Tamanho mínimo de USB (em GB)
+  min_size_gb: 8
+  
+  # Tamanho máximo de USB (em GB)
+  max_size_gb: 1024
+  
+  # Rótulo padrão do sistema de arquivos
+  default_label: "SYNTROPY"
+  
+  # Sistema de arquivos padrão
+  filesystem: "fat32"
+  
+  # Validações de segurança
+  safety:
+    # Verificar se é disco do sistema
+    check_system_disk: true
+    
+    # Confirmar antes de formatar
+    confirm_before_format: true
+    
+    # Verificar tamanho do dispositivo
+    validate_size: true
+
+# Configurações de rede
+network:
+  # Porta SSH padrão
+  ssh_port: 22
+  
+  # Porta de monitoramento
+  monitoring_port: 9100
+  
+  # Timeout de conexão SSH (em segundos)
+  ssh_timeout: 30
+  
+  # Tentativas de conexão SSH
+  ssh_retries: 3
+
+# Configurações de nó
+node:
+  # Usuário padrão
+  default_user: "admin"
+  
+  # Grupo padrão
+  default_group: "admin"
+  
+  # Shell padrão
+  default_shell: "/bin/bash"
+  
+  # Configurações SSH
+  ssh:
+    # Tipo de chave SSH
+    key_type: "rsa"
+    
+    # Tamanho da chave SSH
+    key_size: 4096
+    
+    # Comentário da chave SSH
+    key_comment: "syntropy-node"
+
+# Configurações de container
+container:
+  # Runtime padrão
+  runtime: "docker"
+  
+  # Registro padrão
+  registry: "docker.io"
+  
+  # Configurações de rede
+  network:
+    # Driver de rede padrão
+    driver: "bridge"
+    
+    # Subnet padrão
+    subnet: "172.17.0.0/16"
+
+# Configurações de ISO
+iso:
+  # URL da ISO Ubuntu
+  ubuntu_url: "http://cdimage.ubuntu.com/ubuntu/releases/22.04/release/ubuntu-22.04.4-server-amd64.iso"
+  
+  # Arquivo da ISO
+  ubuntu_file: "ubuntu-22.04.4-server-amd64.iso"
+  
+  # SHA256 da ISO (para verificação de integridade)
+  ubuntu_sha256: "e5b72cc9a2f2373340bdf8294c3a0309bb7c6b9e8c5c4e4e4e4e4e4e4e4e4e4e4"
+  
+  # Cache de ISO
+  cache_enabled: true
+  
+  # Verificar integridade da ISO
+  verify_integrity: true
+
+# Configurações de cloud-init
+cloud_init:
+  # Configurações de pacotes
+  packages:
+    - "docker.io"
+    - "curl"
+    - "wget"
+    - "git"
+    - "htop"
+    - "ufw"
+    - "fail2ban"
+    - "prometheus-node-exporter"
+  
+  # Comandos de inicialização
+  runcmd:
+    - "systemctl enable docker"
+    - "systemctl start docker"
+    - "systemctl enable prometheus-node-exporter"
+    - "systemctl start prometheus-node-exporter"
+    - "ufw allow 22/tcp"
+    - "ufw allow 9100/tcp"
+    - "ufw --force enable"
+  
+  # Configurações de firewall
+  firewall:
+    enabled: true
+    rules:
+      - port: 22
+        protocol: "tcp"
+        action: "allow"
+        comment: "SSH"
+      - port: 9100
+        protocol: "tcp"
+        action: "allow"
+        comment: "Prometheus Node Exporter"
+
+# Configurações de logging
+logging:
+  # Nível de log
+  level: "info"
+  
+  # Formato de log
+  format: "json"
+  
+  # Arquivo de log
+  file: "~/.syntropy/logs/syntropy.log"
+  
+  # Rotação de logs
+  rotation:
+    enabled: true
+    max_size: "100MB"
+    max_age: 30
+    max_backups: 5
+
+# Configurações de métricas
+metrics:
+  # Habilitar métricas
+  enabled: true
+  
+  # Porta das métricas
+  port: 9090
+  
+  # Intervalo de coleta (em segundos)
+  interval: 30
+
+# Configurações de backup
+backup:
+  # Habilitar backup automático
+  enabled: true
+  
+  # Intervalo de backup (em horas)
+  interval: 24
+  
+  # Manter backups por (em dias)
+  retention: 7
+  
+  # Diretório de backup
+  directory: "~/.syntropy/backups"
+
+# Configurações de segurança
+security:
+  # Verificar assinatura de arquivos
+  verify_signatures: true
+  
+  # Usar TLS para downloads
+  use_tls: true
+  
+  # Verificar certificados SSL
+  verify_ssl: true
+  
+  # Timeout de conexão segura (em segundos)
+  secure_timeout: 60
+
+# Configurações de plataforma específica
+platform:
+  # Configurações para WSL
+  wsl:
+    # Detectar WSL automaticamente
+    auto_detect: true
+    
+    # Usar PowerShell para detecção de USB
+    use_powershell: true
+    
+    # Timeout para comandos PowerShell (em segundos)
+    powershell_timeout: 30
+  
+  # Configurações para Windows
+  windows:
+    # Usar diskpart para formatação
+    use_diskpart: true
+    
+    # Usar PowerShell para operações
+    use_powershell: true
+    
+    # Elevação automática de privilégios
+    auto_elevate: false
+  
+  # Configurações para Linux
+  linux:
+    # Usar systemd para serviços
+    use_systemd: true
+    
+    # Usar NetworkManager para rede
+    use_networkmanager: true
+    
+    # Usar AppArmor para segurança
+    use_apparmor: true
+
+# Templates de containers
+templates:
+  # Template nginx
+  nginx:
+    image: "nginx:latest"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/etc/nginx:/etc/nginx:ro"
+    environment:
+      - "NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates"
+      - "NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d"
+  
+  # Template postgres
+  postgres:
+    image: "postgres:15"
+    ports:
+      - "5432:5432"
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+    environment:
+      - "POSTGRES_DB=syntropy"
+      - "POSTGRES_USER=syntropy"
+      - "POSTGRES_PASSWORD=syntropy"
+  
+  # Template redis
+  redis:
+    image: "redis:7-alpine"
+    ports:
+      - "6379:6379"
+    volumes:
+      - "redis_data:/data"
+    command: "redis-server --appendonly yes"
+
+# Configurações de desenvolvimento
+development:
+  # Modo debug
+  debug: false
+  
+  # Logs verbosos
+  verbose: false
+  
+  # Simular operações (não executar)
+  dry_run: false
+  
+  # Usar dados de teste
+  use_test_data: false

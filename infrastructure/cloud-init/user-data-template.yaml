@@ -1,0 +1,229 @@
+#cloud-config
+# Syntropy Cooperative Grid - Enhanced Auto-Installation
+# Node: {{.NodeName}} | Location: {{.Coordinates}} | Created: {{.CreatedAt}}
+# Platform Version: 2.0.0
+
+autoinstall:
+  version: 1
+  interactive-sections: []
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+    
+  network:
+    network:
+      version: 2
+      ethernets:
+        "en*":
+          dhcp4: true
+          dhcp6: false
+          dhcp4-overrides:
+            hostname: {{.NodeName}}
+        "eth*":
+          dhcp4: true
+          dhcp6: false
+          dhcp4-overrides:
+            hostname: {{.NodeName}}
+        "enp*":
+          dhcp4: true
+          dhcp6: false
+          dhcp4-overrides:
+            hostname: {{.NodeName}}
+
+  identity:
+    hostname: {{.NodeName}}
+    username: admin
+    password: "{{.AdminPasswordHash}}"
+
+  ssh:
+    install-server: true
+    allow-pw: false
+    
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+    swap:
+      size: 0
+
+  packages:
+    - curl
+    - wget
+    - git
+    - vim
+    - htop
+    - jq
+    - python3
+    - python3-pip
+    - docker.io
+    - fail2ban
+    - ufw
+    - prometheus-node-exporter
+    - openssh-server
+    - nmap
+    - ncdu
+    - tree
+    - tmux
+    - net-tools
+    - bc
+    - cloud-init
+    - cloud-guest-utils
+
+  late-commands:
+    # Create comprehensive directory structure
+    - curtin in-target -- mkdir -p /opt/syntropy/{identity/{owner,community},platform/{templates,scripts,data},metadata,logs,backups,config}
+    
+    # Install security keys and configuration
+    - {{.KeyInstallationCommands}}
+    
+    # Create comprehensive node metadata
+    - {{.MetadataCreationCommands}}
+    
+    # Create platform templates
+    - {{.TemplateCreationCommands}}
+    
+    # Configure services and security
+    - curtin in-target -- systemctl enable ssh docker prometheus-node-exporter
+    - curtin in-target -- systemctl disable snapd
+    - curtin in-target -- ufw default deny incoming
+    - curtin in-target -- ufw default allow outgoing  
+    - curtin in-target -- ufw allow ssh
+    - curtin in-target -- ufw allow 9100/tcp
+    - curtin in-target -- ufw --force enable
+    - curtin in-target -- usermod -aG docker admin
+    
+    # Create startup services
+    - {{.StartupServiceCommands}}
+
+  power_state:
+    mode: reboot
+    timeout: 30
+
+# Additional cloud-init modules for enhanced functionality
+write_files:
+  # Create Syntropy platform configuration
+  - path: /opt/syntropy/config/platform.yaml
+    content: |
+      platform:
+        name: syntropy_cooperative_grid
+        version: "2.0.0"
+        capabilities:
+          - container_orchestration
+          - resource_sharing
+          - cooperative_computing
+          - distributed_storage
+          - service_mesh
+          - universal_applications
+        
+        services:
+          docker:
+            enabled: true
+            version: "latest"
+          ssh:
+            enabled: true
+            port: 22
+          prometheus_exporter:
+            enabled: true
+            port: 9100
+          firewall:
+            enabled: true
+            policy: "deny_incoming"
+        
+        universal_support:
+          scientific_computing: ["fortran", "python", "r", "julia", "matlab"]
+          web_applications: ["nodejs", "python", "java", "go", "php", "ruby"]
+          machine_learning: ["tensorflow", "pytorch", "scikit-learn", "keras"]
+          databases: ["postgresql", "mongodb", "redis", "mysql", "cassandra"]
+          custom_applications: "any_containerized_application"
+    permissions: '0644'
+    owner: admin:admin
+
+  # Create system monitoring configuration
+  - path: /opt/syntropy/config/monitoring.yaml
+    content: |
+      monitoring:
+        prometheus:
+          node_exporter:
+            enabled: true
+            port: 9100
+            collectors:
+              - cpu
+              - memory
+              - disk
+              - network
+              - filesystem
+        
+        health_checks:
+          - name: "docker_service"
+            command: "systemctl is-active docker"
+            interval: "30s"
+          - name: "ssh_service"
+            command: "systemctl is-active ssh"
+            interval: "30s"
+          - name: "disk_space"
+            command: "df -h / | awk 'NR==2{print $5}' | sed 's/%//'"
+            threshold: 90
+            interval: "60s"
+    permissions: '0644'
+    owner: admin:admin
+
+  # Create network configuration template
+  - path: /opt/syntropy/config/network.yaml
+    content: |
+      network:
+        mesh:
+          enabled: true
+          encryption: true
+          port: 443
+        api:
+          port: 8080
+          ssl: true
+        discovery:
+          enabled: true
+          method: "multicast"
+    permissions: '0644'
+    owner: admin:admin
+
+# Create systemd services for Syntropy platform
+runcmd:
+  # Ensure all directories exist with proper permissions
+  - mkdir -p /opt/syntropy/{identity/{owner,community},platform/{templates,scripts,data},metadata,logs,backups,config}
+  - chown -R admin:admin /opt/syntropy/
+  - chmod 755 /opt/syntropy/
+  - chmod 700 /opt/syntropy/identity/
+  - chmod 600 /opt/syntropy/identity/*/private.key 2>/dev/null || true
+
+  # Configure Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker admin
+
+  # Configure SSH
+  - systemctl enable ssh
+  - systemctl start ssh
+
+  # Configure monitoring
+  - systemctl enable prometheus-node-exporter
+  - systemctl start prometheus-node-exporter
+
+  # Configure firewall
+  - ufw --force reset
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow ssh
+  - ufw allow 9100/tcp
+  - ufw --force enable
+
+  # Configure fail2ban
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+
+  # Create ready indicator
+  - touch /opt/syntropy/.ready
+  - chown admin:admin /opt/syntropy/.ready
+
+  # Log completion
+  - echo "Syntropy Cooperative Grid node {{.NodeName}} installation completed" | logger -t syntropy
+
+# Final message
+final_message: "Syntropy Cooperative Grid Node {{.NodeName}} installed successfully! SSH access available with provided keys."

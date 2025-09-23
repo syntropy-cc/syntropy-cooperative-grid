@@ -1,0 +1,20 @@
+instance-id: syntropy-node-{{.NodeID}}
+local-hostname: {{.NodeName}}
+public-keys:
+  {{.NodeName}}-owner: {{.OwnerPublicKey}}
+  {{.NodeName}}-community: {{.CommunityPublicKey}}
+network:
+  version: 2
+  ethernets:
+    en*:
+      dhcp4: true
+      dhcp4-overrides:
+        hostname: {{.NodeName}}
+    eth*:
+      dhcp4: true
+      dhcp4-overrides:
+        hostname: {{.NodeName}}
+    enp*:
+      dhcp4: true
+      dhcp4-overrides:
+        hostname: {{.NodeName}}

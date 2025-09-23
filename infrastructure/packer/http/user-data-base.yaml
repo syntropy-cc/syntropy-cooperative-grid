@@ -1,0 +1,138 @@
+#cloud-config
+# Syntropy Cooperative Grid - Base Node Configuration
+# This is the base configuration for Packer builds
+
+autoinstall:
+  version: 1
+  interactive-sections: []
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+    
+  network:
+    network:
+      version: 2
+      ethernets:
+        "en*":
+          dhcp4: true
+          dhcp6: false
+        "eth*":
+          dhcp4: true
+          dhcp6: false
+        "enp*":
+          dhcp4: true
+          dhcp6: false
+
+  identity:
+    hostname: ${var.node_name}
+    username: admin
+    password: '$6$rounds=4096$syntropy$N8mVzFK0Y1OelT1SKEjg0jIXzKMzL3ZcOGcE5xR8nS6E8qSO5qFV6eJs1g7T6E0cC7w.kfNO3FqC3YhE9Gz19.'
+
+  ssh:
+    install-server: true
+    allow-pw: true  # Allow password auth for Packer provisioning
+    
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+    swap:
+      size: 0
+
+  packages:
+    - curl
+    - wget
+    - git
+    - vim
+    - htop
+    - jq
+    - python3
+    - python3-pip
+    - docker.io
+    - fail2ban
+    - ufw
+    - prometheus-node-exporter
+    - openssh-server
+    - nmap
+    - ncdu
+    - tree
+    - tmux
+    - net-tools
+    - bc
+    - cloud-init
+    - cloud-guest-utils
+
+  late-commands:
+    # Create Syntropy directory structure
+    - curtin in-target -- mkdir -p /opt/syntropy/{identity/{owner,community},platform/{templates,scripts,data},metadata,logs,backups,config}
+    - curtin in-target -- chown -R admin:admin /opt/syntropy/
+    
+    # Configure services
+    - curtin in-target -- systemctl enable ssh docker prometheus-node-exporter
+    - curtin in-target -- systemctl disable snapd
+    - curtin in-target -- usermod -aG docker admin
+    
+    # Configure firewall
+    - curtin in-target -- ufw default deny incoming
+    - curtin in-target -- ufw default allow outgoing  
+    - curtin in-target -- ufw allow ssh
+    - curtin in-target -- ufw allow 9100/tcp
+    - curtin in-target -- ufw --force enable
+
+  power_state:
+    mode: reboot
+    timeout: 30
+
+# Additional configuration for base image
+write_files:
+  # Create base platform configuration
+  - path: /opt/syntropy/config/platform.yaml
+    content: |
+      platform:
+        name: syntropy_cooperative_grid
+        version: "2.0.0-base"
+        type: "base_image"
+        
+        services:
+          docker:
+            enabled: true
+            version: "latest"
+          ssh:
+            enabled: true
+            port: 22
+          prometheus_exporter:
+            enabled: true
+            port: 9100
+          firewall:
+            enabled: true
+            policy: "deny_incoming"
+        
+        capabilities:
+          - container_orchestration
+          - resource_sharing
+          - cooperative_computing
+          - distributed_storage
+          - service_mesh
+          - universal_applications
+    permissions: '0644'
+    owner: admin:admin
+
+  # Create base monitoring configuration
+  - path: /opt/syntropy/config/monitoring.yaml
+    content: |
+      monitoring:
+        prometheus:
+          node_exporter:
+            enabled: true
+            port: 9100
+            collectors:
+              - cpu
+              - memory
+              - disk
+              - network
+              - filesystem
+    permissions: '0644'
+    owner: admin:admin
+
+# Final message
+final_message: "Syntropy Cooperative Grid Base Node installed successfully!"

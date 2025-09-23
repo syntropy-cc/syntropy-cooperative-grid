@@ -63,3 +63,4 @@ type NetworkConfig struct {
 func (Node) TableName() string {
 	return "nodes"
 }
+

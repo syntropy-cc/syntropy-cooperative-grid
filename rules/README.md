@@ -27,16 +27,23 @@ rules/
 
 ### **Management System** (`management-system.md`)
 Sistema unificado para gerenciar a Syntropy Cooperative Grid:
-- **CLI**: Interface de linha de comando (Go + Cobra)
-- **Web**: Dashboard web (React + Next.js)
-- **Mobile**: App mobile (Flutter)
-- **Desktop**: App desktop (Electron)
+
+**Estrutura de Interfaces:**
+- **CLI**: `interfaces/cli/` - Interface de linha de comando (Go + Cobra)
+- **Web**: `interfaces/web/` - Dashboard web (React + Next.js + Go backend)
+- **Mobile**: `interfaces/mobile/flutter/` - App mobile (Flutter)
+- **Desktop**: `interfaces/desktop/electron/` - App desktop (Electron)
 
 **Funcionalidades principais:**
 - Gerenciamento de nós (detecção USB, configuração, monitoramento)
 - Gerenciamento de containers (deploy, orquestração, escalabilidade)
 - Gerenciamento de rede (service mesh, roteamento, conectividade)
 - Gerenciamento cooperativo (créditos, governança, reputação)
+
+**Regras críticas de estrutura:**
+- NUNCA criar arquivos fora dos diretórios corretos
+- Cada interface tem sua estrutura específica bem definida
+- Core logic deve ir em `core/`, código compartilhado em `internal/`
 
 ## 📖 **Como Usar**
 
@@ -46,6 +53,8 @@ Sistema unificado para gerenciar a Syntropy Cooperative Grid:
 3. **Use os exemplos fornecidos** como base para implementações
 4. **Valide inputs** e implemente error handling adequado
 5. **Documente mudanças** importantes
+6. **RESPEITE a estrutura de diretórios** - NUNCA crie arquivos em locais incorretos
+7. **Use os caminhos corretos** para cada tipo de interface
 
 ### **Para Desenvolvedores:**
 1. **Consulte as regras** ao trabalhar com componentes específicos
@@ -66,6 +75,7 @@ Sistema unificado para gerenciar a Syntropy Cooperative Grid:
 - Contexto no projeto
 
 ## 🏗️ **Arquitetura**
+- Estrutura de diretórios do projeto
 - Componentes principais
 - Relacionamentos
 - Stack tecnológico
@@ -76,6 +86,7 @@ Sistema unificado para gerenciar a Syntropy Cooperative Grid:
 - Comandos essenciais
 
 ## 📝 **Regras para LLMs**
+- Estrutura de diretórios - regras críticas
 - Instruções específicas
 - Padrões a seguir
 - Exemplos práticos
@@ -122,13 +133,13 @@ Sistema unificado para gerenciar a Syntropy Cooperative Grid:
 ### **Para LLMs trabalhando com Management System:**
 ```bash
 # Sempre validar antes de executar
-syntropy-cli node list --format json | jq '.[] | select(.status == "unhealthy")'
+syntropy node list --format json | jq '.[] | select(.status == "unhealthy")'
 
 # Usar templates para consistência
-syntropy-cli container deploy --template nginx --node node-01
+syntropy container deploy --template nginx --node node-01
 
 # Monitorar operações
-syntropy-cli node status node-01 --watch --format table
+syntropy node status node-01 --watch --format table
 ```
 
 ### **Para desenvolvimento:**
@@ -159,6 +170,28 @@ func (s *NodeService) CreateNode(req *CreateNodeRequest) (*Node, error) {
 3. **Reduzir tempo de onboarding** para novos componentes
 4. **Manter consistência** entre diferentes partes do projeto
 5. **Fornecer referência rápida** para comandos e configurações
+6. **Prevenir criação de arquivos em locais incorretos**
+
+## 📁 **Estrutura de Diretórios - Resumo**
+
+### **Interfaces (`interfaces/`)**
+- `interfaces/cli/` - CLI Interface (Go + Cobra)
+- `interfaces/web/frontend/` - Web Frontend (React + Next.js)
+- `interfaces/web/backend/` - Web Backend (Go)
+- `interfaces/mobile/flutter/` - Mobile App (Flutter)
+- `interfaces/desktop/electron/` - Desktop App (Electron)
+
+### **Core e Serviços**
+- `core/` - Management Core (lógica de negócio)
+- `internal/` - Código interno compartilhado
+- `services/` - Microserviços
+
+### **Documentação e Regras**
+- `docs/` - Documentação completa
+- `rules/` - Regras para LLMs (este diretório)
+
+### **Regra Crítica:**
+**NUNCA crie arquivos fora dos diretórios corretos. Cada interface tem sua estrutura específica bem definida.**
 
 ---
 
