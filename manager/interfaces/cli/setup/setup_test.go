@@ -20,10 +20,10 @@ func TestSetupFlow(t *testing.T) {
 
 	// Configurar opções de teste
 	options := types.SetupOptions{
-		Force:         true,
+		Force:          true,
 		InstallService: false,
-		ConfigPath:    filepath.Join(tempDir, "config.yaml"),
-		HomeDir:       tempDir,
+		ConfigPath:     filepath.Join(tempDir, "config.yaml"),
+		HomeDir:        tempDir,
 	}
 
 	fmt.Println("=== Testando Setup ===")
@@ -34,14 +34,14 @@ func TestSetupFlow(t *testing.T) {
 	if err != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
 		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
 			t.Fatalf("Setup falhou com erro inesperado: %v", err)
 		}
 		fmt.Printf("Setup não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
 	} else {
 		fmt.Printf("Setup concluído com sucesso: %v\n", setupResult.Success)
-		
+
 		// Verificar se os arquivos foram criados
 		configFile := setupResult.ConfigPath
 		if _, err := os.Stat(configFile); os.IsNotExist(err) {
@@ -57,8 +57,8 @@ func TestSetupFlow(t *testing.T) {
 	if err != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
 		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
 			t.Fatalf("Status falhou com erro inesperado: %v", err)
 		}
 		fmt.Printf("Status não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
@@ -73,14 +73,14 @@ func TestSetupFlow(t *testing.T) {
 	if err != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
 		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-		   err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
 			t.Fatalf("Reset falhou com erro inesperado: %v", err)
 		}
 		fmt.Printf("Reset não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
 	} else {
 		fmt.Printf("Reset concluído com sucesso: %v\n", resetResult.Success)
-		
+
 		// Verificar se os arquivos foram removidos (se Reset foi bem-sucedido)
 		if resetResult.Success {
 			configFile := filepath.Join(tempDir, "config", "manager.yaml")
@@ -98,7 +98,7 @@ func TestGetSyntropyDir(t *testing.T) {
 	fmt.Println("\n=== Testando GetSyntropyDir ===")
 	dir := GetSyntropyDir()
 	fmt.Printf("Diretório Syntropy: %s\n", dir)
-	
+
 	// Verificar se o caminho retornado é válido
 	if dir == "" {
 		t.Errorf("GetSyntropyDir retornou caminho vazio")

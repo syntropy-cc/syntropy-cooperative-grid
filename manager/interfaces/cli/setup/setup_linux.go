@@ -16,7 +16,7 @@ import (
 // setupLinuxImpl implements Linux-specific setup
 func setupLinuxImpl(options types.SetupOptions) (*types.SetupResult, error) {
 	fmt.Println("Iniciando setup para Linux...")
-	
+
 	// Create result structure
 	result := &types.SetupResult{
 		Success:     false,
@@ -33,13 +33,13 @@ func setupLinuxImpl(options types.SetupOptions) (*types.SetupResult, error) {
 		result.EndTime = time.Now()
 		return result, result.Error
 	}
-	
+
 	if !validationResult.Valid && !options.Force {
 		result.Error = fmt.Errorf("ambiente inválido, use --force para ignorar validações")
 		result.EndTime = time.Now()
 		return result, result.Error
 	}
-	
+
 	// Step 2: Configure Linux environment
 	fmt.Println("Etapa 2/3: Configurando ambiente Linux...")
 	if err := ConfigureLinuxEnvironment(validationResult, options); err != nil {
@@ -63,11 +63,11 @@ func setupLinuxImpl(options types.SetupOptions) (*types.SetupResult, error) {
 	if options.ConfigPath != "" {
 		result.ConfigPath = options.ConfigPath
 	}
-	
+
 	fmt.Println("Setup concluído com sucesso!")
 	fmt.Printf("Arquivo de configuração: %s\n", result.ConfigPath)
 	fmt.Printf("Duração do setup: %s\n", result.EndTime.Sub(result.StartTime))
-	
+
 	return result, nil
 }
 
@@ -169,7 +169,7 @@ echo "Serviço Syntropy Manager instalado e iniciado com sucesso"
 // statusLinux verifica o status da instalação no Linux
 func statusLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	fmt.Println("Verificando status do Syntropy CLI no Linux...")
-	
+
 	result := &types.SetupResult{
 		Success:     false,
 		StartTime:   time.Now(),
@@ -197,7 +197,7 @@ func statusLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	if options.ConfigPath != "" {
 		configPath = options.ConfigPath
 	}
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		result.Error = fmt.Errorf("arquivo de configuração não encontrado: %s", configPath)
 		result.EndTime = time.Now()
@@ -208,7 +208,7 @@ func statusLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	if options.InstallService {
 		cmd := exec.Command("systemctl", "is-active", "syntropy-manager.service")
 		output, _ := cmd.Output()
-		
+
 		if string(output) != "active\n" {
 			result.Error = fmt.Errorf("serviço Syntropy Manager não está ativo")
 			result.EndTime = time.Now()
@@ -220,18 +220,18 @@ func statusLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	result.Success = true
 	result.EndTime = time.Now()
 	result.ConfigPath = configPath
-	
+
 	fmt.Println("Status do Syntropy CLI:")
 	fmt.Printf("Diretório: %s\n", syntropyDir)
 	fmt.Printf("Configuração: %s\n", configPath)
-	
+
 	return result, nil
 }
 
 // resetLinux redefine a configuração do Syntropy CLI no Linux
 func resetLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	fmt.Println("Redefinindo configuração do Syntropy CLI no Linux...")
-	
+
 	result := &types.SetupResult{
 		Success:     false,
 		StartTime:   time.Now(),
@@ -251,16 +251,16 @@ func resetLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	if options.InstallService {
 		stopCmd := exec.Command("systemctl", "stop", "syntropy-manager.service")
 		_ = stopCmd.Run() // Ignorar erro se o serviço não existir
-		
+
 		disableCmd := exec.Command("systemctl", "disable", "syntropy-manager.service")
 		_ = disableCmd.Run()
-		
+
 		// Remover arquivo de serviço
 		serviceFile := "/etc/systemd/system/syntropy-manager.service"
 		if _, err := os.Stat(serviceFile); err == nil {
 			rmCmd := exec.Command("sudo", "rm", serviceFile)
 			_ = rmCmd.Run()
-			
+
 			reloadCmd := exec.Command("systemctl", "daemon-reload")
 			_ = reloadCmd.Run()
 		}
@@ -279,8 +279,8 @@ func resetLinux(options types.SetupOptions) (*types.SetupResult, error) {
 	// Reset concluído com sucesso
 	result.Success = true
 	result.EndTime = time.Now()
-	
+
 	fmt.Println("Configuração do Syntropy CLI redefinida com sucesso")
-	
+
 	return result, nil
 }

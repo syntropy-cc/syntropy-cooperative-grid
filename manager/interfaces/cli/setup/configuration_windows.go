@@ -120,7 +120,7 @@ func ConfigureWindowsEnvironment(validationResult *types.ValidationResult, optio
 // createSyntropyDirStructure creates the Syntropy directory structure
 func createSyntropyDirStructure(homeDir string) error {
 	syntropyDir := filepath.Join(homeDir, ".syntropy")
-	
+
 	// Create main directories
 	dirs := []string{
 		syntropyDir,

@@ -5,24 +5,24 @@ import (
 	"time"
 )
 
-// SetupOptions define as opções para o processo de setup
+// SetupOptions defines the options for the setup process
 type SetupOptions struct {
-	Force          bool   // Forçar setup mesmo com validações falhas
-	InstallService bool   // Instalar serviço do sistema
-	ConfigPath     string // Caminho personalizado para o arquivo de configuração
-	HomeDir        string // Diretório home personalizado
+	Force          bool   // Force setup even if validations fail
+	InstallService bool   // Install system service
+	ConfigPath     string // Custom configuration file path
+	HomeDir        string // Custom home directory
 }
 
-// SetupResult contém o resultado do processo de setup
+// SetupResult contains the result of the setup process
 type SetupResult struct {
-	Success     bool      // Indica se o setup foi bem-sucedido
-	StartTime   time.Time // Hora de início do setup
-	EndTime     time.Time // Hora de término do setup
-	ConfigPath  string    // Caminho do arquivo de configuração
-	Environment string    // Ambiente (windows, linux, darwin)
-	Options     SetupOptions // Opções utilizadas no setup
-	Error       error     // Erro, se houver
+	Success     bool         // Indicates if the setup was successful
+	StartTime   time.Time    // Setup start time
+	EndTime     time.Time    // Setup end time
+	ConfigPath  string       // Configuration file path
+	Environment string       // Environment (windows, linux, darwin)
+	Options     SetupOptions // Options used in the setup
+	Error       error        // Error, if any
 }
 
-// ErrNotImplemented é retornado quando uma funcionalidade não está implementada
-var ErrNotImplemented = errors.New("funcionalidade não implementada para este sistema operacional")
+// ErrNotImplemented is returned when a functionality is not implemented
+var ErrNotImplemented = errors.New("functionality not implemented for this operating system")

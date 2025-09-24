@@ -11,14 +11,14 @@ type ValidationResult struct {
 
 // EnvironmentInfo contains information about the environment
 type EnvironmentInfo struct {
-	OS              string // Operating system name
-	OSVersion       string // Operating system version
-	Architecture    string // System architecture
-	HasAdminRights  bool   // Whether the user has admin rights
-	PowerShellVer   string // PowerShell version (Windows only)
+	OS              string  // Operating system name
+	OSVersion       string  // Operating system version
+	Architecture    string  // System architecture
+	HasAdminRights  bool    // Whether the user has admin rights
+	PowerShellVer   string  // PowerShell version (Windows only)
 	AvailableDiskGB float64 // Available disk space in GB
-	HasInternet     bool   // Whether internet connectivity is available
-	HomeDir         string // User home directory
+	HasInternet     bool    // Whether internet connectivity is available
+	HomeDir         string  // User home directory
 }
 
 // SystemResources contains information about system resources

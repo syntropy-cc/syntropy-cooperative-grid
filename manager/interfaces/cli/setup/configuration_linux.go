@@ -55,8 +55,8 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 	// Create configuration
 	config := &types.SetupConfig{
 		Manager: types.ManagerConfig{
-			HomeDir: syntropyDir,
-			LogLevel: "info",
+			HomeDir:     syntropyDir,
+			LogLevel:    "info",
 			APIEndpoint: "https://api.syntropy.network",
 			Directories: map[string]string{
 				"config":   filepath.Join(syntropyDir, "config"),
@@ -110,10 +110,10 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 		// Create symlink in /usr/local/bin if we have admin rights
 		binPath := filepath.Join(syntropyDir, "bin", "syntropy-manager")
 		symlinkPath := "/usr/local/bin/syntropy-manager"
-		
+
 		// Remove existing symlink if it exists
 		_ = os.Remove(symlinkPath)
-		
+
 		// Create new symlink
 		if err := os.Symlink(binPath, symlinkPath); err != nil {
 			fmt.Printf("Aviso: Não foi possível criar link simbólico em %s: %v\n", symlinkPath, err)

@@ -90,7 +90,7 @@ func checkLinuxVersion(result *types.ValidationResult) error {
 	// Verificar se a distribuição é suportada
 	supportedDistros := []string{"ubuntu", "debian", "centos", "fedora", "rhel"}
 	distroSupported := false
-	
+
 	for _, distro := range supportedDistros {
 		if strings.ToLower(info.Platform) == distro {
 			distroSupported = true
@@ -116,7 +116,7 @@ func checkRootPermissions(result *types.ValidationResult) error {
 	// Tentar executar um comando que requer privilégios
 	cmd := exec.Command("sudo", "-n", "true")
 	err := cmd.Run()
-	
+
 	if err == nil {
 		result.Environment.HasAdminRights = true
 		return nil
@@ -124,7 +124,7 @@ func checkRootPermissions(result *types.ValidationResult) error {
 
 	result.Environment.HasAdminRights = false
 	result.Warnings = append(result.Warnings, "Executando sem privilégios de administrador. Algumas funcionalidades podem não funcionar corretamente.")
-	
+
 	return fmt.Errorf("sem permissões de root")
 }
 
