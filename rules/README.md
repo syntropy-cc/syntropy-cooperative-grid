@@ -17,6 +17,7 @@ Este diretório contém regras otimizadas para LLMs trabalharem com o projeto Sy
 rules/
 ├── README.md                    # Este arquivo - visão geral
 ├── management-system.md         # Regras para o Management System
+├── guide-generation.md          # Regras para geração de guias de desenvolvimento
 ├── development.md              # Regras para desenvolvimento (futuro)
 ├── deployment.md               # Regras para deployment (futuro)
 ├── testing.md                  # Regras para testes (futuro)
@@ -27,6 +28,24 @@ rules/
 
 ### **Management System** (`management-system.md`)
 Sistema unificado para gerenciar a Syntropy Cooperative Grid:
+
+### **Guide Generation** (`guide-generation.md`)
+Regras para geração de guias de desenvolvimento equivalentes ao padrão estabelecido:
+
+**Funcionalidades principais:**
+- Estrutura padrão obrigatória (14 seções)
+- Integração com API central (`manager/api/`)
+- Boas práticas de desenvolvimento
+- Padrões de segurança e performance
+- Exemplos práticos e casos de uso
+- Otimização para leitura por LLMs
+
+**Regras críticas:**
+- SEMPRE incluir todas as seções obrigatórias
+- SEMPRE referenciar integração com API central
+- SEMPRE especificar tamanho de arquivo (300-500 linhas)
+- SEMPRE incluir seção de segurança detalhada
+- NUNCA omitir estrutura padrão
 
 **Estrutura de Interfaces:**
 - **CLI**: `interfaces/cli/` - Interface de linha de comando (Go + Cobra)
@@ -103,6 +122,7 @@ Sistema unificado para gerenciar a Syntropy Cooperative Grid:
 
 ### **Implementadas:**
 - ✅ [Management System](management-system.md) - Sistema de gerenciamento completo
+- ✅ [Guide Generation](guide-generation.md) - Regras para geração de guias
 
 ### **Planejadas:**
 - ⏳ [Development](development.md) - Regras para desenvolvimento
