@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"time"
 
-	apiTypes "manager/api/types"
+	apiTypes "github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
 )
 
 // ErrNotImplemented is returned when a functionality is not implemented for the current operating system

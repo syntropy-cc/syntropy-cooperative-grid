@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"manager/api/middleware"
-	"manager/api/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // ConfigService provides configuration services for all interfaces

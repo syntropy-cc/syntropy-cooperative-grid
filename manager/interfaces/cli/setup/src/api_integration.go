@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"manager/api/handlers/config"
-	"manager/api/middleware"
-	"manager/api/services/config"
-	"manager/api/services/validation"
-	"manager/api/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/handlers/config"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/config"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // APIIntegration provides integration with the API central

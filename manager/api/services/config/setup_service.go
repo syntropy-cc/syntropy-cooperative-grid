@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"manager/api/middleware"
-	"manager/api/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // SetupService provides setup services for all interfaces

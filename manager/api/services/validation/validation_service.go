@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"manager/api/middleware"
-	"manager/api/services/validation/compatibility"
-	"manager/api/services/validation/dependencies"
-	"manager/api/services/validation/environment"
-	"manager/api/services/validation/performance"
-	"manager/api/services/validation/security"
-	"manager/api/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation/compatibility"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation/dependencies"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation/environment"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation/performance"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation/security"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // ValidationService provides validation services for all interfaces

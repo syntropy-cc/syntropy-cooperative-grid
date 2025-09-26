@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"manager/api/middleware"
-	"manager/api/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // DependenciesValidator validates system dependencies

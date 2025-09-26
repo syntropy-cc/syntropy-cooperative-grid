@@ -5,7 +5,7 @@
 1. **Consistency First**: All documentation must follow identical structure patterns across all components
 2. **LLM Optimization**: Use clear hierarchies, explicit markers, and structured formatting for optimal LLM parsing
 3. **Three-Layer Perspective**: Every documentation must include macro (project), meso (module), and micro (component) views
-4. **Progressive Detail**: Information depth increases from README.md → DEV.md → API.md → TEST.md
+4. **Progressive Detail**: Information depth increases from DOC.md → DEV.md → API.md → TEST.md
 5. **Language Agnostic**: Rules apply to any programming language or framework
 
 ## Documentation File Structure
@@ -14,7 +14,7 @@ Every component MUST have exactly four documentation files in `component/docs/`:
 ```
 component/
 ├── docs/
-│   ├── README.md  - Quick start and overview for users
+│   ├── DOC.md  - Quick start and overview for users
 │   ├── DEV.md     - Architecture and implementation for developers
 │   ├── API.md     - Complete interface documentation
 │   └── TEST.md    - Testing strategies and execution
@@ -25,14 +25,14 @@ component/
 
 | File | Primary Audience | Focus | Technical Depth | Use When |
 |------|-----------------|-------|-----------------|----------|
-| README.md | New Users | What & Why | Low | First contact with component |
+| DOC.md | New Users | What & Why | Low | First contact with component |
 | DEV.md | Developers | How it works | High | Modifying/extending component |
 | API.md | Integrators | How to use | Medium | Integrating component |
 | TEST.md | QA/DevOps | How to verify | Medium-High | Testing/debugging component |
 
 ---
 
-## README.md Rules
+## DOC.md Rules
 
 ### Purpose
 **First-contact documentation providing immediate understanding and quick start capabilities.**
@@ -117,7 +117,7 @@ component/
 [License type] - See LICENSE file for details
 ```
 
-### README.md Unique Characteristics
+### DOC.md Unique Characteristics
 1. **Language**: Simple, jargon-free, benefit-focused
 2. **Examples**: Minimal, immediately runnable
 3. **Depth**: Surface-level, linking to details
@@ -1134,7 +1134,7 @@ All documentation MUST be located in `component/docs/`:
 ```
 component/
 ├── docs/
-│   ├── README.md
+│   ├── DOC.md
 │   ├── DEV.md
 │   ├── API.md
 │   └── TEST.md
@@ -1171,7 +1171,7 @@ Every document MUST include three perspective levels:
 
 ### Documentation Distinctions
 
-| Aspect | README | DEV | API | TEST |
+| Aspect | DOC | DEV | API | TEST |
 |--------|---------|-----|-----|------|
 | **Audience** | End users | Developers | Integrators | QA/DevOps |
 | **Questions** | What? Why? | How does it work? | How to use? | How to verify? |
@@ -1199,7 +1199,7 @@ Every document MUST include three perspective levels:
 - [ ] Sections follow prescribed order
 
 ### Documentation Maintenance Triggers
-| Event | README | DEV | API | TEST |
+| Event | DOC | DEV | API | TEST |
 |-------|---------|-----|-----|------|
 | New feature | Update features | Update architecture | Add endpoints | Add test cases |
 | Bug fix | If user-facing | If design change | If behavior change | Add regression test |
@@ -1210,7 +1210,7 @@ Every document MUST include three perspective levels:
 
 ## Documentation Anti-Patterns to Avoid
 
-1. **Mixing Concerns**: Don't put API details in README
+1. **Mixing Concerns**: Don't put API details in DOC
 2. **Duplication**: Don't repeat content across files
 3. **Language Bias**: Don't assume specific programming paradigms
 4. **Missing Context**: Always include all three view levels
@@ -1233,7 +1233,7 @@ When generating documentation following these rules:
 8. **Apply the correct tone** for each document type
 
 ### Document Generation Order
-1. Generate README.md first (defines what)
+1. Generate DOC.md first (defines what)
 2. Generate API.md second (defines how to use)
 3. Generate DEV.md third (explains how it works)
 4. Generate TEST.md last (verifies everything)
@@ -1258,7 +1258,7 @@ END FOR
 ```
 my-component/
 ├── docs/
-│   ├── README.md          # 2 pages - User introduction
+│   ├── DOC.md          # 2 pages - User introduction
 │   ├── DEV.md            # 8 pages - Technical deep-dive
 │   ├── API.md            # 12 pages - Complete interface
 │   └── TEST.md           # 6 pages - Testing guide
@@ -1278,7 +1278,7 @@ my-component/
 
 ### Document Relationship Map
 ```
-README.md (Entry Point)
+DOC.md (Entry Point)
     ↓ "Learn to use" → API.md
     ↓ "Learn internals" → DEV.md
     ↓ "Verify it works" → TEST.md
@@ -1292,7 +1292,7 @@ DEV.md ←→ TEST.md (Architecture guides testing)
 
 ### Mandatory Elements Per Document
 
-#### README.md Must Have:
+#### DOC.md Must Have:
 - [ ] "What is This?" section
 - [ ] "Why Use This?" section with benefits
 - [ ] Quick Start with immediate value
@@ -1328,7 +1328,7 @@ DEV.md ←→ TEST.md (Architecture guides testing)
 
 1. **Never mix document purposes**
    - ❌ Don't put setup instructions in API.md
-   - ❌ Don't put API details in README.md
+   - ❌ Don't put API details in DOC.md
    - ❌ Don't put architecture in TEST.md
 
 2. **Never use language-specific examples in rules**
@@ -1346,19 +1346,19 @@ DEV.md ←→ TEST.md (Architecture guides testing)
 ## Quick Reference Card for LLMs
 
 ### Document Purpose in One Line
-- **README.md**: What it does and why you'd want it
+- **DOC.md**: What it does and why you'd want it
 - **DEV.md**: How it's built and why it's built that way
 - **API.md**: How to integrate and use it completely
 - **TEST.md**: How to verify it works correctly
 
 ### Tone Guide
-- **README.md**: Friendly teacher explaining benefits
+- **DOC.md**: Friendly teacher explaining benefits
 - **DEV.md**: Senior engineer explaining architecture
 - **API.md**: Technical writer documenting contract
 - **TEST.md**: QA lead explaining verification
 
 ### Audience Needs
-- **README.md reader asks**: "Should I use this?"
+- **DOC.md reader asks**: "Should I use this?"
 - **DEV.md reader asks**: "How do I modify this?"
 - **API.md reader asks**: "How do I call this?"
 - **TEST.md reader asks**: "How do I verify this?"
@@ -1369,7 +1369,7 @@ Before completing documentation generation:
 
 ### Structure Validation
 - [ ] All documents in `component/docs/` directory
-- [ ] All four documents present (README, DEV, API, TEST)
+- [ ] All four documents present (DOC, DEV, API, TEST)
 - [ ] Each document has ALL required sections
 - [ ] Sections appear in prescribed order
 
@@ -1388,13 +1388,13 @@ Before completing documentation generation:
 - [ ] Line length ≤ 100 characters
 
 ### Audience Alignment
-- [ ] README speaks to new users
+- [ ] DOC speaks to new users
 - [ ] DEV speaks to developers
 - [ ] API speaks to integrators
 - [ ] TEST speaks to QA/DevOps
 
 ### Completeness Check
-- [ ] README has working quick start
+- [ ] DOC has working quick start
 - [ ] DEV has architecture diagrams
 - [ ] API has examples for all endpoints
 - [ ] TEST has OS-specific instructions
