@@ -2,41 +2,65 @@
 
 Before considering the test suite complete:
 
+**Pre-Implementation Analysis:**
+- [ ] Read and analyzed ALL files in `component/src/`
+- [ ] Read and cataloged ALL utilities in `component/src/internal/`
+- [ ] Identified all components and subcomponents
+- [ ] Mapped all OS-specific implementations
+- [ ] Listed all types from src/internal/types.go
+- [ ] Listed all helpers from src/internal/helpers.go
+- [ ] NO duplication of src/internal/ utilities in tests/
+
 **File Location Verification:**
 - [ ] ALL test files are in `component/tests/` directory
 - [ ] NO files were created in `component/src/` directory
 - [ ] NO files were modified in `component/src/` directory
 - [ ] Source code in `src/` remains completely unchanged
+- [ ] Using utilities from `src/internal/` instead of recreating them
+
+**Component Test Coverage:**
+- [ ] Main component (component.go) has complete test coverage
+- [ ] Each subcomponent base file has dedicated test file
+- [ ] Each OS-specific implementation has platform-specific tests
+- [ ] API integration module has both unit and integration tests
+- [ ] All exported functions from src/ are tested
+- [ ] All error paths in src/ are tested
 
 **Coverage Verification (for src/ code):**
 - [ ] 100% line coverage of src/ achieved
-- [ ] 100% branch coverage of src/ achieved
+- [ ] 100% branch coverage of src/ achieved  
 - [ ] 100% path coverage of src/ achieved
+- [ ] All subcomponent files covered
+- [ ] All OS-specific code paths covered
+- [ ] All API integration paths covered
 - [ ] All error conditions in src/ tested
 - [ ] All edge cases in src/ covered
-- [ ] All security vulnerabilities in src/ tested
-- [ ] All performance requirements of src/ validated
-- [ ] All integrations used by src/ tested
-- [ ] All user journeys in src/ tested
+
+**Platform-Specific Verification:**
+- [ ] Linux-specific code has Linux-tagged tests
+- [ ] Windows-specific code has Windows-tagged tests
+- [ ] macOS-specific code has Darwin-tagged tests
+- [ ] Build constraints properly set for OS tests
+- [ ] Cross-platform compatibility verified
 
 **Test Quality Verification:**
 - [ ] All tests are independent
 - [ ] All tests are deterministic
-- [ ] All tests execute quickly
-- [ ] All tests have clear names
+- [ ] Tests use types from src/internal/types.go
+- [ ] Tests use helpers from src/internal/helpers.go where available
+- [ ] No recreation of existing src/internal/ utilities
 - [ ] All test data is isolated in tests/fixtures/
 - [ ] All mocks are complete in tests/mocks/
-- [ ] All helpers are implemented in tests/helpers/
-- [ ] No anti-patterns present
-- [ ] Quality gates passed
+- [ ] Only necessary helpers created in tests/helpers/
 
 **Implementation Verification:**
 - [ ] Tests import from src/ correctly
-- [ ] Tests use relative paths properly
+- [ ] Tests import from src/internal/ for utilities
+- [ ] Each source file has corresponding test file
+- [ ] OS-specific tests have correct build tags
+- [ ] API mocks properly simulate external services
 - [ ] No hardcoded paths to src/
-- [ ] Mocks simulate src/ dependencies properly
-- [ ] Fixtures cover all src/ input scenarios
-- [ ] Helpers support all test scenarios# LLM Testing Rules - Professional Test Suite Implementation Guide
+- [ ] Test structure mirrors src/ structure# LLM Testing Rules - Professional Test Suite Implementation Guide
 
 ## Executive Summary
 
@@ -52,14 +76,32 @@ This document provides comprehensive, language-agnostic rules for LLMs to implem
 3. **NEVER add new files to the `src/` directory**
 4. **The `src/` directory is READ-ONLY - treat it as immutable**
 5. **ALL test code, fixtures, mocks, and helpers MUST be created inside `tests/` directory only**
+6. **MUST READ AND ANALYZE all files in `src/` before implementing tests**
+7. **MUST IDENTIFY files in `src/internal/` to avoid duplicating utilities**
 
-### Component Structure
+### Component Structure Analysis
+
+**MANDATORY PRE-TEST ANALYSIS:**
+
+Before creating any test, analyze the complete `src/` structure:
 
 ```
 component/
-├── src/          # READ-ONLY - Contains implementation code
-│   └── [implementation files - DO NOT MODIFY]
-└── tests/        # WRITE-ONLY - All test code goes here
+├── src/                         # READ-ONLY - Implementation code
+│   ├── component.go            # Main component implementation
+│   ├── subcomponent1.go        # Subcomponent 1 base implementation
+│   ├── subcomponent1_linux.go  # OS-specific implementation (Linux)
+│   ├── subcomponent1_windows.go # OS-specific implementation (Windows)
+│   ├── subcomponent1_darwin.go # OS-specific implementation (macOS)
+│   ├── subcomponent2.go        # Subcomponent 2 base implementation
+│   ├── subcomponent2_linux.go  # OS-specific implementation (Linux)
+│   ├── subcomponent2_windows.go # OS-specific implementation (Windows)
+│   ├── api_integration.go      # External API integration
+│   └── internal/               # Internal utilities - DO NOT DUPLICATE
+│       ├── types.go           # Type definitions - USE, DON'T RECREATE
+│       ├── helpers.go         # Helper functions - USE, DON'T RECREATE
+│       └── constants.go       # Constants - USE, DON'T RECREATE
+└── tests/                      # WRITE-ONLY - All test code goes here
     ├── unit/
     ├── integration/
     ├── e2e/
@@ -70,13 +112,47 @@ component/
     └── helpers/
 ```
 
+### Pre-Implementation Analysis Requirements
+
+**STEP 0: Source Code Analysis (MANDATORY FIRST STEP)**
+
+```
+ANALYSIS CHECKLIST:
+1. Main Component Analysis:
+   - [ ] Read component.go - identify public interfaces
+   - [ ] List all exported functions/methods
+   - [ ] Identify dependencies
+   - [ ] Note error handling patterns
+   
+2. Subcomponent Analysis:
+   FOR EACH subcomponent:
+   - [ ] Read subcomponentN.go - identify base implementation
+   - [ ] Read subcomponentN_[OS].go - identify OS-specific code
+   - [ ] Map OS-specific variations
+   - [ ] Note platform-dependent behavior
+   
+3. API Integration Analysis:
+   - [ ] Read api_integration.go
+   - [ ] Identify external service dependencies
+   - [ ] Note authentication requirements
+   - [ ] Map request/response structures
+   
+4. Internal Utilities Analysis:
+   - [ ] Read ALL files in src/internal/
+   - [ ] Catalog type definitions (DO NOT recreate)
+   - [ ] Catalog helper functions (USE from tests)
+   - [ ] Catalog constants (IMPORT, don't duplicate)
+   - [ ] Note any test utilities already present
+```
+
 ### Implementation Boundaries
 
 - **Source Code (`src/`)**: Contains the implementation to be tested - READ ONLY
+- **Internal Code (`src/internal/`)**: Contains utilities - READ AND USE, NEVER DUPLICATE
 - **Test Code (`tests/`)**: Contains all testing artifacts - CREATE ALL FILES HERE
 - **Independence**: Tests must NEVER modify source code to make tests pass
-- **Isolation**: Tests import from `src/` but NEVER write to it
-- **Black Box**: Treat `src/` as an external, immutable dependency
+- **Reuse**: Tests MUST use existing utilities from `src/internal/` when available
+- **Isolation**: Tests import from `src/` and `src/internal/` but NEVER write to them
 
 ## Core Testing Principles
 
@@ -139,45 +215,113 @@ component/
 ### Layer 1: Unit Tests (`component/tests/unit/`)
 
 #### Purpose
-Validate individual components from `src/` directory in complete isolation with 100% coverage of all logic paths. Tests read from `src/` but never modify it.
+Validate individual components and subcomponents from `src/` directory in complete isolation with 100% coverage of all logic paths, including OS-specific implementations.
 
 #### Implementation Requirements
 
 ##### Test Coverage Targets for Source Code
-- **Line Coverage**: 100% of `src/` code
-- **Branch Coverage**: 100% of `src/` code
-- **Path Coverage**: 100% of `src/` code
+- **Line Coverage**: 100% of `src/` code (including all OS-specific files)
+- **Branch Coverage**: 100% of `src/` code (all platform branches)
+- **Path Coverage**: 100% of `src/` code (all OS paths)
 - **Condition Coverage**: 100% of `src/` code
 - **Modified Condition/Decision Coverage (MC/DC)**: 100% of `src/` code
 
-##### Test Structure Pattern
+##### Test Structure for Component and Subcomponents
+
 ```
-TEST FILE LOCATION: component/tests/unit/[test-name].test
-IMPORTS FROM: ../src/[module-name]
+TEST FILE ORGANIZATION in component/tests/unit/:
+
+component/tests/unit/
+├── component_test.go                    # Tests for src/component.go
+├── subcomponent1_test.go               # Tests for src/subcomponent1.go
+├── subcomponent1_linux_test.go         # Tests for src/subcomponent1_linux.go
+├── subcomponent1_windows_test.go       # Tests for src/subcomponent1_windows.go
+├── subcomponent1_darwin_test.go        # Tests for src/subcomponent1_darwin.go
+├── subcomponent2_test.go               # Tests for src/subcomponent2.go
+├── subcomponent2_linux_test.go         # Tests for src/subcomponent2_linux.go
+├── subcomponent2_windows_test.go       # Tests for src/subcomponent2_windows.go
+├── api_integration_test.go             # Tests for src/api_integration.go
+└── test_common.go                       # Shared test utilities (NOT duplicating src/internal/)
+```
+
+##### Test Structure Pattern for Each Component
+
+```
+TEST FILE: component/tests/unit/[component]_test.go
+IMPORTS FROM: 
+  - ../src/[component]
+  - ../src/internal/types (USE existing types)
+  - ../src/internal/helpers (USE existing helpers)
 
 TEST SUITE: [Component Name from src/]
-  TEST CONTEXT: [Method/Function Name from src/]
+  
+  PREREQUISITE: Analyze src/internal/ for existing utilities
+    - USE type definitions from src/internal/types.go
+    - USE helper functions from src/internal/helpers.go
+    - USE constants from src/internal/constants.go
+    - DO NOT recreate any utility that exists in src/internal/
+  
+  TEST CONTEXT: Main Component Functions
     TEST GROUP: Normal Conditions
-      TEST CASE: Should [expected behavior] when [valid input scenario 1]
-      TEST CASE: Should [expected behavior] when [valid input scenario 2]
-      TEST CASE: Should [expected behavior] with [boundary value - minimum]
-      TEST CASE: Should [expected behavior] with [boundary value - maximum]
+      TEST CASE: Should [expected behavior] with valid input
+      TEST CASE: Should handle all supported configurations
     
     TEST GROUP: Edge Cases
-      TEST CASE: Should handle [edge case 1] correctly
-      TEST CASE: Should handle [edge case 2] correctly
-      TEST CASE: Should process [boundary condition] as expected
+      TEST CASE: Should handle boundary conditions
+      TEST CASE: Should process maximum limits
     
     TEST GROUP: Error Conditions
-      TEST CASE: Should [error behavior] when [invalid input scenario 1]
-      TEST CASE: Should [error behavior] when [invalid input scenario 2]
-      TEST CASE: Should [error behavior] when [null/undefined input]
-      TEST CASE: Should [error behavior] when [type mismatch]
+      TEST CASE: Should return appropriate errors
+      TEST CASE: Should handle invalid inputs gracefully
+```
+
+##### OS-Specific Test Pattern
+
+```
+TEST FILE: component/tests/unit/subcomponent1_[OS]_test.go
+
+BUILD CONSTRAINTS: 
+  // +build [OS] (e.g., linux, windows, darwin)
+
+TEST SUITE: [Subcomponent] [OS] Specific
+  TEST GROUP: OS-Specific Behavior
+    TEST CASE: Should handle [OS-specific feature]
+    TEST CASE: Should use correct [OS] system calls
+    TEST CASE: Should handle [OS] file paths correctly
+    TEST CASE: Should manage [OS] permissions properly
     
-    TEST GROUP: State Verification
-      TEST CASE: Should maintain [invariant 1] after operation
-      TEST CASE: Should maintain [invariant 2] after operation
-      TEST CASE: Should transition from [state A] to [state B] when [event]
+  TEST GROUP: OS-Specific Error Handling
+    TEST CASE: Should handle [OS] specific errors
+    TEST CASE: Should fallback appropriately on [OS]
+    
+  TEST GROUP: Cross-Platform Compatibility
+    TEST CASE: Should maintain interface compatibility
+    TEST CASE: Should produce consistent results across platforms
+```
+
+##### API Integration Test Pattern
+
+```
+TEST FILE: component/tests/unit/api_integration_test.go
+IMPORTS FROM:
+  - ../src/api_integration
+  - ../src/internal/* (USE, don't duplicate)
+
+TEST SUITE: API Integration
+  TEST GROUP: Request Formation
+    TEST CASE: Should construct valid requests
+    TEST CASE: Should include required headers
+    TEST CASE: Should handle authentication
+    
+  TEST GROUP: Response Handling
+    TEST CASE: Should parse successful responses
+    TEST CASE: Should handle error responses
+    TEST CASE: Should manage rate limiting
+    
+  TEST GROUP: Network Conditions
+    TEST CASE: Should handle timeouts
+    TEST CASE: Should retry on failures
+    TEST CASE: Should circuit break when appropriate
 ```
 
 ##### Unit Test Categories (100% Coverage Required)
@@ -615,11 +759,29 @@ MOCK: [Service Name used by src/]
 
 ### Required Helper Categories
 
-**LOCATION**: All helpers must be in `tests/helpers/`. They assist in testing `src/` code without modifying it.
+**CRITICAL**: Check `src/internal/` FIRST. Only create helpers that don't exist in `src/internal/`. 
+
+#### Helper Creation Decision Tree
+```
+BEFORE CREATING ANY HELPER:
+1. Does this utility exist in src/internal/?
+   YES → Import and use from src/internal/
+   NO  → Continue to step 2
+   
+2. Is this utility specific to testing?
+   YES → Create in tests/helpers/
+   NO  → This should probably be in src/internal/ (but DO NOT add it there)
+   
+3. Would this duplicate functionality from src/?
+   YES → Import the original, don't duplicate
+   NO  → Create in tests/helpers/
+```
 
 #### 1. Setup Utilities
 ```
 component/tests/helpers/setup/
+PREREQUISITES: Check src/internal/ for existing setup utilities
+
 - Environment configuration for testing src/
 - Test database initialization for src/ DB modules
 - Test server startup for src/ server code
@@ -631,45 +793,49 @@ component/tests/helpers/setup/
 #### 2. Assertion Helpers
 ```
 component/tests/helpers/assertions/
+PREREQUISITES: Check if src/internal/ has validation functions
+
 - Custom matchers for src/ output validation
-- Deep equality checks for src/ objects
+- Deep equality checks for src/ objects (if not in internal/)
 - Schema validation for src/ data structures
 - Approximate equality for src/ calculations
 - Collection assertions for src/ arrays/lists
 - Async assertions for src/ promises
 ```
 
-#### 3. Wait/Retry Utilities
+#### 3. OS-Specific Test Helpers
 ```
-component/tests/helpers/timing/
-- Wait for src/ async operations
-- Retry src/ operations with backoff
-- Timeout handling for src/ long operations
-- Polling mechanisms for src/ state changes
-- Event waiting for src/ event emitters
-- Promise utilities for src/ async code
+component/tests/helpers/platform/
+PURPOSE: Support testing of OS-specific code in src/
+
+- Platform detection helpers
+- OS-specific path builders
+- Permission validators for each OS
+- System call simulators
+- Environment variable helpers per OS
 ```
 
 #### 4. Data Builders
 ```
 component/tests/helpers/builders/
-- Object mothers for src/ entity testing
-- Test data builders for src/ inputs
-- Random generators matching src/ constraints
-- Factory methods for src/ object creation
+IMPORTANT: Use types from src/internal/types.go
+
+- Object builders using src/internal/ types
+- Test data builders matching src/ constraints
+- Random generators within src/ validation rules
+- Factory methods for src/ entities
 - Fixture loaders for src/ data processing
-- Snapshot creators for src/ state capture
 ```
 
-#### 5. Cleanup Utilities
+#### 5. Mock Utilities
 ```
-component/tests/helpers/cleanup/
-- Database cleanup after testing src/ DB ops
-- File system cleanup after src/ file ops
-- Network cleanup after src/ network ops
-- Process cleanup after src/ process spawning
-- Memory cleanup after src/ memory ops
-- State reset between src/ tests
+component/tests/helpers/mocking/
+PURPOSE: Support mock creation for src/ dependencies
+
+- Mock builders for src/ interfaces
+- Spy creators for src/ functions
+- Stub generators for src/ services
+- Fake implementations of src/ protocols
 ```
 
 ---
@@ -826,7 +992,9 @@ Tests in `tests/` directory must exercise:
 2. **NEVER create new files in `component/src/` directory**
 3. **CREATE all test files ONLY in `component/tests/` directory**
 4. **TREAT `src/` as completely immutable and read-only**
-5. **Tests must work with existing `src/` code AS-IS**
+5. **MUST analyze ALL files in `src/` and `src/internal/` BEFORE writing tests**
+6. **NEVER duplicate utilities that exist in `src/internal/`**
+7. **Tests must work with existing `src/` code AS-IS**
 
 ### Test Generation Process
 
@@ -834,82 +1002,126 @@ Tests in `tests/` directory must exercise:
 WORKING DIRECTORY: component/tests/ (ALL files created here)
 SOURCE DIRECTORY: component/src/ (READ-ONLY - never modified)
 
-STEP 1: Analysis Phase (READ from src/)
-  - Analyze all code paths in src/
-  - Identify all dependencies in src/
-  - Map all state transitions in src/
-  - List all error conditions in src/
-  - Document all business rules in src/
+STEP 0: Complete Source Analysis (MANDATORY FIRST)
+  READ AND ANALYZE src/:
+  - component.go → Identify main component interface
+  - subcomponent1.go → Identify subcomponent 1 base logic
+  - subcomponent1_linux.go → Note Linux-specific implementation
+  - subcomponent1_windows.go → Note Windows-specific implementation
+  - subcomponent1_darwin.go → Note macOS-specific implementation
+  - subcomponent2.go → Identify subcomponent 2 base logic
+  - subcomponent2_*.go → Note all OS-specific variations
+  - api_integration.go → Identify external dependencies
   
-  OUTPUT: Test plan (saved in tests/test-plan)
-
-STEP 2: Test Planning
-  - Create test matrix for src/ code coverage
-  - Plan mocks for src/ dependencies
-  - Design test data for src/ inputs
-  - Define 100% coverage goals for src/
-  - Establish execution order
+  READ AND CATALOG src/internal/:
+  - types.go → List all type definitions (USE THESE)
+  - helpers.go → List all helper functions (USE THESE)
+  - constants.go → List all constants (USE THESE)
+  - Any other utilities → Catalog for use in tests
   
-  OUTPUT: Test strategy (saved in tests/test-strategy)
+  OUTPUT: Complete component map (saved in tests/analysis.md)
 
-STEP 3: Structure Creation (CREATE in tests/)
+STEP 1: Test Planning Based on Analysis
+  - Create test matrix for each component and subcomponent
+  - Plan OS-specific test variations
+  - Identify which src/internal/ utilities to use
+  - Plan mocks for external dependencies in api_integration
+  - Design test data using src/internal/types
+  - Define 100% coverage goals for all files
+  
+  OUTPUT: Test strategy (saved in tests/test-strategy.md)
+
+STEP 2: Structure Creation (CREATE in tests/)
   - Create directory structure in tests/
-  - Initialize test configuration in tests/
-  - Set up test utilities in tests/helpers/
-  - Configure coverage tools for src/
-  - Prepare CI/CD pipeline in tests/
+  - Create test files for EACH source file:
+    * component_test.go for component.go
+    * subcomponent1_test.go for subcomponent1.go
+    * subcomponent1_linux_test.go for subcomponent1_linux.go
+    * subcomponent1_windows_test.go for subcomponent1_windows.go
+    * Continue for all subcomponents and OS variations
+    * api_integration_test.go for api_integration.go
+
+STEP 3: Helper Analysis and Creation
+  FOR EACH helper needed:
+    1. Check if it exists in src/internal/
+       - YES: Import and use it
+       - NO: Continue
+    2. Create ONLY missing helpers in tests/helpers/
+    3. Document why helper doesn't exist in src/internal/
 
 STEP 4: Test Implementation (ALL in tests/)
-  1. Generate test helpers in tests/helpers/
-  2. Create mocks in tests/mocks/
-  3. Prepare fixtures in tests/fixtures/
-  4. Implement unit tests in tests/unit/ (100% src/ coverage)
-  5. Implement integration tests in tests/integration/
-  6. Implement E2E tests in tests/e2e/
-  7. Implement performance tests in tests/performance/
-  8. Implement security tests in tests/security/
+  1. Generate ONLY necessary helpers in tests/helpers/
+  2. Create mocks in tests/mocks/ for api_integration dependencies
+  3. Prepare fixtures in tests/fixtures/ using src/internal/types
+  4. Implement unit tests for main component
+  5. Implement unit tests for EACH subcomponent
+  6. Implement OS-specific tests for EACH platform variant
+  7. Implement integration tests for api_integration
+  8. Implement E2E tests covering all components together
+  9. Implement performance tests for critical paths
+  10. Implement security tests for API boundaries
 
 STEP 5: Verification
-  - Verify 100% coverage of src/ code
+  - Verify 100% coverage of ALL src/ files
+  - Verify ALL subcomponents have tests
+  - Verify ALL OS-specific code has platform tests
+  - Verify no duplication of src/internal/ utilities
   - Verify no modifications to src/
   - Verify all tests are in tests/
-  - Verify test independence
-  - Verify execution speed
 ```
 
 ### Import Patterns for Tests
 
 ```
 CORRECT IMPORT EXAMPLES:
-  From test file: tests/unit/example.test
-  Import source: import from '../../src/module'
-  Import helper: import from '../helpers/utility'
-  Import mock: import from '../mocks/service'
-  Import fixture: import from '../fixtures/data'
+  From test file: tests/unit/component_test.go
+  Import source: import "component/src"
+  Import internal: import "component/src/internal/types"
+  Import internal: import "component/src/internal/helpers"
+  Import helper: import "component/tests/helpers/assertions"
+  Import mock: import "component/tests/mocks/api"
+  Import fixture: import "component/tests/fixtures/data"
+
+OS-SPECIFIC IMPORTS:
+  From test file: tests/unit/subcomponent1_linux_test.go
+  Build constraint: // +build linux
+  Import source: import "component/src" (gets Linux-specific code)
 
 INCORRECT (NEVER DO):
-  ❌ Modify: src/module (to make test pass)
-  ❌ Create: src/test-helper
-  ❌ Write: any file to src/
-  ❌ Delete: any file from src/
-  ❌ Move: files between src/ and tests/
+  ❌ Create: src/internal/test_helper.go
+  ❌ Duplicate: types from src/internal/types.go
+  ❌ Recreate: helpers that exist in src/internal/
+  ❌ Modify: any file in src/ to make tests pass
 ```
 
-### File System Operations
+### Pre-Implementation Checklist
 
 ```
-ALLOWED OPERATIONS:
-  ✅ READ from component/src/*
-  ✅ WRITE to component/tests/*
-  ✅ CREATE in component/tests/*
-  ✅ DELETE in component/tests/* (during cleanup)
+BEFORE WRITING ANY TEST CODE:
+□ Read ALL files in src/
+□ Read ALL files in src/internal/
+□ Document each component's purpose
+□ List all subcomponents and their OS variants
+□ Catalog all types in src/internal/types.go
+□ Catalog all helpers in src/internal/helpers.go
+□ Catalog all constants in src/internal/constants.go
+□ Identify all external dependencies in api_integration.go
+□ Map component relationships
+□ Note platform-specific behaviors
+□ Plan test file structure matching src/ structure
+```
 
-FORBIDDEN OPERATIONS:
-  ❌ WRITE to component/src/*
-  ❌ CREATE in component/src/*
-  ❌ DELETE from component/src/*
-  ❌ MODIFY component/src/*
-  ❌ RENAME in component/src/*
+### Test File Naming Convention
+
+```
+SOURCE FILE → TEST FILE MAPPING:
+src/component.go → tests/unit/component_test.go
+src/subcomponent1.go → tests/unit/subcomponent1_test.go
+src/subcomponent1_linux.go → tests/unit/subcomponent1_linux_test.go
+src/subcomponent1_windows.go → tests/unit/subcomponent1_windows_test.go
+src/subcomponent1_darwin.go → tests/unit/subcomponent1_darwin_test.go
+src/api_integration.go → tests/unit/api_integration_test.go
+src/api_integration.go → tests/integration/api_integration_test.go (integration tests)
 ```
 
 ### Test Completeness Checklist
