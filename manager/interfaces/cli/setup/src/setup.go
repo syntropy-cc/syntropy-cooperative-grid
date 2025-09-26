@@ -229,12 +229,12 @@ func forceLocalSetup() bool {
 	if os.Getenv("SYNTROPY_FORCE_LOCAL_SETUP") == "true" {
 		return true
 	}
-	
+
 	// 3. Check if we're running in CI/testing environment
 	if os.Getenv("CI") != "" || os.Getenv("TESTING") != "" {
 		return true
 	}
-	
+
 	// 4. For now, force local setup to guarantee functionality
 	// This can be removed once API central issues are fixed
 	return true
