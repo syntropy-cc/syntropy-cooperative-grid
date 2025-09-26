@@ -1,8 +1,82 @@
-# LLM Testing Rules - Professional Test Suite Implementation Guide
+### Test Completeness Checklist
+
+Before considering the test suite complete:
+
+**File Location Verification:**
+- [ ] ALL test files are in `component/tests/` directory
+- [ ] NO files were created in `component/src/` directory
+- [ ] NO files were modified in `component/src/` directory
+- [ ] Source code in `src/` remains completely unchanged
+
+**Coverage Verification (for src/ code):**
+- [ ] 100% line coverage of src/ achieved
+- [ ] 100% branch coverage of src/ achieved
+- [ ] 100% path coverage of src/ achieved
+- [ ] All error conditions in src/ tested
+- [ ] All edge cases in src/ covered
+- [ ] All security vulnerabilities in src/ tested
+- [ ] All performance requirements of src/ validated
+- [ ] All integrations used by src/ tested
+- [ ] All user journeys in src/ tested
+
+**Test Quality Verification:**
+- [ ] All tests are independent
+- [ ] All tests are deterministic
+- [ ] All tests execute quickly
+- [ ] All tests have clear names
+- [ ] All test data is isolated in tests/fixtures/
+- [ ] All mocks are complete in tests/mocks/
+- [ ] All helpers are implemented in tests/helpers/
+- [ ] No anti-patterns present
+- [ ] Quality gates passed
+
+**Implementation Verification:**
+- [ ] Tests import from src/ correctly
+- [ ] Tests use relative paths properly
+- [ ] No hardcoded paths to src/
+- [ ] Mocks simulate src/ dependencies properly
+- [ ] Fixtures cover all src/ input scenarios
+- [ ] Helpers support all test scenarios# LLM Testing Rules - Professional Test Suite Implementation Guide
 
 ## Executive Summary
 
 This document provides comprehensive, language-agnostic rules for LLMs to implement a complete, professional-grade test suite achieving 100% code coverage. These rules follow industry best practices and standards including ISO/IEC/IEEE 29119, ISTQB guidelines, and proven testing methodologies.
+
+## CRITICAL CONSTRAINTS - READ FIRST
+
+### File System Boundaries
+
+**ABSOLUTE RULES:**
+1. **NEVER create or modify ANY file outside the `tests/` directory**
+2. **NEVER modify ANY file in the `src/` directory**
+3. **NEVER add new files to the `src/` directory**
+4. **The `src/` directory is READ-ONLY - treat it as immutable**
+5. **ALL test code, fixtures, mocks, and helpers MUST be created inside `tests/` directory only**
+
+### Component Structure
+
+```
+component/
+├── src/          # READ-ONLY - Contains implementation code
+│   └── [implementation files - DO NOT MODIFY]
+└── tests/        # WRITE-ONLY - All test code goes here
+    ├── unit/
+    ├── integration/
+    ├── e2e/
+    ├── performance/
+    ├── security/
+    ├── fixtures/
+    ├── mocks/
+    └── helpers/
+```
+
+### Implementation Boundaries
+
+- **Source Code (`src/`)**: Contains the implementation to be tested - READ ONLY
+- **Test Code (`tests/`)**: Contains all testing artifacts - CREATE ALL FILES HERE
+- **Independence**: Tests must NEVER modify source code to make tests pass
+- **Isolation**: Tests import from `src/` but NEVER write to it
+- **Black Box**: Treat `src/` as an external, immutable dependency
 
 ## Core Testing Principles
 
@@ -26,47 +100,63 @@ This document provides comprehensive, language-agnostic rules for LLMs to implem
 
 ## Directory Structure Requirements
 
+**IMPORTANT**: All paths below are relative to `component/tests/`. Never create files outside this directory.
+
 ```
-tests/
-├── unit/                 # Isolated component tests
-│   ├── core/            # Core business logic tests
-│   └── utilities/       # Utility function tests
-├── integration/         # Component interaction tests
-│   ├── api/            # External API integration tests
-│   └── database/       # Data persistence tests
-├── e2e/                # End-to-end user journeys
-│   └── scenarios/      # Complete workflow tests
-├── performance/        # Performance validation
-├── security/          # Security verification
-├── fixtures/          # Test data
-│   ├── valid/        # Valid input scenarios
-│   └── invalid/      # Invalid input scenarios
-├── mocks/            # Test doubles
-└── helpers/          # Test utilities
+component/
+├── src/                  # [READ-ONLY] - Implementation code - DO NOT MODIFY
+│   └── ...              # Existing source files - NEVER CHANGE
+└── tests/               # [WRITE-ONLY] - All test files created here
+    ├── unit/           # Isolated component tests
+    │   ├── core/      # Core business logic tests
+    │   └── utilities/ # Utility function tests
+    ├── integration/   # Component interaction tests
+    │   ├── api/      # External API integration tests
+    │   └── database/ # Data persistence tests
+    ├── e2e/          # End-to-end user journeys
+    │   └── scenarios/# Complete workflow tests
+    ├── performance/  # Performance validation
+    ├── security/     # Security verification
+    ├── fixtures/     # Test data
+    │   ├── valid/   # Valid input scenarios
+    │   └── invalid/ # Invalid input scenarios
+    ├── mocks/       # Test doubles
+    └── helpers/     # Test utilities
 ```
+
+### File Creation Rules
+
+1. **All test files**: Must be created under `component/tests/`
+2. **Import statements**: Can import from `../src/` (read-only access)
+3. **Test artifacts**: Fixtures, mocks, helpers stay within `tests/`
+4. **No source modification**: Tests must work with existing `src/` code as-is
+5. **Test independence**: Tests cannot require changes to source code
 
 ---
 
 ## Test Implementation Layers
 
-### Layer 1: Unit Tests (`tests/unit/`)
+### Layer 1: Unit Tests (`component/tests/unit/`)
 
 #### Purpose
-Validate individual components in complete isolation with 100% coverage of all logic paths.
+Validate individual components from `src/` directory in complete isolation with 100% coverage of all logic paths. Tests read from `src/` but never modify it.
 
 #### Implementation Requirements
 
-##### Test Coverage Targets
-- **Line Coverage**: 100%
-- **Branch Coverage**: 100%
-- **Path Coverage**: 100%
-- **Condition Coverage**: 100%
-- **Modified Condition/Decision Coverage (MC/DC)**: 100%
+##### Test Coverage Targets for Source Code
+- **Line Coverage**: 100% of `src/` code
+- **Branch Coverage**: 100% of `src/` code
+- **Path Coverage**: 100% of `src/` code
+- **Condition Coverage**: 100% of `src/` code
+- **Modified Condition/Decision Coverage (MC/DC)**: 100% of `src/` code
 
 ##### Test Structure Pattern
 ```
-TEST SUITE: [Component Name]
-  TEST CONTEXT: [Method/Function Name]
+TEST FILE LOCATION: component/tests/unit/[test-name].test
+IMPORTS FROM: ../src/[module-name]
+
+TEST SUITE: [Component Name from src/]
+  TEST CONTEXT: [Method/Function Name from src/]
     TEST GROUP: Normal Conditions
       TEST CASE: Should [expected behavior] when [valid input scenario 1]
       TEST CASE: Should [expected behavior] when [valid input scenario 2]
@@ -133,32 +223,35 @@ TEST SUITE: [Component Name]
 
 ---
 
-### Layer 2: Integration Tests (`tests/integration/`)
+### Layer 2: Integration Tests (`component/tests/integration/`)
 
 #### Purpose
-Verify correct interaction between components and with external systems while maintaining 100% interface coverage.
+Verify correct interaction between components from `src/` and with external systems while maintaining 100% interface coverage. Tests import from `src/` but never modify source files.
 
 #### Implementation Requirements
 
 ##### Integration Points Coverage (100% Required)
 ```
+TEST FILE LOCATION: component/tests/integration/
+IMPORTS FROM: ../src/[modules]
+
 INTEGRATION SUITE: [Integration Name]
   CATEGORY: Component Integration
-    TEST: Component A → Component B data flow
-    TEST: Component B → Component A feedback
+    TEST: Component A → Component B data flow (both from src/)
+    TEST: Component B → Component A feedback (both from src/)
     TEST: Error propagation between components
     TEST: Transaction boundaries
     
   CATEGORY: External System Integration
-    TEST: Database connectivity
+    TEST: Database connectivity (using src/ database module)
     TEST: Database transactions (commit/rollback)
-    TEST: External API communication
-    TEST: Message queue operations
-    TEST: Cache synchronization
+    TEST: External API communication (using src/ API client)
+    TEST: Message queue operations (using src/ queue module)
+    TEST: Cache synchronization (using src/ cache module)
     
   CATEGORY: Contract Testing
-    TEST: Request schema validation
-    TEST: Response schema validation
+    TEST: Request schema validation (validating src/ contracts)
+    TEST: Response schema validation (validating src/ contracts)
     TEST: Error response formats
     TEST: Version compatibility
 ```
@@ -208,38 +301,41 @@ INTEGRATION SUITE: [Integration Name]
 
 ---
 
-### Layer 3: End-to-End Tests (`tests/e2e/`)
+### Layer 3: End-to-End Tests (`component/tests/e2e/`)
 
 #### Purpose
-Validate complete user workflows and system behavior from entry to exit points.
+Validate complete user workflows using the implementation from `src/` directory without modifying any source code.
 
 #### Implementation Requirements
 
 ##### E2E Scenario Coverage
 ```
+TEST FILE LOCATION: component/tests/e2e/scenarios/
+SYSTEM UNDER TEST: ../src/ (entire application)
+
 E2E SUITE: [Application Name]
-  CRITICAL PATHS: (Must have 100% coverage)
+  CRITICAL PATHS: (Must have 100% coverage of src/ user flows)
     SCENARIO: User Registration Flow
-      STEP 1: Navigate to registration
-      STEP 2: Fill registration form
-      STEP 3: Submit and verify
-      STEP 4: Email confirmation
-      STEP 5: Account activation
+      STEP 1: Navigate to registration (using src/ routes)
+      STEP 2: Fill registration form (testing src/ validation)
+      STEP 3: Submit and verify (testing src/ business logic)
+      STEP 4: Email confirmation (testing src/ email module)
+      STEP 5: Account activation (testing src/ activation logic)
       
     SCENARIO: Authentication Flow
-      STEP 1: Login with credentials
-      STEP 2: Multi-factor authentication
-      STEP 3: Session establishment
-      STEP 4: Session refresh
-      STEP 5: Logout process
+      STEP 1: Login with credentials (testing src/ auth module)
+      STEP 2: Multi-factor authentication (testing src/ MFA)
+      STEP 3: Session establishment (testing src/ session)
+      STEP 4: Session refresh (testing src/ token refresh)
+      STEP 5: Logout process (testing src/ cleanup)
       
     SCENARIO: Core Business Process
-      [Define steps for main business workflow]
+      [Test complete workflow using src/ modules]
       
   ALTERNATIVE PATHS:
-    SCENARIO: Error Recovery
-    SCENARIO: Concurrent Users
-    SCENARIO: System Degradation
+    SCENARIO: Error Recovery (testing src/ error handlers)
+    SCENARIO: Concurrent Users (testing src/ concurrency)
+    SCENARIO: System Degradation (testing src/ fallbacks)
 ```
 
 ##### E2E Test Implementation Patterns
@@ -413,38 +509,40 @@ SECURITY SUITE: [Application Name]
 
 ---
 
-## Test Data Management (`tests/fixtures/`)
+## Test Data Management (`component/tests/fixtures/`)
 
 ### Test Data Categories
 
+**IMPORTANT**: All test data must be created in `tests/fixtures/`. Never modify data in `src/`.
+
 #### 1. Valid Data Sets
 ```
-valid/
-├── minimal/          # Minimum required fields
-├── complete/         # All fields populated
-├── typical/          # Common use cases
-├── maximum/          # Maximum allowed values
-└── variations/       # Format variations
+component/tests/fixtures/valid/
+├── minimal/          # Minimum required fields for src/ functions
+├── complete/         # All fields populated for src/ functions
+├── typical/          # Common use cases from src/ requirements
+├── maximum/          # Maximum allowed values per src/ validation
+└── variations/       # Format variations accepted by src/
 ```
 
 #### 2. Invalid Data Sets
 ```
-invalid/
-├── missing-required/ # Missing mandatory fields
-├── type-errors/     # Wrong data types
-├── constraint-violations/ # Business rule violations
-├── malformed/       # Structural errors
-└── malicious/       # Security test payloads
+component/tests/fixtures/invalid/
+├── missing-required/ # Missing fields that src/ requires
+├── type-errors/     # Wrong types that src/ should reject
+├── constraint-violations/ # Violates src/ business rules
+├── malformed/       # Structural errors src/ should catch
+└── malicious/       # Security payloads src/ should block
 ```
 
 #### 3. Edge Case Data Sets
 ```
-edge-cases/
-├── boundary-values/ # Min, Max, Zero
-├── special-characters/ # Unicode, Emoji, Control
-├── large-datasets/  # Volume testing
-├── concurrent/      # Race condition testing
-└── temporal/        # Time-based edge cases
+component/tests/fixtures/edge-cases/
+├── boundary-values/ # Test src/ boundary handling
+├── special-characters/ # Test src/ character handling
+├── large-datasets/  # Test src/ volume limits
+├── concurrent/      # Test src/ race conditions
+└── temporal/        # Test src/ time handling
 ```
 
 ### Test Data Principles
@@ -459,98 +557,120 @@ edge-cases/
 
 ---
 
-## Mock Implementation (`tests/mocks/`)
+## Mock Implementation (`component/tests/mocks/`)
 
 ### Mock Types Required
 
+**CRITICAL**: All mocks must be created in `tests/mocks/`. Mocks simulate `src/` dependencies but NEVER modify source files.
+
 #### 1. Test Doubles Taxonomy
-- **Dummy**: Objects passed but never used
-- **Stub**: Provides predetermined responses
-- **Spy**: Records interactions for verification
-- **Mock**: Pre-programmed with expectations
-- **Fake**: Working implementation for testing
+- **Dummy**: Objects passed to src/ functions but never used
+- **Stub**: Provides predetermined responses to src/ calls
+- **Spy**: Records src/ function interactions for verification
+- **Mock**: Pre-programmed expectations for src/ behavior
+- **Fake**: Working implementation replacing src/ dependencies
 
 #### 2. Mock Implementation Requirements
 
 ```
-MOCK: [Service Name]
+FILE LOCATION: component/tests/mocks/[service-name].mock
+PURPOSE: Mock external dependencies used by src/ code
+
+MOCK: [Service Name used by src/]
   CAPABILITIES:
-    - Record all method calls
-    - Verify call count and parameters
-    - Simulate success responses
-    - Simulate error conditions
-    - Simulate timeouts
-    - Simulate rate limiting
-    - Simulate partial failures
+    - Record all calls from src/ code
+    - Verify src/ call count and parameters
+    - Simulate responses that src/ expects
+    - Simulate errors that src/ should handle
+    - Simulate timeouts that src/ should handle
+    - Simulate rate limiting for src/ retry logic
+    - Simulate partial failures for src/ resilience
     
   VERIFICATION METHODS:
-    - Was called with specific parameters
-    - Was called N times
-    - Was called in specific order
-    - Was not called
+    - Verify src/ called with specific parameters
+    - Verify src/ called N times
+    - Verify src/ called in specific order
+    - Verify src/ did not call
     
   CONFIGURATION:
-    - Response delays
-    - Error rates
-    - Custom responses
-    - Conditional behavior
+    - Response delays (test src/ timeout handling)
+    - Error rates (test src/ error handling)
+    - Custom responses (test src/ parsing)
+    - Conditional behavior (test src/ branching)
 ```
 
 ### Mock Best Practices
 
-1. **Interface Compliance**: Match real service interface exactly
-2. **Behavior Simulation**: Realistic response patterns
-3. **State Management**: Maintain state between calls
+1. **Interface Compliance**: Match interfaces that src/ expects exactly
+2. **Behavior Simulation**: Realistic responses for src/ consumption
+3. **State Management**: Maintain state between src/ calls
 4. **Reset Capability**: Clear state between tests
-5. **Error Injection**: Controllable failure modes
-6. **Performance Characteristics**: Simulate latency
-7. **Verification API**: Rich assertion capabilities
+5. **Error Injection**: Test src/ error handling paths
+6. **Performance Characteristics**: Test src/ timeout logic
+7. **Verification API**: Verify how src/ uses dependencies
 
 ---
 
-## Test Helpers (`tests/helpers/`)
+## Test Helpers (`component/tests/helpers/`)
 
 ### Required Helper Categories
 
+**LOCATION**: All helpers must be in `tests/helpers/`. They assist in testing `src/` code without modifying it.
+
 #### 1. Setup Utilities
-- Environment configuration
-- Test database initialization
-- Test server startup
-- Service connections
-- Authentication setup
-- Test user creation
+```
+component/tests/helpers/setup/
+- Environment configuration for testing src/
+- Test database initialization for src/ DB modules
+- Test server startup for src/ server code
+- Service connections for src/ integrations
+- Authentication setup for src/ auth testing
+- Test user creation for src/ user management
+```
 
 #### 2. Assertion Helpers
-- Custom matchers
-- Deep equality checks
-- Schema validation
-- Approximate equality
-- Collection assertions
-- Async assertions
+```
+component/tests/helpers/assertions/
+- Custom matchers for src/ output validation
+- Deep equality checks for src/ objects
+- Schema validation for src/ data structures
+- Approximate equality for src/ calculations
+- Collection assertions for src/ arrays/lists
+- Async assertions for src/ promises
+```
 
 #### 3. Wait/Retry Utilities
-- Wait for condition
-- Retry with backoff
-- Timeout handling
-- Polling mechanisms
-- Event waiting
-- Promise utilities
+```
+component/tests/helpers/timing/
+- Wait for src/ async operations
+- Retry src/ operations with backoff
+- Timeout handling for src/ long operations
+- Polling mechanisms for src/ state changes
+- Event waiting for src/ event emitters
+- Promise utilities for src/ async code
+```
 
 #### 4. Data Builders
-- Object mothers
-- Test data builders
-- Random generators
-- Factory methods
-- Fixture loaders
-- Snapshot creators
+```
+component/tests/helpers/builders/
+- Object mothers for src/ entity testing
+- Test data builders for src/ inputs
+- Random generators matching src/ constraints
+- Factory methods for src/ object creation
+- Fixture loaders for src/ data processing
+- Snapshot creators for src/ state capture
+```
 
 #### 5. Cleanup Utilities
-- Database cleanup
-- File system cleanup
-- Network cleanup
-- Process cleanup
-- Memory cleanup
-- State reset
+```
+component/tests/helpers/cleanup/
+- Database cleanup after testing src/ DB ops
+- File system cleanup after src/ file ops
+- Network cleanup after src/ network ops
+- Process cleanup after src/ process spawning
+- Memory cleanup after src/ memory ops
+- State reset between src/ tests
+```
 
 ---
 
@@ -609,35 +729,47 @@ PHASE 6: Security Tests
 
 ### Mandatory Coverage Metrics (100% Required)
 
+**TARGET**: 100% coverage of all code in `src/` directory. The `tests/` directory achieves this without modifying any source files.
+
 ```
-COVERAGE REQUIREMENTS:
+COVERAGE REQUIREMENTS FOR src/ CODE:
   Code Coverage:
-    - Line Coverage: 100%
-    - Branch Coverage: 100%
-    - Function Coverage: 100%
-    - Statement Coverage: 100%
+    - Line Coverage: 100% of src/
+    - Branch Coverage: 100% of src/
+    - Function Coverage: 100% of src/
+    - Statement Coverage: 100% of src/
     
   Logic Coverage:
-    - Decision Coverage: 100%
-    - Condition Coverage: 100%
-    - MC/DC Coverage: 100%
-    - Path Coverage: 100%
+    - Decision Coverage: 100% of src/
+    - Condition Coverage: 100% of src/
+    - MC/DC Coverage: 100% of src/
+    - Path Coverage: 100% of src/
     
   Data Flow Coverage:
-    - All-Defs: 100%
-    - All-Uses: 100%
-    - All-P-Uses: 100%
-    - All-C-Uses: 100%
+    - All-Defs: 100% of src/
+    - All-Uses: 100% of src/
+    - All-P-Uses: 100% of src/
+    - All-C-Uses: 100% of src/
     
   Mutation Coverage:
-    - Mutation Score: 100%
-    - Killed Mutants: 100%
+    - Mutation Score: 100% of src/
+    - Killed Mutants: 100% of src/
 ```
 
-### Coverage Exclusions (Must Document)
-- Generated code (with justification)
-- Third-party libraries
-- Unreachable code (with proof)
+### Coverage Scope
+
+- **Include**: All files in `src/` directory
+- **Exclude**: Only `tests/` directory files (these are tests, not code)
+- **No Exceptions**: Every line in `src/` must be covered
+
+### Coverage Validation
+
+Tests in `tests/` directory must exercise:
+1. Every line of code in `src/`
+2. Every branch condition in `src/`
+3. Every function/method in `src/`
+4. Every error path in `src/`
+5. Every edge case in `src/`
 
 ---
 
@@ -687,46 +819,97 @@ COVERAGE REQUIREMENTS:
 
 ## LLM Implementation Instructions
 
+### CRITICAL RULES FOR TEST GENERATION
+
+**ABSOLUTE CONSTRAINTS:**
+1. **NEVER modify any file in `component/src/` directory**
+2. **NEVER create new files in `component/src/` directory**
+3. **CREATE all test files ONLY in `component/tests/` directory**
+4. **TREAT `src/` as completely immutable and read-only**
+5. **Tests must work with existing `src/` code AS-IS**
+
 ### Test Generation Process
 
 ```
-STEP 1: Analysis Phase
-  - Analyze all code paths
-  - Identify all dependencies
-  - Map all state transitions
-  - List all error conditions
-  - Document all business rules
+WORKING DIRECTORY: component/tests/ (ALL files created here)
+SOURCE DIRECTORY: component/src/ (READ-ONLY - never modified)
+
+STEP 1: Analysis Phase (READ from src/)
+  - Analyze all code paths in src/
+  - Identify all dependencies in src/
+  - Map all state transitions in src/
+  - List all error conditions in src/
+  - Document all business rules in src/
+  
+  OUTPUT: Test plan (saved in tests/test-plan)
 
 STEP 2: Test Planning
-  - Create test matrix (input × conditions × outputs)
-  - Plan mock requirements
-  - Design test data sets
-  - Define coverage goals (100% mandatory)
+  - Create test matrix for src/ code coverage
+  - Plan mocks for src/ dependencies
+  - Design test data for src/ inputs
+  - Define 100% coverage goals for src/
   - Establish execution order
+  
+  OUTPUT: Test strategy (saved in tests/test-strategy)
 
-STEP 3: Structure Creation
-  - Create directory structure
-  - Initialize test configuration
-  - Set up test utilities
-  - Configure coverage tools
-  - Prepare CI/CD pipeline
+STEP 3: Structure Creation (CREATE in tests/)
+  - Create directory structure in tests/
+  - Initialize test configuration in tests/
+  - Set up test utilities in tests/helpers/
+  - Configure coverage tools for src/
+  - Prepare CI/CD pipeline in tests/
 
-STEP 4: Test Implementation (Order is Critical)
-  1. Generate test helpers and utilities
-  2. Create mock implementations
-  3. Prepare test fixtures
-  4. Implement unit tests (100% coverage)
-  5. Implement integration tests
-  6. Implement E2E tests
-  7. Implement performance tests
-  8. Implement security tests
+STEP 4: Test Implementation (ALL in tests/)
+  1. Generate test helpers in tests/helpers/
+  2. Create mocks in tests/mocks/
+  3. Prepare fixtures in tests/fixtures/
+  4. Implement unit tests in tests/unit/ (100% src/ coverage)
+  5. Implement integration tests in tests/integration/
+  6. Implement E2E tests in tests/e2e/
+  7. Implement performance tests in tests/performance/
+  8. Implement security tests in tests/security/
 
 STEP 5: Verification
-  - Verify 100% code coverage
+  - Verify 100% coverage of src/ code
+  - Verify no modifications to src/
+  - Verify all tests are in tests/
   - Verify test independence
   - Verify execution speed
-  - Verify determinism
-  - Verify documentation completeness
+```
+
+### Import Patterns for Tests
+
+```
+CORRECT IMPORT EXAMPLES:
+  From test file: tests/unit/example.test
+  Import source: import from '../../src/module'
+  Import helper: import from '../helpers/utility'
+  Import mock: import from '../mocks/service'
+  Import fixture: import from '../fixtures/data'
+
+INCORRECT (NEVER DO):
+  ❌ Modify: src/module (to make test pass)
+  ❌ Create: src/test-helper
+  ❌ Write: any file to src/
+  ❌ Delete: any file from src/
+  ❌ Move: files between src/ and tests/
+```
+
+### File System Operations
+
+```
+ALLOWED OPERATIONS:
+  ✅ READ from component/src/*
+  ✅ WRITE to component/tests/*
+  ✅ CREATE in component/tests/*
+  ✅ DELETE in component/tests/* (during cleanup)
+
+FORBIDDEN OPERATIONS:
+  ❌ WRITE to component/src/*
+  ❌ CREATE in component/src/*
+  ❌ DELETE from component/src/*
+  ❌ MODIFY component/src/*
+  ❌ RENAME in component/src/*
 ```
 
 ### Test Completeness Checklist
