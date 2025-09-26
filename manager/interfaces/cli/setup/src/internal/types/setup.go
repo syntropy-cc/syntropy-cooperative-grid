@@ -22,6 +22,7 @@ type SetupResult struct {
 	Environment string       // Environment (windows, linux, darwin)
 	Options     SetupOptions // Options used in the setup
 	Error       error        // Error, if any
+	Message     string       // Human-readable message
 }
 
 // ErrNotImplemented is returned when a functionality is not implemented

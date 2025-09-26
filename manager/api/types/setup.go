@@ -139,14 +139,6 @@ type SetupResponse struct {
 	Code    int          `json:"code"`             // Response code
 }
 
-// ErrorDetail represents detailed error information
-type ErrorDetail struct {
-	Code    string `json:"code"`    // Error code
-	Message string `json:"message"` // Error message
-	Details string `json:"details"` // Error details
-	Field   string `json:"field"`   // Field that caused the error
-}
-
 // ErrNotImplemented is returned when a functionality is not implemented
 var ErrNotImplemented = errors.New("functionality not implemented for this operating system")
 

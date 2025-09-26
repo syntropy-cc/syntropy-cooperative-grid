@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/handlers/config"
+	confighandlers "github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/handlers/config"
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/middleware"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/config"
+	configsvc "github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/config"
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/services/validation"
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 )
 
 // APIIntegration provides integration with the API central
 type APIIntegration struct {
-	configHandler     *config.ConfigHandler
-	setupHandler      *config.SetupHandler
-	validationHandler *config.ValidationHandler
+	configHandler     *confighandlers.ConfigHandler
+	setupHandler      *confighandlers.SetupHandler
+	validationHandler *confighandlers.ValidationHandler
 	validationService *validation.ValidationService
-	configService     *config.ConfigService
+	configService     *configsvc.ConfigService
 	logger            middleware.Logger
 }
 
@@ -26,14 +26,14 @@ type APIIntegration struct {
 func NewAPIIntegration() *APIIntegration {
 	logger := middleware.NewSimpleLogger()
 
-	// Create services
+	// services
 	validationService := validation.NewValidationService(logger)
-	configService := config.NewConfigService(logger)
+	configService := configsvc.NewConfigService(logger)
 
-	// Create handlers
-	configHandler := config.NewConfigHandler(configService, validationService, logger)
-	setupHandler := config.NewSetupHandler(configService, validationService, configService.SetupService(), logger)
-	validationHandler := config.NewValidationHandler(validationService, logger)
+	// handlers
+	configHandler := confighandlers.NewConfigHandler(configService, validationService, logger)
+	setupHandler := confighandlers.NewSetupHandler(configService, validationService, configService.SetupService(), logger)
+	validationHandler := confighandlers.NewValidationHandler(validationService, logger)
 
 	return &APIIntegration{
 		configHandler:     configHandler,

@@ -15,6 +15,7 @@ type ConfigRequest struct {
 	SessionID   string                 `json:"session_id"`  // Session identifier
 	Template    string                 `json:"template"`    // Configuration template
 	CustomData  map[string]interface{} `json:"custom_data"` // Custom configuration data
+	Config      *SetupConfig           `json:"config,omitempty"`
 }
 
 // ConfigOptions represents configuration options

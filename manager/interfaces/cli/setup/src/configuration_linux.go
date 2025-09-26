@@ -20,6 +20,13 @@ import (
 func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options types.SetupOptions) error {
 	fmt.Println("Configurando ambiente Linux...")
 
+	// Pré-declarações para evitar shadowing de err e chaves
+	var (
+		err     error
+		pubKey  ed25519.PublicKey
+		privKey ed25519.PrivateKey
+	)
+
 	// Determine Syntropy directory
 	syntropyDir := filepath.Join(validationResult.Environment.HomeDir, ".syntropy")
 	if options.HomeDir != "" {
@@ -36,13 +43,14 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		err = os.MkdirAll(dir, 0o755)
+		if err != nil {
 			return fmt.Errorf("falha ao criar diretório %s: %w", dir, err)
 		}
 	}
 
 	// Generate Ed25519 key pair for owner
-	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
+	pubKey, privKey, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return fmt.Errorf("falha ao gerar par de chaves: %w", err)
 	}
@@ -89,7 +97,8 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 		configPath = options.ConfigPath
 		// Ensure directory exists
 		configDir := filepath.Dir(configPath)
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		err = os.MkdirAll(configDir, 0o755)
+		if err != nil {
 			return fmt.Errorf("falha ao criar diretório de configuração: %w", err)
 		}
 	}
@@ -99,7 +108,8 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 		return fmt.Errorf("falha ao serializar configuração: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, configData, 0644); err != nil {
+	err = os.WriteFile(configPath, configData, 0o644)
+	if err != nil {
 		return fmt.Errorf("falha ao salvar configuração: %w", err)
 	}
 
@@ -115,7 +125,8 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 		_ = os.Remove(symlinkPath)
 
 		// Create new symlink
-		if err := os.Symlink(binPath, symlinkPath); err != nil {
+		err = os.Symlink(binPath, symlinkPath)
+		if err != nil {
 			fmt.Printf("Aviso: Não foi possível criar link simbólico em %s: %v\n", symlinkPath, err)
 		} else {
 			fmt.Printf("Link simbólico criado em: %s\n", symlinkPath)

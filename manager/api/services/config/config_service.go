@@ -29,6 +29,11 @@ func NewConfigService(logger middleware.Logger) *ConfigService {
 	}
 }
 
+// SetupService expõe o serviço de setup interno de forma segura.
+func (cs *ConfigService) SetupService() *SetupService {
+	return cs.setupService
+}
+
 // GenerateConfig generates a complete configuration
 func (cs *ConfigService) GenerateConfig(req *types.ConfigRequest) (*types.SetupConfig, error) {
 	cs.logger.Info("Generating configuration", map[string]interface{}{
@@ -113,8 +118,14 @@ func (cs *ConfigService) RestoreConfig(req *types.ConfigRestoreRequest) (*types.
 		"user_id":   req.UserID,
 	})
 
+	// Evitar shadowing de err/vars
+	var (
+		err    error
+		backup *types.ConfigBackup
+	)
+
 	// Get backup (in production, this would fetch from storage)
-	backup, err := cs.getBackup(req.BackupID)
+	backup, err = cs.getBackup(req.BackupID)
 	if err != nil {
 		return &types.ConfigRestoreResponse{
 			Success: false,
@@ -129,7 +140,7 @@ func (cs *ConfigService) RestoreConfig(req *types.ConfigRestoreRequest) (*types.
 	}
 
 	// Validate backup
-	if err := cs.validateBackup(backup); err != nil {
+	if err = cs.validateBackup(backup); err != nil {
 		return &types.ConfigRestoreResponse{
 			Success: false,
 			Error: &types.ErrorDetail{
@@ -162,7 +173,7 @@ func (cs *ConfigService) RestoreConfig(req *types.ConfigRestoreRequest) (*types.
 	}
 
 	// Restore configuration
-	if err := cs.applyConfiguration(backup.Config); err != nil {
+	if err = cs.applyConfiguration(backup.Config); err != nil {
 		return &types.ConfigRestoreResponse{
 			Success: false,
 			Error: &types.ErrorDetail{

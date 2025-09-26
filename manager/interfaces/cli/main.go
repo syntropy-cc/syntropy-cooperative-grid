@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup"
+	setup "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
 )
 
 var (

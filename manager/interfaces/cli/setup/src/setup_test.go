@@ -6,13 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
 )
 
 // TestSetupFlow testa o fluxo completo de setup, status e reset
 func TestSetupFlow(t *testing.T) {
+	// Evitar shadowing: declarar variáveis no topo do escopo
+	var (
+		err     error
+		tempDir string
+	)
+
 	// Criar diretório temporário para testes
-	tempDir, err := os.MkdirTemp("", "syntropy-test")
+	tempDir, err = os.MkdirTemp("", "syntropy-test")
 	if err != nil {
 		t.Fatalf("Falha ao criar diretório temporário: %v", err)
 	}
@@ -30,21 +36,21 @@ func TestSetupFlow(t *testing.T) {
 	fmt.Printf("Diretório de teste: %s\n", tempDir)
 
 	// Testar Setup
-	setupResult, err := Setup(options)
-	if err != nil {
+	setupResult, setupErr := Setup(options)
+	if setupErr != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
-		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
-			t.Fatalf("Setup falhou com erro inesperado: %v", err)
+		if setupErr.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
+			setupErr.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			setupErr.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			t.Fatalf("Setup falhou com erro inesperado: %v", setupErr)
 		}
-		fmt.Printf("Setup não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
+		fmt.Printf("Setup não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", setupErr)
 	} else {
 		fmt.Printf("Setup concluído com sucesso: %v\n", setupResult.Success)
 
 		// Verificar se os arquivos foram criados
 		configFile := setupResult.ConfigPath
-		if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		if fiErr := fileExists(configFile); fiErr != nil {
 			t.Errorf("Arquivo de configuração não foi criado: %s", configFile)
 		} else {
 			fmt.Printf("Arquivo de configuração criado: %s\n", configFile)
@@ -53,15 +59,15 @@ func TestSetupFlow(t *testing.T) {
 
 	// Testar Status
 	fmt.Println("\n=== Testando Status ===")
-	statusResult, err := Status(options)
-	if err != nil {
+	statusResult, statusErr := Status(options)
+	if statusErr != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
-		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
-			t.Fatalf("Status falhou com erro inesperado: %v", err)
+		if statusErr.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
+			statusErr.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			statusErr.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			t.Fatalf("Status falhou com erro inesperado: %v", statusErr)
 		}
-		fmt.Printf("Status não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
+		fmt.Printf("Status não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", statusErr)
 	} else {
 		fmt.Printf("Status concluído com sucesso: %v\n", statusResult.Success)
 		fmt.Printf("Caminho da configuração: %s\n", statusResult.ConfigPath)
@@ -69,28 +75,31 @@ func TestSetupFlow(t *testing.T) {
 
 	// Testar Reset
 	fmt.Println("\n=== Testando Reset ===")
-	resetResult, err := Reset(options)
-	if err != nil {
+	resetResult, resetErr := Reset(options)
+	if resetErr != nil {
 		// Em sistemas não-Windows, esperamos ErrNotImplemented
-		if err.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
-			err.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
-			t.Fatalf("Reset falhou com erro inesperado: %v", err)
+		if resetErr.Error() != "funcionalidade não implementada para este sistema operacional: windows (stub)" &&
+			resetErr.Error() != "funcionalidade não implementada para este sistema operacional: linux" &&
+			resetErr.Error() != "funcionalidade não implementada para este sistema operacional: darwin" {
+			t.Fatalf("Reset falhou com erro inesperado: %v", resetErr)
 		}
-		fmt.Printf("Reset não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", err)
+		fmt.Printf("Reset não implementado para este sistema: %v (esperado em sistemas não-Windows)\n", resetErr)
 	} else {
 		fmt.Printf("Reset concluído com sucesso: %v\n", resetResult.Success)
 
 		// Verificar se os arquivos foram removidos (se Reset foi bem-sucedido)
 		if resetResult.Success {
 			configFile := filepath.Join(tempDir, "config", "manager.yaml")
-			if _, err := os.Stat(configFile); !os.IsNotExist(err) {
+			// Evitar shadowing de err: usar função helper
+			if fiErr := ensureNotExists(configFile); fiErr != nil {
 				t.Errorf("Arquivo de configuração não foi removido após reset: %s", configFile)
 			} else {
 				fmt.Printf("Arquivo de configuração removido com sucesso\n")
 			}
 		}
 	}
+
+	_ = err // manter 'err' referenciado (caso o linter reclame de variável não utilizada)
 }
 
 // TestGetSyntropyDir testa a função GetSyntropyDir
@@ -103,4 +112,25 @@ func TestGetSyntropyDir(t *testing.T) {
 	if dir == "" {
 		t.Errorf("GetSyntropyDir retornou caminho vazio")
 	}
+}
+
+// Helpers sem shadowing
+
+func fileExists(path string) error {
+	_, statErr := os.Stat(path)
+	if os.IsNotExist(statErr) {
+		return fmt.Errorf("arquivo não existe")
+	}
+	return nil
+}
+
+func ensureNotExists(path string) error {
+	_, statErr := os.Stat(path)
+	if os.IsNotExist(statErr) {
+		return nil
+	}
+	if statErr != nil {
+		return statErr
+	}
+	return fmt.Errorf("arquivo ainda existe")
 }

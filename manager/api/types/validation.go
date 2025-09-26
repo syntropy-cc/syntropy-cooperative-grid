@@ -208,16 +208,6 @@ type ValidationResponse struct {
 	Code    int               `json:"code"`             // Response code
 }
 
-// InterfaceType represents the type of interface
-type InterfaceType string
-
-const (
-	InterfaceCLI     InterfaceType = "cli"
-	InterfaceWeb     InterfaceType = "web"
-	InterfaceDesktop InterfaceType = "desktop"
-	InterfaceMobile  InterfaceType = "mobile"
-)
-
 // ValidationCategory represents validation categories
 type ValidationCategory string
 
@@ -230,14 +220,4 @@ const (
 	CategoryConfiguration ValidationCategory = "configuration"
 	CategoryNetwork       ValidationCategory = "network"
 	CategoryStorage       ValidationCategory = "storage"
-)
-
-// SeverityLevel represents validation severity levels
-type SeverityLevel string
-
-const (
-	SeverityInfo     SeverityLevel = "info"
-	SeverityWarning  SeverityLevel = "warning"
-	SeverityError    SeverityLevel = "error"
-	SeverityCritical SeverityLevel = "critical"
 )
