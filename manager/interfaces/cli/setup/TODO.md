@@ -184,13 +184,93 @@ Implementar componente Setup com 2 subcomponentes (Validation + Configuration) c
 - [x] Criar `TESTE_RESULTADOS.md` (37 linhas) - Resultados de testes
 - [x] Criar `SIMPLE_STRUCTURE.md` (75 linhas) - Estrutura simplificada
 
+### 🔧 **5.3 Exemplos e Scripts de Automação** (0.5 dia) ⚠️ **NOVA TAREFA**
+- [ ] **Criar diretório `examples/`** (0.1 dia)
+  - [ ] `examples/basic-setup/` - Configuração básica do setup
+    - [ ] `examples/basic-setup/README.md` - Documentação do exemplo
+    - [ ] `examples/basic-setup/setup-basic.sh` - Script de setup básico para Linux/macOS
+    - [ ] `examples/basic-setup/setup-basic.ps1` - Script de setup básico para Windows
+    - [ ] `examples/basic-setup/config-example.yaml` - Exemplo de configuração
+  - [ ] `examples/advanced-setup/` - Configuração avançada
+    - [ ] `examples/advanced-setup/README.md` - Documentação do exemplo avançado
+    - [ ] `examples/advanced-setup/custom-config.yaml` - Configuração customizada
+    - [ ] `examples/advanced-setup/environment-variables.env` - Variáveis de ambiente
+    - [ ] `examples/advanced-setup/network-topology.yaml` - Topologia de rede específica
+  - [ ] `examples/validation-tests/` - Exemplos de testes de validação
+    - [ ] `examples/validation-tests/README.md` - Guia de uso
+    - [ ] `examples/validation-tests/test-environment.sh` - Validação de ambiente
+    - [ ] `examples/validation-tests/performance-test.sh` - Teste de performance
+- [ ] **Criar diretório `scripts/`** (0.4 dia)
+  - [ ] `scripts/automation/` - Scripts de automação comuns
+    - [ ] `scripts/automation/setup-all.sh` - Setup completo automatizado
+    - [ ] `scripts/automation/validate-system.sh` - Validação completa do sistema
+    - [ ] `scripts/automation/backup-config.sh` - Backup de configurações
+    - [ ] `scripts/automation/restore-config.sh` - Restauração de configurações
+    - [ ] `scripts/automation/cleanup.sh` - Limpeza e reset completo
+  - [ ] `scripts/windows/` - Scripts específicos para Windows
+    - [ ] `scripts/windows/install-service.ps1` - Instalação como serviço Windows
+    - [ ] `scripts/windows/check-requirements.ps1` - Verificação de requisitos
+    - [ ] `scripts/windows/troubleshoot.ps1` - Resolução de problemas
+    - [ ] `scripts/windows/uninstall.ps1` - Desinstalação completa
+  - [ ] `scripts/linux/` - Scripts específicos para Linux
+    - [ ] `scripts/linux/install-systemd.sh` - Instalação como serviço systemd
+    - [ ] `scripts/linux/check-requirements.sh` - Verificação de requisitos
+    - [ ] `scripts/linux/troubleshoot.sh` - Resolução de problemas
+    - [ ] `scripts/linux/uninstall.sh` - Desinstalação completa
+  - [ ] `scripts/dev/` - Scripts para desenvolvimento
+    - [ ] `scripts/dev/run-tests.sh` - Execução de todos os testes
+    - [ ] `scripts/dev/build.sh` - Build para diferentes plataformas
+    - [ ] `scripts/dev/lint.sh` - Verificação de código
+    - [ ] `scripts/dev/format.sh` - Formatação de código
+
 ---
 
 ## 🚧 **TAREFAS RESTANTES PARA COMPLETAR O SETUP COMPONENT**
 
-### ⚠️ **FASE 6: Finalização e Integração (1-2 dias)**
+### ⚠️ **FASE 6: Exemplos e Scripts (0.5 dia)**
 
-#### **6.1 Dependências e Build** (0.5 dia) ⚠️ **CRÍTICO**
+#### **6.1 Exemplos e Scripts de Automação** (0.5 dia) ⚠️ **NOVA IMPLEMENTAÇÃO**
+- [ ] **Implementar diferentes exemplos de uso**
+  - [ ] `examples/basic-setup/` - Demonstração do uso básico
+    - [ ] Configuração mínima funcional
+    - [ ] Comandos básicos de setup
+    - [ ] Validação do sucesso da configuração
+    - [ ] Exemplo de troubleshooting comum
+  - [ ] `examples/advanced-setup/` - Configurações avançadas
+    - [ ] Configuração com parâmetros customizados
+    - [ ] Integração com API externas
+    - [ ] Configurações de rede específicas
+    - [ ] Otimizações de performance
+  - [ ] `examples/validation-tests/` - Cenários de teste
+    - [ ] Testes automatizados de validação
+    - [ ] Testes de performance
+    - [ ] Validação em diferentes ambientes
+    - [ ] Roteiros de teste end-to-end
+- [ ] **Implementar scripts de automação**
+  - [ ] `scripts/automation/` - Automação geral
+    - [ ] Automação completa do processo de setup
+    - [ ] Automatização de tarefas de manutenção
+    - [ ] Backup e restore automatizados
+    - [ ] Monitoramento automatizado de status
+  - [ ] `scripts/windows/` - Automação para Windows
+    - [ ] Instalação e configuração de serviços
+    - [ ] Diagnóstico automatizado
+    - [ ] Scripts de instalação silenciosa
+    - [ ] Verificação automatizada de requisitos
+  - [ ] `scripts/linux/` - Automação para Linux
+    - [ ] Configuração de systemd/init
+    - [ ] Gerenciamento automatizado via cron
+    - [ ] Scripts de saúde do sistema
+    - [ ] Automação para diferentes distribuções
+  - [ ] `scripts/dev/` - Automação de desenvolvimento
+    - [ ] Build e deploy automatizados
+    - [ ] Testes de integração automatizados
+    - [ ] Linting e formatação automáticos
+    - [ ] Validação de código automatizada
+
+### ⚠️ **FASE 7: Finalização e Integração (1-2 dias)**
+
+#### **7.1 Dependências e Build** (0.5 dia) ⚠️ **CRÍTICO**
 - [ ] Configurar Go modules corretamente
   - [ ] Criar/atualizar `go.mod` no diretório CLI
   - [ ] Adicionar dependências externas necessárias:
@@ -202,7 +282,7 @@ Implementar componente Setup com 2 subcomponentes (Validation + Configuration) c
   - [ ] Corrigir imports relativos para absolutos
   - [ ] Estabelecer dependências entre módulos
 
-#### **6.2 Integração com API Central** (0.5 dia) ⚠️ **PARCIALMENTE IMPLEMENTADA**
+#### **7.2 Integração com API Central** (0.5 dia) ⚠️ **PARCIALMENTE IMPLEMENTADA**
 - [x] Integrar com `manager/api/handlers/config/` ✅ **IMPLEMENTADA**
   - [x] Reutilizar lógica de configuração existente
   - [x] Compartilhar tipos de dados
@@ -215,7 +295,7 @@ Implementar componente Setup com 2 subcomponentes (Validation + Configuration) c
   - [ ] Configurar workspace Go ou módulos separados
   - [ ] Resolver conflitos de import paths
 
-#### **6.3 Testes de Integração** (0.5 dia) ✅ **IMPLEMENTADA**
+#### **7.3 Testes de Integração** (0.5 dia) ✅ **IMPLEMENTADA**
 - [x] Implementar `tests/integration/setup_integration_test.go` ✅ **IMPLEMENTADA**
   - [x] Teste completo de setup end-to-end
   - [x] Teste de integração com API central
@@ -225,7 +305,7 @@ Implementar componente Setup com 2 subcomponentes (Validation + Configuration) c
   - [ ] Resolver imports faltantes nos testes
   - [ ] Configurar ambiente de teste
 
-#### **6.4 Integração Final CLI** (0.5 dia) ✅ **IMPLEMENTADA**
+#### **7.4 Integração Final CLI** (0.5 dia) ✅ **IMPLEMENTADA**
 - [x] Integração final com CLI principal ✅ **IMPLEMENTADA**
 - [x] Testes de integração CLI ✅ **IMPLEMENTADA**
 - [x] Validação de comandos e flags ✅ **IMPLEMENTADA**
@@ -283,9 +363,12 @@ Implementar componente Setup com 2 subcomponentes (Validation + Configuration) c
 10. ✅ **Integração Final CLI** → Integração final com CLI (0.5 dia) **CONCLUÍDA**
 11. ✅ **Correções e Melhorias** → Correções finais (0.5 dia) **CONCLUÍDA**
 
-**Total Original**: 13 dias para implementação completa  
-**Progresso Atual**: ✅ **100% concluído (13/13 dias)**  
-**Status**: ✅ **IMPLEMENTAÇÃO COMPLETA**
+### 🔧 **NOVA FASE**
+12. 🔧 **Exemplos e Scripts** → Criar exemplos e scripts de automação (0.5 dia) **EM IMPLEMENTAÇÃO**
+
+**Total Atualizado**: 13.5 dias para implementação completa  
+**Progresso Atual**: ✅ **97% concluído (13/13.5 dias)**  
+**Status**: 🔧 **IMPLEMENTAÇÃO +0.5 DIA PARA EXEMPLOS E SCRIPTS**
 
 ---
 
@@ -327,11 +410,11 @@ syntropy setup config backup
 
 ---
 
-**Status**: 🚧 **95% Concluído** - Apenas dependências e build restantes  
-**Prioridade**: 🔥 **Crítica** (Problemas de build impedem uso)  
+**Status**: 🔧 **97% Concluído** - Implementação completa + exemplos e scripts + dependências  
+**Prioridade**: 🔥 **Crítica** (Problemas de build + implementação de exemplos e scripts)  
 **Responsável**: Equipe de desenvolvimento  
-**Prazo Original**: 13 dias para implementação completa  
-**Prazo Restante**: **1-2 dias** para resolução de dependências e build  
+**Prazo Original**: 13.5 dias para implementação completa (incluindo exemplos e scripts)  
+**Prazo Restante**: **1-2 dias** para exemplos/scripts + resolução de dependências e build  
 **Última Atualização**: 2025-01-27
 
 ---
@@ -345,13 +428,17 @@ syntropy setup config backup
 4. **Testes não executam**: Dependências faltantes impedem execução
 
 ### **Ações Necessárias:**
-1. **Configurar Go modules** no diretório CLI
-2. **Resolver dependências** da API central
-3. **Testar build** do executável
-4. **Validar funcionamento** dos comandos CLI
+1. **Implementar exemplos demonstrativos** nos diretórios examples/
+2. **Criar scripts de automação** nos diretórios scripts/ 
+3. **Configurar Go modules** no diretório CLI
+4. **Resolver dependências** da API central
+5. **Testar build** do executável
+6. **Validar funcionamento** dos comandos CLI
 
 ### **Impacto:**
 - ✅ **Funcionalidade**: 100% implementada
 - ✅ **Testes**: 100% implementados  
+- 🔧 **Exemplos**: 0% implementados (novo requisito)
+- 🔧 **Scripts**: 0% implementados (novo requisito)
 - ⚠️ **Build**: 0% funcional (crítico)
 - ⚠️ **Dependências**: 0% resolvidas (crítico)
