@@ -1,0 +1,394 @@
+# Syntropy CLI - Configuração Avançada
+# Arquivo de configuração para setups em produção e enterprise 
+#
+# Author: Syntropy Team
+# Version: 1.2.0
+# Created: 2025-01-27
+# 
+# Purpose: Exemplo de configuração avançada para setups complexos
+# 
+# Supported Features:
+# - Multi-tenant environments
+# - High availability clusters  
+# - Advanced security configurations
+# - Monitoring and observability
+# - Custom network topologies
+#
+# Usage:
+#   export SYNTHROPY_ENV=production
+#   ./../basic-setup/setup-basic.sh --config custom-config.yaml
+#
+# Production Checklist:
+#   [ ] Review and customize performance settings
+#   [ ] Configure encryption and security  
+#   [ ] Set up monitoring dashboards
+#   [ ] Test high availability failover
+#   [ ] Verify backup/restore procedures
+
+# ============================================================================
+# CONFIGURAÇÃO PRINCIPAL DO MANAGER
+# ============================================================================
+
+manager:
+  # Diretório base (pode usar variáveis de ambiente)
+  home_dir: "${SYNTHROPY_HOME:-\~/.syntropy}"
+  
+  # Sistema de logging avançado
+  log_level: "${SYNTHROPY_LOG_LEVEL:-info}"  # debug, info, warn, error, audit
+  
+  # Endpoint da API (configurável por ambiente)
+  api_endpoint: "${SYNTHROPY_API_ENDPOINT:-https://api.syntropy.io}"
+  
+  # Configurações multi-tenant
+  multi_tenant:
+    enabled: true
+    default_tenant: "${SYNTHROPY_TENANT:-default}"
+    
+  # Estrutura de diretórios customizáveis
+  directories:
+    config: "${SYNTHROPY_CONFIG_DIR:-config}"
+    logs: "${SYNTHROPY_LOGS_DIR:-logs}"  
+    data: "${SYNTHROPY_DATA_DIR:-data}"
+    cache: "cache"
+    snapshots: "snapshots"
+    certificates: "certs"
+    keys: "keys"
+  
+  # Caminhos avançados para arquivos críticos
+  default_paths:
+    config: "config/manager-${ENVIRONMENT:-development}.yaml"
+    owner_key: "keys/owner.key"
+    api_key: "keys/api.key"
+    certificate: "certs/manager.cert"
+    private_key: "keys/manager.key"
+    
+  # Configurações de enterprise
+  enterprise:
+    audit_logging: true
+    compliance:
+      sox: false      # Sarbanes-Oxley compliance
+      gdpr: true      # GDPR compliance
+      pci: false      # PCI DSS compliance
+      
+# ============================================================================
+# CONFIGURAÇÃO DE AUTENTICAÇÃO E SEGURANÇA
+# ============================================================================
+
+security:
+  # Autenticação avançada
+  auth:
+    type: "multi"  # single, multi, ldap, oauth
+    providers:
+      - name: "internal"
+        type: "built-in"
+        priority: 100
+      - name: "ldap"
+        type: "ldap"
+        priority: 50
+        enabled: "${SYNTHROPY_AUTH_LDAP_ENABLED:-false}"
+        server: "${LDAP_SERVER:-}"
+        base_dn: "${LDAP_BASE_DN:-}"
+      - name: "oauth"
+        type: "oauth"
+        priority: 80
+        enabled: "${SYNTHROPY_AUTH_OAUTH_ENABLED:-false}"
+        provider: "${OAUTH_PROVIDER:-auth0}"
+        
+  # Criptografia avançada
+  encryption:
+    # Configuração de chaves
+    key_management:
+      enabled: true
+      rotation_interval: "24h"
+      backup_before_rotation: true
+      backup_location: "${SYNTHROPY_BACKUP_DIR:-backup/keys}"
+      
+    # Algoritmos de criptografia
+    algorithms:
+      symmetric: "AES-256-GCM"
+      asymmetric: "Ed25519"  
+      signing: "Ed25519"
+      hash: "SHA-256"
+      
+    # Comunicação TLS/SSL
+    tls:
+      min_version: "TLS1.2"
+      max_version: "TLS1.3"
+      cipher_suites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_AES_256_GCM_SHA384"
+        
+  # Políticas de segurança
+  policies:
+    password:
+      min_length: 12
+      require_special_chars: true
+      expiration_days: 90
+      history_count: 5
+      
+    session:
+      timeout_minutes: 480  # 8 horas
+      max_concurrent_sessions: 5
+      
+# ============================================================================
+# CONFIGURAÇÃO DE REDE AVANÇADA
+# ============================================================================
+
+network:
+  # Configurações globais de rede
+  global:
+    timeout: 30
+    retry_interval: 5
+    max_retries: 3
+    connection_pooling: true
+    keepalive: true
+    
+  # Configuração de proxy (se necessário)
+  proxy:
+    enabled: "${SYNTHROPY_PROXY_ENABLED:-false}"
+    type: "http"  # http, socks5, auto
+    endpoints:
+      - http: "${HTTP_PROXY:-}"
+        https: "${HTTPS_PROXY:-}"
+      - no_proxy: "${NO_PROXY:-localhost,127.0.0.1}"
+        
+  # Load balancing
+  load_balancing:
+    enabled: true
+    algorithm: "round_robin"  # round_robin, weighted, least_conn
+    health_check:
+      path: "/health"
+      interval: "30s"
+      timeout: "5s"
+      
+  # Failover e HA
+  failover:
+    enabled: true
+    primary:
+      host: "${SYNTHROPY_PRIMARY_HOST:-}"
+      port: "${SYNTHROPY_PRIMARY_PORT:-443}"
+    secondary:
+      host: "${SYNTHROPY_SECONDARY_HOST:-}"
+      port: "${SYNTHROPY_SECONDARY_PORT:-443}"
+      
+# ============================================================================
+# CONFIGURAÇÃO DE PERFORMANCE AVANÇADA
+# ============================================================================
+
+performance:
+  # Recursos do sistema
+  resources:
+    cpu:
+      max_usage_percent: 80
+      cores_reserved: 2
+    memory:
+      limit_gb: "${SYNTHROPY_MEMORY_LIMIT:-4}"
+      heap_size: "2GB"
+      gc_threshold: 75
+    disk:
+      min_free_gb: 10
+      max_usage_percent: 85
+      
+  # Concatenação e throughput
+  concurrency:
+    max_connections: "${SYNTHROPY_MAX_CONNECTIONS:-1000}"
+    connections_per_owner: 10
+    burst_capacity: 200
+    
+  # Cache e buffers
+  caching:
+    enabled: true
+    size_mb: 512
+    ttl_hours: 24
+    cleanup_interval_minutes: 60
+    
+  # Otimizações específicas
+  optimizations:
+    gzip_compression: true
+    connection_pooling: true
+    query_optimization: true
+    lazy_loading: true
+    
+# ============================================================================
+# CONFIGURAÇÃO DE MONITORAMENTO E OBSERVABILIDADE
+# ============================================================================
+
+monitoring:
+  # Métricas centralizadas  
+  metrics:
+    enabled: true
+    collection_interval: "30s"
+    
+    prometheus:
+      enabled: "${PROMETHEUS_ENABLED:-true}"
+      port: 9090
+      path: "/metrics"
+      
+    grafana:
+      enabled: "${GRAFANA_ENABLED:-false}"
+      dashboard_id: "syntropy-overview"
+      datasource: "prometheus"
+      
+  # Alertas inteligentes
+  alerts:
+    enabled: true
+    receivers:
+      - name: "email"
+        type: "email"
+        config:
+          smtp_server: "${SMTP_SERVER:-}"
+          from: "${SMTP_FROM:-}"
+      - name: "slack"
+        type: "slack"
+        config:
+          webhook: "${SLACK_WEBHOOK:-}"
+      - name: "pagerduty"
+        type: "pagerduty"
+        config:
+          integration_key: "${PAGERDUTY_INTEGRATION_KEY:-}"
+          
+    # Regras de alerta avançadas
+    rules:
+      - name: "High Error Rate"
+        condition: "error_rate > 0.05"
+        window: "5m"
+        severity: "critical"
+      - name: "Memory Usage High"
+        condition: "memory_usage > 0.9"  
+        window: "2m"
+        severity: "warning"
+      - name: "Connection Failure"
+        condition: "connection_failures > 10"
+        window: "1m"
+        severity: "critical"
+        
+  # Logging estruturado
+  logging:
+    format: "json"  # json, text
+    levels:
+      audit: "info"     # Log de auditoria
+      security: "warn"  # Log de segurança
+      performance: "debug"  # Log de performance
+      network: "info"   # Log de rede
+      
+    destinations:
+      - type: "file"
+        path: "logs/syntropy-{timestamp}.log"
+        max_mb: 100
+        max_files: 10
+      - type: "remote"  # remote logging
+        endpoint: "${LOG_REMOTE_ENDPOINT:-}"
+        
+# ============================================================================
+# CONFIGURAÇÃO DE CLUSTER E HIGH AVAILABILITY
+# ============================================================================
+
+cluster:
+  # Configuração de cluster
+  enabled: "${SYNTHROPY_CLUSTER_ENABLED:-true}"
+  name: "${SYNTHROPY_CLUSTER_NAME:-syntropy-cluster}"
+  version: "v1.0"
+  
+  # Nós do cluster
+  nodes:
+    - id: "node-1"
+      host: "${SYNTHROPY_NODE1_HOST:-manager1.internal}"
+      port: "${SYNTHROPY_NODE1_PORT:-443}"
+      priority: 100
+      roles: ["coordinator", "api"]
+    - id: "node-2"  
+      host: "${SYNTHROPY_NODE2_HOST:-manager2.internal}"
+      port: "${SYNTHROPY_NODE2_PORT:-443}"
+      priority: 100
+      roles: ["api", "worker"]
+      
+  # Discovery e membership
+  discovery:
+    enabled: true
+    provider: "consul"  # consul, etcd, static
+    config:
+      consul:
+        host: "${CONSUL_HOST:-consul.internal}"
+        port: "${CONSUL_PORT:-8500}"
+        service: "syntropy-manager"
+        check_interval: "30s"
+        
+  # Balanceamento de carga interno
+  load_balancer:
+    enabled: true
+    algorithm: "round_robin"
+    health_check_interval: "10s"
+    
+# ============================================================================
+# CONFIGURAÇÕES ESPECÍFICAS POR PLATAFORMA
+# ============================================================================
+
+platform:
+  windows:
+    service:
+      name: "SyntropyService"
+      display_name: "Syntropy Cooperative Grid Service"
+      description: "High-availability Syntropy network management service"
+      run_as:
+        user: "${SYNTHROPY_SERVICE_USER:-SYSTEM}"
+    registry:
+      key: "HKLM\\Software\\Syntropy\\Manager"
+      
+  linux:
+    systemd:
+      enabled: true
+      user_service: false
+      restart_policy: "always"
+      after:
+        - "network-online.target"
+        - "time-sync.target"
+    user:
+      uid: "${SYNTHROPY_UID:-1000}"
+      gid: "${SYNTHROPY_GID:-1000}"
+      
+  osx:
+    launchd:
+      enabled: true
+      user_daemon: true
+      keep_alive: true
+      working_directory: "${SYNTHROPY_HOME}"
+
+# ============================================================================
+# CONFIGURAÇÃO DE BACKUP E DISASTER RECOVERY
+# ============================================================================
+
+backup:
+  # Backup automático
+  enabled: true
+  schedule: "0 2 * * *"  # 2:00 AM daily
+  retention_days: 30
+  compression: true
+  
+  # Configurações de storage
+  destinations:
+    - type: "local"
+      path: "backup/local"
+    - type: "s3"
+      enabled: "${BACKUP_S3_ENABLED:-false}"
+      bucket: "${AWS_S3_BUCKET:-}"
+      region: "${AWS_REGION:-us-east-1}"
+    - type: "nfs"
+      enabled: "${BACKUP_NFS_ENABLED:-false}"
+      share: "${NFS_BACKUP_SHARE:-}"
+      
+# ============================================================================
+# CONFIGURAÇÕES DE DESENVOLVIMENTO/TESTE  
+# ============================================================================
+
+development:
+  debug: "${SYNTHROPY_DEBUG:-false}"
+  profiler:
+    enabled: false
+    cpu_profile: false
+    memory_profile: false
+    
+  test_mode:
+    enabled: "${SYNTHROPY_TEST_MODE:-false}"
+    mock_apis: false
+    bypass_auth: false

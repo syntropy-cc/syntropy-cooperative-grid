@@ -1,0 +1,527 @@
+# Syntropy CLI - Configuração de Topologia de Rede
+# Arquivo para definir topologia de rede específica do projeto
+#
+# Author: Syntropy Team
+# Version: 1.0.0
+# Created: 2025-01-27  
+# 
+# Purpose: Configurar topologia de rede avançada e roteamento específico
+# 
+# Layers Supported:
+# - Network layer topology definition
+# - Security zones and firewall rules  
+# - Load balancing and routing policies
+# - Monitoring and health checks
+# - ACLs and traffic governing
+#
+# Use Cases:
+#   - Enterprise private networks
+#   - Multi-region deployments
+#   - Hybrid cloud integrations  
+#   - Edge computing topologies
+#   - IoT mesh networks
+
+# ============================================================================
+# TOPOLOGIA GLOBAL DE REDE
+# ============================================================================
+
+topology:
+  name: "syntropy-advanced-network"
+  version: "1.0"
+  description: "Advanced network topology for Syntropy setup"
+  
+  # Configuração de conectividade global
+  connectivity:
+    protocol: "ipv4+v6"  # ipv4, ipv6, ipv4+v6
+    mtu: 1500
+    fragmentation: false
+    
+  # Domain overview  
+  domains:
+    - name: "core-network"
+      description: "Core management infrastructure"
+      zone_id: "core"
+    - name: "edge-network"  
+      description: "Edge node infrastructure"
+      zone_id: "edge"
+    - name: "partner-network"
+      description: "External partner connections"  
+      zone_id: "external"
+
+# ============================================================================
+# DEFINIÇÃO DE SEGMENTOS DE REDE
+# ============================================================================
+
+segments:
+  # Segmento management/admin  
+  management:
+    name: "mgmt-segment"
+    cidr: "10.0.1.0/24"
+    tags: ["management", "admin", "core"]
+    
+    hosts:
+      - id: "admin-01"
+        ip: "10.0.1.1"
+        role: "primary_admin"
+        priority: 100
+      - id: "admin-02" 
+        ip: "10.0.1.2"
+        role: "backup_admin"
+        priority: 90
+        
+    security:
+      encryption: "AES-256-GCM"
+      visibility: "private"
+      monitoring_level: "high"
+      
+  # Segmento para devices/endpoints normais
+  clients:
+    name: "client-segment"
+    cidr: "10.0.2.0/24"
+    tags: ["client", "user-endpoints"]
+    
+    hosts:
+      - id: "client-01"
+        ip: "10.0.2.1"
+        role: "primary_client"
+      - id: "client-02"
+        ip: "10.0.2.2"
+        role: "secondary_client"
+        
+    security:
+      encryption: "AES-128-GCM" 
+      visibility: "shared"
+      monitoring_level: "medium"
+      
+  # Segmento para analytics e monitoring
+  monitoring:
+    name: "monitor-segment"
+    cidr: "10.0.3.0/24"
+    tags: ["monitoring", "observability"]
+    
+    hosts:
+      - id: "prometheus-01"
+        ip: "10.0.3.1"
+        role: "metrics_collector"
+      - id: "grafana-01"
+        ip: "10.0.3.2"
+        role: "dashboard"
+        
+    security:
+      encryption: "AES-256-GCM"
+      visibility: "restricted"
+      monitoring_level: "critical"
+
+# ============================================================================
+# REGRAS DE FIREWALL E SEGURANÇA
+# ============================================================================
+
+security:
+  # Políticas de firewall global
+  firewalls:
+    - name: "mgmt-firewall"
+      source_zones: ["core"] 
+      dest_zones: ["edge", "external"]
+      
+      inbound_rules:
+        - protocol: "ssh" 
+          ports: [22]
+          sources: ["trusted_admin_ips"]
+          actions: "allow"
+        - protocol: "https"
+          ports: [443]
+          sources: ["any"]
+          actions: "allow"
+          
+      outbound_rules:
+        - protocol: "all"
+          dest_ips: ["0.0.0.0/0"]
+          actions: "allow"
+          
+    - name: "client-firewall"
+      source_zones: ["edge"]
+      dest_zones: ["core", "monitoring"]
+      
+      outbound_rules:
+        - protocol: "http"
+          ports: [80, 443]
+          actions: "allow"
+        - protocol: "icmp"
+          actions: "allow"
+          
+  # Network ACLs específicas
+  acls:
+    - name: "mgmt_to_edge_acl"
+      from_zone: "core"
+      to_zone: "edge"  
+      allow:
+        - "https"
+        - "ssh"
+        - "prometheus"  # monitoring ports
+        
+    - name: "client_restrictions_acl"
+      from_zone: "edge" 
+      to_zone: "core"
+      deny:
+        - "database_ports"  # direct DB access
+      allow:
+        - "http"
+        - "https"
+        - "api_ports" 
+        
+  # Segurança por segmento/endpoint
+  endpoint_security:
+    - segment: "management"
+      isolation_level: "strict"
+      required_encryption: ["ipsec", "tls"]
+      
+    - segment: "clients"
+      isolation_level: "standard"
+      required_encryption: ["tls"]
+      
+    - segment: "monitoring"
+      isolation_level: "secure"
+      required_encryption: ["tls", "tls-auth"]
+
+# ============================================================================
+# LOAD BALANCING E ROUTING
+# ============================================================================
+
+load_balancing:
+  # Load balancers principais
+  balancers:
+    - name: "syntropy-public-lb"
+      type: "application"     # application, network, global
+      algorithm: "round_robin" # round_robin, least_conn, ip_hash
+      
+      reliability:
+        failover: true
+        redundancy_level: "N+1"
+        
+      destinations:
+        primary:
+          hosts:
+            - ip: "10.0.1.1"
+              weight: 100
+              health_check: "enabled"
+            - ip: "10.0.1.2"  
+              weight: 100
+              health_check: "enabled"
+      ports:
+        - protocol: "http"
+          port: 80
+          backend_port: 8080
+        - protocol: "https"  
+          port: 443
+          backend_port: 8443
+          
+  # Routing policies customizadas
+  routing:
+    - name: "core-traffic"
+      segments: ["management"]
+      policy: "priority"
+      priority: 1  # highest
+      
+    - name: "client-traffic"
+      segments: ["clients"] 
+      policy: "weighted"
+      weight: 70
+      
+    - name: "monitoring-traffic"
+      segments: ["monitoring"]
+      policy: "direct"
+      
+  # Health checks automáticos
+  health_checks:
+    - name: "api-health"
+      target: "10.0.1.1:8080"
+      protocol: "http"
+      path: "/health"
+      interval: 30  # seconds
+      timeout: 5
+      thresholds:
+        healthy: 2
+        unhealthy: 3
+        
+    - name: "database-health"
+      target: "10.0.2.1:5432"
+      protocol: "tcp"
+      interval: 15
+      timeout: 3
+      
+# ============================================================================
+# CONFIGURAÇÕES DE MONITORAMENTO DE REDE  
+# ============================================================================
+
+monitoring:
+  # Network observability
+  network_observability:
+    enabled: true
+    levels:
+      - "packet_analysis"   # Full packet capture
+      - "flow_analysis"     # Netflow/similar
+      - "traffic_summary"   # High level stats
+      
+  # QoS e bandwidth management  
+  qos:
+    policy_engine: "internal"  # internal, vendor_engine
+    class_mappings:
+      - name: "critical"
+        bandwidth_percent: 40
+        precedence: "premium"
+      - name: "standard" 
+        bandwidth_percent: 50
+        precedence: "best_effort"
+      - name: "background"
+        bandwidth_percent: 10
+        precedence: "dscp_be0"
+        
+  # Performance tracking
+  performance_tracking:
+    enabled: true
+    metrics:
+      - "latency"
+      - "bandwidth" 
+      - "loss_rate"
+      - "throughput"
+      - "connection_count"
+      
+    aggregations:
+      - type: "average"
+        period: "1m"
+      - type: "percentile"
+        percentile: 95
+        period: "5m"
+
+# ============================================================================
+# CONFIGURAÇÕES ESPECÍFICAS POR INFRAESTRUTURA  
+# ============================================================================
+
+infrastructure:
+  # Configuração para clouds híbridas
+  cloud:
+    primary:
+      type: "aws"
+      region: "us-east-1"
+      vpc_id: "vpc-12345678"
+      
+    secondary:
+      type: "azure"  
+      region: "East US"
+      resource_group: "syntropy-rg"
+      
+  # Edge computing specifications  
+  edge:
+    locations:
+      - name: "edge-seattle"
+        coordinates: [47.6062, -122.3321]
+        bandwidth: "100Mbps"
+        priority: "high"
+      - name: "edge-newyork"
+        coordinates: [40.7128, -74.0060]  
+        bandwidth: "50Mbps"
+        priority: "medium"
+        
+    connectivity:
+      back_to_core: "automated"
+      redundancy: "N+1"
+      
+  # On-premise requirements
+  on_premise:
+    datacenters:
+      - name: "dc-prod-01"
+        location: "primary"
+        bandwidth_in: "1Gbps"
+        bandwidth_out: "500Mbps"
+        
+    connectivity:
+      encryption_ethertype: "required"
+      security_scopes: ["dmz", "internal"]
+
+# ============================================================================
+# CONFIGURAÇÕES DE ROTEAMENTO AVANÇADO
+# ============================================================================
+
+advanced_routing:
+  # BGP configurations (if applicable)
+  bgp:
+    enabled: false  # disabled by default
+    autonomous_system: 65001
+    hold_timer: 180
+    keepalive_timer: 60
+    
+    neighbors:
+      - address: "10.0.1.1"
+        remote_as: 65000
+        
+  # Custom route propagation  
+  route_propagation:
+    auto_summary: true
+    max_routes: 100000
+    
+  # Policy-based routing
+  pbr:
+    - name: "client_services"
+      match:
+        segment: "clients"
+        dscp: "54"  # expedited forwarding
+      action:
+        routing_table: "routing_table_2"
+        
+  # NAT configurations
+  nat:
+    # 1:1 NAT outs for load balancers
+    static_nat:
+      - external_ip: "203.0.113.10"
+        internal_ip: "10.0.1.1"
+        
+    # Port mapping for services  
+    port_forwarding:
+      - external_port: 443
+        protocol: "tcp"
+        internal: "10.0.1.1:8443"
+
+# ============================================================================
+# BACKUP E REDUNDÂNCIA DE TOPOLOGIA
+# ============================================================================
+
+redundancy:
+  enabled: true
+  mode: "active_backup"  # active_backup, active_active
+  
+  strategies:
+    - name: "connection_redundancy"
+      method: "multiple_paths"
+      priority_stripes: 2
+      
+    - name: "device_redundancy"
+      method: "hot_standby"
+      failover_time: "5s"
+      
+  failure_domains:
+    - zone: "availability_zone_1"
+      
+backup_topology:
+  # Backup topology configuration
+  mirrored: true
+  script:
+    enabled: true
+    path: "./scripts/backup-topology.sh"
+    
+# ============================================================================
+# CONFIGURAÇÕES DE VPNs E TUNNELS
+# ============================================================================
+
+tunneling:
+  # Site-to-site VPN configurations
+  site_to_site:
+    - vpn_id: "mgmt-to-edge-vpn"
+      local_ip: "10.0.1.0/24"
+      peer_ip: "10.0.2.0/24"
+      encryption:
+        phase1_encryption: "aes-256"
+        phase1_hash: "sha-256"
+        phase2_encryption: "aes-256"
+        phase2_hash: "sha-256"
+        
+  # Point-to-site configurations
+  point_to_site:
+    - name: "client-vpn-access"
+      subnet: "10.0.90.0/24"
+      authentication: "certificate"
+      
+  # Secure tunneling protocols
+  secure_tunnels:
+    - protocol: "wireguard"
+      port: 51820
+    - protocol: "openvpn"
+      port: 1194
+      transport: "udp"
+
+# ============================================================================
+# CONFIGURAÇÕES DE CONECTIVIDADE DE SERVIÇOS
+# ============================================================================
+
+service_connectivity:
+  # Microservices connectivity
+  microservices:
+    backing_services:
+      - name: "database-cluster"
+        endpoints: ["db-primary:5432", "db-secondary:5432"]
+        protocol: "postgresql"
+        
+      - name: "redis-cluster"  
+        endpoints: ["redis-1:6379", "redis-2:6379"]
+        protocol: "redis"
+        
+    frontend_services:
+      - name: "web-frontend"
+        endpoints: ["web-1:80", "web-2:80"]
+        protocol: "http"
+        
+  # Service mesh configuration  
+  service_mesh:
+    enabled: true
+    mesh_name: "syntropy-mesh"
+    
+    sidecars:
+      type: "envoy"
+      proxy_protocol: "tcp"
+      
+    communication:
+      secure_by_default: true
+      mutual_tls: true
+
+# ============================================================================
+# MÉTRICAS E ALERTAS ESPECÍFICAS DE REDE
+# ============================================================================
+
+network_alerts:
+  # Network-specific monitoring
+  alerts:
+    - name: "HighLatency"
+      metric: "latency_ms"
+      threshold: 100  # ms
+      period: "5m"
+      
+    - name: "HighLossRate"
+      metric: "loss_rate_percent"
+      threshold: 1.0
+      period: "2m"
+      
+    - name: "ThroughputThreshold"
+      metric: "throughput_mbps"
+      threshold_below: 10
+      period: "10m"
+      
+  # SLA definitions
+  slas:
+    - service: "core-network"
+      uptime_target: "99.95%"
+      latency_target: "<50ms"
+      
+    - service: "edge-network"
+      uptime_target: "99.90%"
+      latency_target: "<100ms"
+
+# ============================================================================
+# CONFIGURAÇÕES FINAIS DE INTEGRAÇÃO
+# ============================================================================
+
+integration:
+  # Preferred protocols per zone/segment
+  protocols:
+    core: "https,ssh,snmp"
+    edge: "https,http"
+    monitoring: "https,snmp,prometheus"
+    
+  # Network utilities integration
+  utilities:
+    dns_resolution:
+      enabled: true
+      resolution_priority: ["dns", "ntp"]
+      
+    time_sync:
+      enabled: true
+      source: "pool.ntp.org"
+      stratum_max: 2

@@ -1,0 +1,135 @@
+# Syntropy CLI - Configuração de Exemplo
+# Arquivo de configuração básico para setup automatizado
+# 
+# Author: Syntropy Team
+# Version: 1.0.0  
+# Created: 2025-01-27
+# 
+# Purpose: Exemplo de configuração mínima para setup do Syntropy CLI
+# 
+# Structure: Baseado nos tipos definidos em src/internal/types/
+# - setup.go -> SetupOptions
+# - config.go -> SetupConfig, ManagerConfig, OwnerKey, Environment  
+# - validation.go -> ValidationResult, EnvironmentInfo, SystemResources
+#
+# Usage: 
+#   - Use no setup básico: copie este arquivo para ~/.syntropy/config/manager.yaml
+#   - Customize conforme necessário para seu ambiente
+#   - Valide sintaxe YAML antes de usar
+
+# Configuração principal do Manager Syntropy
+manager:
+  # Diretório base onde os arquivos do Syntropy serão armazenados
+  home_dir: "~/.syntropy"  # Será expandido automaticamente durante setup
+  
+  # Nível de logging do sistema (debug, info, warn, error)
+  log_level: "info"
+  
+  # Endpoint da API Syntropy para comunicação
+  api_endpoint: "https://api.syntropy.io"
+  
+  # Estrutura de diretórios dentro do home_dir
+  directories:
+    config: "config"    # Configurações e chaves
+    logs: "logs"       # Logs do sistema  
+    data: "data"       # Dados do usuário e cache
+  
+  # Caminhos padrão para arquivos importantes
+  default_paths:
+    config: "config/manager.yaml"      # Este arquivo de configuração
+    owner_key: "config/owner.key"    # Chave privada do proprietário
+    api_key: "config/api.key"       # Chave de API (opcional)
+    
+# Configuração da chave do proprietário (Owner Key)
+owner_key:
+  # Tipo de criptografia para chave (Ed25519 é recomendado)
+  type: "Ed25519"
+  
+  # Caminho relativo ao home_dir para salvar a chave privada  
+  path: "config/owner.key"
+  
+  # Chave pública será gerada automaticamente
+  # e incluída no manager.yaml após setup bem-sucedido
+
+# Configuração do ambiente de execução  
+environment:
+  # Sistema operacional detectado automaticamente:
+  # - windows, linux, darwin (macOS)
+  os: "{{.OS}}"  # Substituído durante setup pelo SO detectado
+  
+  # Arquitetura do processador (AMD64, ARM64, etc.)
+  architecture: "{{.Arch}}"  # Substituído durante setup pela arquitetura detectada
+  
+  # Diretório home do usuário
+  home_dir: "{{.HomeDir}}"  # Substituído durante setup pelo $HOME detectado
+
+# ============================================================================
+# CONFIGURAÇÕES OPCIONAIS AVANÇADAS
+# ============================================================================
+
+# Configurações de rede (opcional)
+network:
+  # Timeout para conexões de rede (segundos)
+  timeout: 30
+  
+  # Configuração de proxy (se necessário)
+  # proxy_url: "http://proxy.example.com:8080"
+  # proxy_user: "username"
+  # proxy_pass: "password"
+
+# Configurações de segurança (opcional)  
+security:
+  # Criptografia adicional para chaves sensíveis
+  encryption_enabled: true
+  
+  # Algoritmo de hashing para senhas de API
+  hash_algorithm: "SHA256"
+  
+  # Tempo de vida para tokens de autenticação (minutos)
+  token_lifetime: 1440  # 24 horas
+
+# Configurações de performance (opcional)
+performance:
+  # Número máximo de conexões simultâneas
+  max_connections: 100
+  
+  # Tamanho do buffer para operações de rede (KB)
+  buffer_size: 4096
+  
+  # Intervalo para limpeza de cache (minutos)
+  cache_cleanup_interval: 60
+
+# Configurações de logging avançadas (opcional)
+logging:
+  # Diretório para arquivos de log (relativo ao home_dir)
+  log_dir: "logs"
+  
+  # Máximo de arquivos de log a manter (rotação)
+  max_log_files: 10
+  
+  # Tamanho máximo de cada arquivo de log (MB)
+  max_log_size_mb: 100
+  
+  # Níveis de log por componente
+  log_levels:
+    manager: "info"
+    network: "debug"  
+    security: "warn"
+    performance: "info"
+
+# Configurações específicas por plataforma (opcional)
+platform_overrides:
+  windows:
+    # Configurações só para Windows
+    service_name: "SyntropyService"
+    service_display_name: "Syntropy Cooperative Grid Service"
+    
+  linux:
+    # Configurações só para Linux
+    systemd_service: "syntropy.service"
+    user_service: true
+    
+  darwin:
+    # Configurações só para macOS
+    launchd_service: "com.syntropy.manager"
+    user_daemon: true
