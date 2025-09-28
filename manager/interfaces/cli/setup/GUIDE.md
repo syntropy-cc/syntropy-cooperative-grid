@@ -113,6 +113,146 @@ manager/interfaces/cli/setup/
 4. **Middleware**: Aproveitar autenticação e logging da API
 5. **Consistency**: Manter consistência entre configuração da API e CLI
 
+## Dependências por Sistema Operacional
+
+### Windows
+**Ferramentas Obrigatórias:**
+- **PowerShell**: Versão 5.1+ (instalado por padrão no Windows 10/11)
+- **Windows Management Framework**: Para comandos WMI e CIM
+- **.NET Framework**: Versão 4.7.2+ ou .NET Core 3.1+
+- **Git**: Para clonagem de repositórios e versionamento
+- **7-Zip ou WinRAR**: Para extração de arquivos compactados
+- **Windows Subsystem for Linux (WSL)**: Opcional, para compatibilidade com scripts Linux
+
+**Ferramentas Opcionais (Recomendadas):**
+- **Docker Desktop**: Para containerização de serviços
+- **Visual Studio Code**: Para edição de configurações
+- **Windows Terminal**: Para melhor experiência de terminal
+
+**Verificação de Versões:**
+```powershell
+# PowerShell
+$PSVersionTable.PSVersion
+
+# .NET Framework
+Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\" -Name Release
+
+# Git
+git --version
+
+# WSL (se instalado)
+wsl --version
+```
+
+### Linux (Ubuntu/Debian)
+**Ferramentas Obrigatórias:**
+- **curl**: Para downloads e comunicação HTTP
+- **wget**: Alternativa ao curl para downloads
+- **unzip**: Para extração de arquivos ZIP
+- **tar**: Para extração de arquivos TAR
+- **git**: Para versionamento e clonagem
+- **build-essential**: Compiladores e ferramentas de build
+- **ca-certificates**: Certificados SSL/TLS
+
+**Ferramentas Opcionais (Recomendadas):**
+- **Docker**: Para containerização
+- **jq**: Para processamento de JSON
+- **htop**: Para monitoramento de sistema
+- **tree**: Para visualização de estrutura de diretórios
+
+**Instalação Automática:**
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y curl wget unzip tar git build-essential ca-certificates
+
+# CentOS/RHEL/Fedora
+sudo yum install -y curl wget unzip tar git gcc gcc-c++ make ca-certificates
+# ou para versões mais recentes:
+sudo dnf install -y curl wget unzip tar git gcc gcc-c++ make ca-certificates
+```
+
+### macOS (Darwin)
+**Ferramentas Obrigatórias:**
+- **Xcode Command Line Tools**: Compiladores e ferramentas essenciais
+- **Homebrew**: Gerenciador de pacotes (recomendado)
+- **curl**: Para downloads e comunicação HTTP
+- **git**: Para versionamento
+- **unzip**: Para extração de arquivos
+
+**Ferramentas Opcionais (Recomendadas):**
+- **Docker Desktop**: Para containerização
+- **jq**: Para processamento de JSON
+- **tree**: Para visualização de estrutura de diretórios
+
+**Instalação Automática:**
+```bash
+# Instalar Xcode Command Line Tools
+xcode-select --install
+
+# Instalar Homebrew (se não estiver instalado)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Instalar ferramentas essenciais
+brew install curl git unzip jq tree
+```
+
+## Fluxo de Instalação Automática
+
+### Processo de Autorização do Usuário
+
+**1. Detecção de Dependências Faltantes:**
+```bash
+syntropy setup dependencies check
+```
+
+**2. Solicitação de Autorização:**
+```
+⚠️  Dependências Faltantes Detectadas:
+
+Windows:
+  ❌ Git (não encontrado)
+  ❌ 7-Zip (não encontrado)
+
+Deseja instalar automaticamente as dependências faltantes? [y/N]: 
+```
+
+**3. Confirmação de Instalação:**
+```
+📦 Dependências a serem instaladas:
+  • Git (via winget)
+  • 7-Zip (via winget)
+
+⚠️  ATENÇÃO: Esta operação pode requerer privilégios administrativos.
+Continuar com a instalação? [y/N]: 
+```
+
+**4. Instalação com Feedback:**
+```
+🔄 Instalando dependências...
+
+[1/2] Instalando Git... ✅ Concluído
+[2/2] Instalando 7-Zip... ✅ Concluído
+
+✅ Todas as dependências foram instaladas com sucesso!
+```
+
+### Estratégias de Instalação por SO
+
+**Windows:**
+- **winget**: Gerenciador de pacotes oficial da Microsoft
+- **Chocolatey**: Gerenciador de pacotes alternativo
+- **Download direto**: Para ferramentas sem gerenciador de pacotes
+
+**Linux:**
+- **apt/yum/dnf**: Gerenciadores de pacotes nativos
+- **snap**: Para aplicações universais
+- **AppImage**: Para aplicações portáteis
+
+**macOS:**
+- **Homebrew**: Gerenciador de pacotes principal
+- **MacPorts**: Alternativa ao Homebrew
+- **Download direto**: Para aplicações específicas
+
 ## Integração com Rede Existente
 
 O Setup Component utiliza componentes já implementados da rede:
@@ -704,6 +844,166 @@ syntropy setup --check
 syntropy setup --repair
 ```
 
+## Próximos Passos Pós-Setup
+
+### Validação Final do Setup
+
+Após a conclusão bem-sucedida do setup, o sistema deve validar automaticamente todos os componentes e fornecer instruções claras para os próximos passos.
+
+**Comando de Validação Final:**
+```bash
+syntropy setup validate --final
+```
+
+**Saída Esperada:**
+```
+✅ Setup do Syntropy Manager Concluído com Sucesso!
+
+📋 Resumo do Setup:
+  • Ambiente: Windows 11 Pro (Build 22621)
+  • Estrutura: ~/.syntropy/ criada com sucesso
+  • Chaves: Owner key gerada e armazenada com segurança
+  • Configuração: manager.yaml criado e validado
+  • Logs: Sistema de logging configurado
+
+🔐 Informações de Segurança:
+  • Owner Key ID: owner_ed25519_abc123...
+  • Backup: ~/.syntropy/backups/keys/backup_20240115_143022.tar.gz
+  • Permissões: Configuradas corretamente (600)
+
+📁 Estrutura Criada:
+  ~/.syntropy/
+  ├── config/manager.yaml
+  ├── keys/owner.key*
+  ├── nodes/ (pronto para novos nós)
+  ├── logs/setup.log
+  └── backups/ (backup automático criado)
+```
+
+### Instruções para Próximos Passos
+
+**1. Verificação do Status:**
+```bash
+# Verificar status geral do sistema
+syntropy status
+
+# Verificar configuração atual
+syntropy config show
+
+# Verificar chaves de segurança
+syntropy keys list
+```
+
+**2. Preparação para Criação de Nós:**
+```bash
+# Verificar conectividade de rede
+syntropy network test
+
+# Verificar espaço disponível para nós
+syntropy storage check
+
+# Verificar permissões para criação de nós
+syntropy permissions check
+```
+
+**3. Transição para Componente de Criação de Nós:**
+```bash
+# O próximo passo é usar o componente de criação de nós
+syntropy node create --help
+
+# Ou começar com um nó de exemplo
+syntropy node create --template raspberry-pi --name lab-raspberry-01
+```
+
+### Fluxo de Transição para Criação de Nós
+
+**Pré-requisitos Verificados:**
+- ✅ Setup do quartel geral concluído
+- ✅ Owner key gerada e armazenada
+- ✅ Estrutura de diretórios criada
+- ✅ Configuração validada
+- ✅ Sistema de logs funcionando
+
+**Próximas Ações Disponíveis:**
+1. **Criação de Nós**: Usar `syntropy node create` para adicionar novos nós
+2. **Gerenciamento de Nós**: Usar `syntropy node list` para ver nós existentes
+3. **Monitoramento**: Usar `syntropy monitor` para acompanhar status
+4. **Configuração Avançada**: Usar `syntropy config edit` para ajustes
+
+### Comandos de Verificação Pós-Setup
+
+**Verificação Completa:**
+```bash
+# Executar verificação completa do sistema
+syntropy setup verify --complete
+
+# Verificar integridade das chaves
+syntropy keys verify
+
+# Verificar permissões de arquivos
+syntropy permissions verify
+
+# Verificar conectividade
+syntropy network verify
+```
+
+**Diagnóstico de Problemas:**
+```bash
+# Executar diagnóstico completo
+syntropy diagnose
+
+# Verificar logs de setup
+syntropy logs show --component setup
+
+# Verificar status de serviços
+syntropy services status
+```
+
+### Backup e Recuperação
+
+**Backup Automático:**
+- Backup automático criado em `~/.syntropy/backups/`
+- Inclui configurações, chaves e logs
+- Rotação automática de backups antigos
+
+**Comandos de Backup Manual:**
+```bash
+# Criar backup manual
+syntropy backup create --name "backup_pre_node_creation"
+
+# Listar backups disponíveis
+syntropy backup list
+
+# Restaurar backup específico
+syntropy backup restore backup_pre_node_creation_20240115_143022.tar.gz
+```
+
+### Monitoramento e Manutenção
+
+**Comandos de Monitoramento:**
+```bash
+# Monitorar status em tempo real
+syntropy monitor --live
+
+# Verificar saúde do sistema
+syntropy health check
+
+# Verificar uso de recursos
+syntropy resources status
+```
+
+**Manutenção Preventiva:**
+```bash
+# Limpeza de logs antigos
+syntropy maintenance cleanup --logs
+
+# Verificação de integridade
+syntropy maintenance verify
+
+# Atualização de configurações
+syntropy maintenance update-config
+```
+
 ## Padrões de Nomenclatura de Arquivos
 
 ### Estrutura de Arquivos por Subcomponente
@@ -794,6 +1094,342 @@ func setupWindows() error {
 - Exemplos práticos de uso
 - Troubleshooting comum
 - FAQ e dicas de uso
+
+## Manual de Troubleshooting Expandido
+
+### Diagnóstico de Problemas por Categoria
+
+#### 1. Problemas de Ambiente
+
+**Erro: Sistema Operacional Não Suportado**
+```
+❌ ERRO: Sistema operacional não suportado: FreeBSD
+```
+**Solução:**
+```bash
+# Verificar SO suportado
+syntropy setup validate --check-os
+
+# Listar SOs suportados
+syntropy setup info --supported-os
+```
+
+**Erro: Permissões Insuficientes**
+```
+❌ ERRO: Permissões insuficientes para criar diretório ~/.syntropy/
+```
+**Solução:**
+```bash
+# Verificar permissões atuais
+syntropy setup validate --check-permissions
+
+# Corrigir permissões automaticamente (Windows)
+syntropy setup fix --permissions
+
+# Corrigir permissões manualmente (Linux/macOS)
+sudo chown -R $USER:$USER ~/.syntropy
+chmod 755 ~/.syntropy
+```
+
+**Erro: Espaço em Disco Insuficiente**
+```
+❌ ERRO: Espaço em disco insuficiente. Necessário: 1GB, Disponível: 500MB
+```
+**Solução:**
+```bash
+# Verificar uso de disco
+syntropy setup validate --check-disk
+
+# Limpar cache e logs antigos
+syntropy maintenance cleanup --all
+
+# Verificar diretórios grandes
+syntropy setup diagnose --disk-usage
+```
+
+#### 2. Problemas de Dependências
+
+**Erro: PowerShell Não Encontrado (Windows)**
+```
+❌ ERRO: PowerShell não encontrado ou versão incompatível
+```
+**Solução:**
+```bash
+# Verificar versão do PowerShell
+syntropy setup validate --check-powershell
+
+# Instalar PowerShell automaticamente
+syntropy setup dependencies install --powershell
+
+# Instalar manualmente via winget
+winget install Microsoft.PowerShell
+```
+
+**Erro: Git Não Instalado**
+```
+❌ ERRO: Git não encontrado no sistema
+```
+**Solução:**
+```bash
+# Verificar Git
+syntropy setup validate --check-git
+
+# Instalar Git automaticamente
+syntropy setup dependencies install --git
+
+# Instalar manualmente por SO:
+# Windows: winget install Git.Git
+# Linux: sudo apt install git
+# macOS: brew install git
+```
+
+**Erro: Ferramentas de Compilação Faltando (Linux)**
+```
+❌ ERRO: build-essential não encontrado
+```
+**Solução:**
+```bash
+# Verificar ferramentas de build
+syntropy setup validate --check-build-tools
+
+# Instalar automaticamente
+syntropy setup dependencies install --build-tools
+
+# Instalar manualmente
+sudo apt update && sudo apt install -y build-essential
+```
+
+#### 3. Problemas de Rede
+
+**Erro: Conectividade de Rede Falhando**
+```
+❌ ERRO: Não foi possível verificar conectividade de rede
+```
+**Solução:**
+```bash
+# Testar conectividade
+syntropy setup validate --check-network
+
+# Diagnóstico de rede
+syntropy network diagnose
+
+# Verificar firewall
+syntropy setup validate --check-firewall
+```
+
+**Erro: Proxy ou Firewall Bloqueando**
+```
+❌ ERRO: Conexão bloqueada por proxy/firewall
+```
+**Solução:**
+```bash
+# Configurar proxy
+syntropy config set --proxy http://proxy.company.com:8080
+
+# Verificar configurações de firewall
+syntropy setup validate --check-firewall
+
+# Adicionar exceção no firewall
+syntropy setup fix --firewall-exception
+```
+
+#### 4. Problemas de Segurança
+
+**Erro: Falha na Geração de Chaves**
+```
+❌ ERRO: Falha na geração da owner key
+```
+**Solução:**
+```bash
+# Verificar gerador de números aleatórios
+syntropy setup validate --check-random
+
+# Regenerar chaves
+syntropy setup config generate --regenerate-keys
+
+# Verificar permissões do diretório de chaves
+syntropy setup validate --check-key-permissions
+```
+
+**Erro: Permissões de Arquivo Incorretas**
+```
+❌ ERRO: Permissões de arquivo de chave incorretas
+```
+**Solução:**
+```bash
+# Corrigir permissões automaticamente
+syntropy setup fix --key-permissions
+
+# Corrigir manualmente
+chmod 600 ~/.syntropy/keys/owner.key
+chmod 644 ~/.syntropy/keys/owner.key.pub
+```
+
+#### 5. Problemas de Configuração
+
+**Erro: Arquivo de Configuração Corrompido**
+```
+❌ ERRO: Arquivo manager.yaml corrompido ou inválido
+```
+**Solução:**
+```bash
+# Validar configuração
+syntropy setup config validate
+
+# Restaurar configuração padrão
+syntropy setup config reset
+
+# Restaurar de backup
+syntropy backup restore --latest
+```
+
+**Erro: Schema de Configuração Inválido**
+```
+❌ ERRO: Configuração não atende ao schema esperado
+```
+**Solução:**
+```bash
+# Verificar schema
+syntropy setup config validate --schema
+
+# Gerar configuração válida
+syntropy setup config generate --force
+
+# Editar configuração interativamente
+syntropy setup config edit
+```
+
+### Comandos de Diagnóstico Avançado
+
+#### Diagnóstico Completo do Sistema
+```bash
+# Executar diagnóstico completo
+syntropy diagnose --complete
+
+# Diagnóstico específico por componente
+syntropy diagnose --environment
+syntropy diagnose --dependencies
+syntropy diagnose --configuration
+syntropy diagnose --security
+```
+
+#### Verificação de Integridade
+```bash
+# Verificar integridade de arquivos
+syntropy setup verify --integrity
+
+# Verificar checksums
+syntropy setup verify --checksums
+
+# Verificar assinaturas digitais
+syntropy setup verify --signatures
+```
+
+#### Análise de Logs
+```bash
+# Analisar logs de setup
+syntropy logs analyze --component setup
+
+# Verificar erros recentes
+syntropy logs show --errors --last 24h
+
+# Exportar logs para análise
+syntropy logs export --format json --output setup-logs.json
+```
+
+### Soluções Automáticas
+
+#### Reparo Automático
+```bash
+# Reparar problemas comuns automaticamente
+syntropy setup repair --auto
+
+# Reparar componente específico
+syntropy setup repair --environment
+syntropy setup repair --dependencies
+syntropy setup repair --configuration
+```
+
+#### Reset Completo
+```bash
+# Reset completo do setup (CUIDADO: Remove todas as configurações)
+syntropy setup reset --confirm
+
+# Reset de componente específico
+syntropy setup reset --environment --confirm
+syntropy setup reset --configuration --confirm
+```
+
+### Códigos de Erro e Soluções
+
+#### Códigos de Erro Comuns
+
+**E001 - Sistema Operacional Não Suportado**
+- **Causa**: SO não está na lista de suportados
+- **Solução**: Verificar lista de SOs suportados ou usar modo compatibilidade
+
+**E002 - Permissões Insuficientes**
+- **Causa**: Usuário não tem permissões para criar arquivos/diretórios
+- **Solução**: Executar como administrador ou corrigir permissões
+
+**E003 - Dependência Faltando**
+- **Causa**: Ferramenta obrigatória não está instalada
+- **Solução**: Instalar dependência automaticamente ou manualmente
+
+**E004 - Espaço em Disco Insuficiente**
+- **Causa**: Menos de 1GB de espaço livre
+- **Solução**: Liberar espaço ou especificar diretório alternativo
+
+**E005 - Falha na Geração de Chaves**
+- **Causa**: Problema com gerador de números aleatórios
+- **Solução**: Verificar /dev/urandom ou usar fonte alternativa
+
+**E006 - Conectividade de Rede Falhando**
+- **Causa**: Problema de rede, proxy ou firewall
+- **Solução**: Verificar conectividade e configurações de rede
+
+### Modo de Recuperação
+
+#### Ativação do Modo de Recuperação
+```bash
+# Ativar modo de recuperação
+syntropy setup --recovery-mode
+
+# Recuperação com backup específico
+syntropy setup --recovery-mode --backup backup_20240115_143022.tar.gz
+```
+
+#### Comandos de Recuperação
+```bash
+# Restaurar configuração de backup
+syntropy recovery restore-config
+
+# Restaurar chaves de backup
+syntropy recovery restore-keys
+
+# Verificar integridade após recuperação
+syntropy recovery verify
+```
+
+### Suporte e Contato
+
+#### Coleta de Informações para Suporte
+```bash
+# Gerar relatório de diagnóstico para suporte
+syntropy support generate-report
+
+# Coletar logs e configurações
+syntropy support collect-info
+
+# Verificar informações do sistema
+syntropy support system-info
+```
+
+#### Canais de Suporte
+- **Documentação**: `syntropy docs`
+- **FAQ**: `syntropy faq`
+- **Comunidade**: `syntropy community`
+- **Suporte Técnico**: `syntropy support contact`
 
 ---
 
