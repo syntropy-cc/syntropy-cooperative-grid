@@ -1,4 +1,4 @@
-# Setup Component - Guia de Desenvolvimento
+# Setup Component - Guia de Implementação para LLMs
 
 ## Contexto e Objetivos
 
@@ -11,1426 +11,1142 @@ O **Syntropy Manager** é a interface de controle para o Syntropy Cooperative Gr
 ### Setup Component
 O **Setup Component** é o componente responsável por configurar o **computador de trabalho** como um "quartel geral" para criação e gestão de nós da rede Syntropy. Este componente estabelece o ambiente inicial necessário para que o usuário possa criar, gerenciar e monitorar nós da rede através da CLI, funcionando como uma estação de controle centralizada.
 
-## Princípios Fundamentais
+## Princípios de Implementação
 
-- **Desenvolvimento Baseado em Componentes**: Setup é uma componente independente e entregável
-- **Multiplataforma**: Suporte a Windows, Linux e macOS usando tags `//go:build`
-- **Quartel Geral**: Computador de trabalho como centro de controle para nós
-- **Estado Local**: Configuração persistente no sistema local
-- **Integração com API**: Reutilização de componentes da API central (`manager/api/`)
-- **Go-Native**: Implementação em Go com foco em Windows
-- **Ambiente Seguro**: Configuração de ambiente criptograficamente seguro
-- **Orquestração**: Subcomponentes orquestrados em arquivos principais por SO
+- **Simplicidade**: Arquitetura simples e direta, evitando over-engineering
+- **Multiplataforma**: Suporte a Windows, Linux e macOS usando interfaces Go
+- **Thread-Safe**: Operações atômicas e controle de concorrência
+- **Segurança**: Sistema de chaves criptográficas robusto
+- **Observabilidade**: Logging estruturado e métricas
+- **Testabilidade**: Componentes desacoplados e testáveis
+- **Manutenibilidade**: Código limpo e bem documentado
 
-## Arquitetura do Setup Component
+## Arquitetura Simplificada
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Setup Component (Orquestrador Principal)                   │
 │ ─────────────────────────────────────────────────────────── │
-│ • setup.go          • setup_windows.go  • setup_linux.go   │
-│ • setup_darwin.go   • Configuração      • Validação        │
+│ • setup.go          • validator.go      • configurator.go   │
+│ • state_manager.go  • key_manager.go    • logger.go         │
 └─────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────┐
-│ Subcomponentes (Implementação Específica por SO)           │
+│ Serviços Internos (Implementação por Interface)           │
 │ ─────────────────────────────────────────────────────────── │
-│ • Environment       • Dependencies      • Configuration     │
-│ • environment_windows.go    • dependencies_windows.go      │
-│ • configuration_windows.go  • Validação e Testes          │
+│ • OSValidator       • DependencyManager • FileSystemOps     │
+│ • CryptoProvider    • NetworkValidator  • ConfigGenerator   │
 └─────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────┐
-│ Sistema de Arquivos Local (~/.syntropy/)                   │
+│ Sistema de Estado Local (~/.syntropy/)                     │
 │ ─────────────────────────────────────────────────────────── │
-│ • config/           • keys/            • templates/         │
-│ • logs/             • cache/           • backups/           │
-│ • nodes/            • scripts/         • certificates/      │
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│ Integração com API Central (manager/api/)                  │
-│ ─────────────────────────────────────────────────────────── │
-│ • handlers/         • middleware/      • types/             │
-│ • services/         • routes/          • utils/             │
+│ • config/manager.yaml    • keys/owner.key*                 │
+│ • logs/setup.log         • backups/backup_*.tar.gz         │
+│ • nodes/ (estrutura)     • cache/ (temporários)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Estrutura de Projeto Baseada em Componentes
+## Explicação da Arquitetura por Níveis
+
+### Nível 1: Componentes Principais (Orquestração)
+
+#### **setup.go** - Orquestrador Principal
+- **Função**: Coordena todo o processo de setup, gerenciando o fluxo de execução
+- **Responsabilidades**: Validação inicial, coordenação de subcomponentes, tratamento de erros globais
+- **Interface**: `SetupManager` - ponto de entrada único para todas as operações
+
+#### **validator.go** - Validador Unificado
+- **Função**: Verifica se o ambiente está pronto para o setup
+- **Responsabilidades**: Validação de SO, recursos, permissões, dependências e rede
+- **Interface**: `Validator` - centraliza todas as verificações de pré-requisitos
+
+#### **configurator.go** - Configurador Unificado
+- **Função**: Executa a configuração propriamente dita do sistema
+- **Responsabilidades**: Criação de estrutura de diretórios, geração de configurações, templates
+- **Interface**: `Configurator` - gerencia toda a configuração do ambiente
+
+#### **state_manager.go** - Gerenciador de Estado Atômico
+- **Função**: Controla o estado do setup de forma thread-safe
+- **Responsabilidades**: Operações atômicas, locks, backup/restore de estado
+- **Interface**: `StateManager` - garante consistência e integridade do estado
+
+#### **key_manager.go** - Gerenciador de Chaves Criptográficas
+- **Função**: Gerencia chaves de segurança do sistema
+- **Responsabilidades**: Geração, armazenamento seguro, rotação e backup de chaves
+- **Interface**: `KeyManager` - centraliza toda a criptografia do sistema
+
+#### **logger.go** - Sistema de Logging Estruturado
+- **Função**: Fornece observabilidade e debugging do sistema
+- **Responsabilidades**: Logging estruturado, rotação de logs, exportação
+- **Interface**: `SetupLogger` - padroniza todo o logging do componente
+
+### Nível 2: Serviços Internos (Implementação)
+
+#### **OSValidator** - Validação por Sistema Operacional
+- **Função**: Implementa validações específicas para cada SO (Windows, Linux, macOS)
+- **Responsabilidades**: Detecção de SO, validação de recursos, permissões específicas
+- **Implementações**: `WindowsValidator`, `LinuxValidator`, `DarwinValidator`
+
+#### **DependencyManager** - Gerenciamento de Dependências
+- **Função**: Verifica e instala dependências necessárias por SO
+- **Responsabilidades**: Detecção de ferramentas, instalação automática, validação de versões
+- **Integração**: Usa gerenciadores nativos (winget, apt, brew)
+
+#### **FileSystemOps** - Operações de Sistema de Arquivos
+- **Função**: Gerencia operações atômicas de arquivo e diretório
+- **Responsabilidades**: Criação de estrutura, permissões, validação de integridade
+- **Segurança**: Operações atômicas com locks para evitar corrupção
+
+#### **CryptoProvider** - Provedor Criptográfico
+- **Função**: Fornece serviços criptográficos seguros
+- **Responsabilidades**: Geração de entropia, criptografia de chaves, derivação PBKDF2
+- **Segurança**: Fonte de entropia criptograficamente segura
+
+#### **NetworkValidator** - Validador de Rede
+- **Função**: Verifica conectividade e configurações de rede
+- **Responsabilidades**: Teste de conectividade, validação de firewall, proxy
+- **Integração**: Testa conectividade com serviços externos
+
+#### **ConfigGenerator** - Gerador de Configurações
+- **Função**: Gera configurações a partir de templates
+- **Responsabilidades**: Processamento de templates, validação de schemas, personalização
+- **Templates**: YAML com variáveis dinâmicas
+
+### Nível 3: Sistema de Estado Local (Persistência)
+
+#### **~/.syntropy/config/** - Configurações Principais
+- **Função**: Armazena configurações do sistema
+- **Conteúdo**: `manager.yaml` (configuração principal), templates processados
+- **Segurança**: Permissões 644, validação por schema JSON
+
+#### **~/.syntropy/keys/** - Chaves Criptográficas
+- **Função**: Armazena chaves de segurança do sistema
+- **Conteúdo**: `owner.key*` (chaves criptografadas), metadados, fingerprints
+- **Segurança**: Permissões 600, criptografia AES-256, backup automático
+
+#### **~/.syntropy/nodes/** - Estrutura para Nós
+- **Função**: Preparação para gerenciamento de nós da rede
+- **Conteúdo**: Diretórios vazios prontos para nós futuros
+- **Estrutura**: Uma pasta por nó com metadados e configurações
+
+#### **~/.syntropy/logs/** - Logs do Sistema
+- **Função**: Armazena logs estruturados do setup
+- **Conteúdo**: `setup.log`, logs de validação, erros, auditoria
+- **Gerenciamento**: Rotação automática, compressão, retenção configurável
+
+#### **~/.syntropy/cache/** - Cache Temporário
+- **Função**: Armazena dados temporários e cache
+- **Conteúdo**: Downloads temporários, cache de validações, ISOs
+- **Limpeza**: Limpeza automática, TTL configurável
+
+#### **~/.syntropy/backups/** - Backups Automáticos
+- **Função**: Armazena backups de segurança do sistema
+- **Conteúdo**: Backups de configuração, chaves, estado completo
+- **Gerenciamento**: Rotação automática, compressão, retenção por tempo
+
+### Fluxo de Interação entre Níveis
+
+```
+1. setup.go (Nível 1) → coordena o processo
+   ↓
+2. validator.go (Nível 1) → chama OSValidator (Nível 2)
+   ↓
+3. OSValidator (Nível 2) → valida ~/.syntropy/ (Nível 3)
+   ↓
+4. configurator.go (Nível 1) → chama ConfigGenerator (Nível 2)
+   ↓
+5. ConfigGenerator (Nível 2) → cria arquivos em ~/.syntropy/ (Nível 3)
+   ↓
+6. state_manager.go (Nível 1) → persiste estado em ~/.syntropy/ (Nível 3)
+```
+
+### Princípios de Design
+
+- **Separação de Responsabilidades**: Cada nível tem responsabilidades bem definidas
+- **Desacoplamento**: Interfaces permitem troca de implementações
+- **Atomicidade**: Operações críticas são atômicas e thread-safe
+- **Observabilidade**: Logging estruturado em todos os níveis
+- **Segurança**: Criptografia e validação em múltiplas camadas
+
+## Estrutura de Projeto Otimizada
 
 ```
 manager/interfaces/cli/setup/
-├── GUIDE.md                     # Este guia de desenvolvimento
-├── README.md                    # Documentação do usuário
-├── setup.go                     # Orquestrador principal (300-500 linhas)
-├── setup_windows.go             # Implementação Windows (300-500 linhas)
-├── validation_windows.go        # Subcomponente: Validação Windows (300-500 linhas)
-├── configuration_windows.go     # Subcomponente: Configuração Windows (300-500 linhas)
-├── internal/                    # Código interno do componente
-│   ├── types/                   # Tipos específicos do setup
-│   │   ├── config.go           # Estruturas de configuração
-│   │   ├── environment.go      # Estruturas de ambiente
-│   │   └── validation.go       # Estruturas de validação
-│   ├── services/               # Serviços internos
-│   │   ├── config/             # Serviço de configuração
-│   │   ├── validation/         # Serviço de validação
-│   │   └── storage/            # Serviço de armazenamento
-│   └── utils/                  # Utilitários
-│       ├── filesystem.go       # Operações de sistema de arquivos
-│       ├── security.go         # Utilitários de segurança
-│       └── validation.go       # Utilitários de validação
-├── config/                     # Configurações padrão
-│   ├── templates/              # Templates de configuração
-│   │   ├── manager.yaml       # Template de configuração do manager
+├── setup.go                     # Orquestrador principal (200-300 linhas)
+├── validator.go                 # Validação unificada (200-300 linhas)
+├── configurator.go              # Configuração unificada (200-300 linhas)
+├── state_manager.go             # Gerenciamento de estado atômico (150-200 linhas)
+├── key_manager.go               # Gerenciamento de chaves criptográficas (200-250 linhas)
+├── logger.go                    # Sistema de logging estruturado (100-150 linhas)
+├── internal/
+│   ├── types/
+│   │   ├── setup.go            # Estruturas de dados principais
+│   │   ├── errors.go           # Erros estruturados e códigos
+│   │   └── interfaces.go       # Interfaces para desacoplamento
+│   ├── services/
+│   │   ├── validator/          # Serviço de validação
+│   │   │   ├── os_validator.go # Validação por SO
+│   │   │   ├── dependency.go   # Validação de dependências
+│   │   │   └── network.go      # Validação de rede
+│   │   ├── configurator/       # Serviço de configuração
+│   │   │   ├── config_gen.go   # Geração de configurações
+│   │   │   ├── filesystem.go   # Criação de estrutura
+│   │   │   └── templates.go    # Processamento de templates
+│   │   ├── keystore/           # Gerenciamento de chaves
+│   │   │   ├── generator.go    # Geração de chaves
+│   │   │   ├── storage.go      # Armazenamento seguro
+│   │   │   └── rotation.go     # Rotação de chaves
+│   │   └── state/              # Gerenciamento de estado
+│   │       ├── manager.go      # Gerenciador de estado
+│   │       ├── atomic.go       # Operações atômicas
+│   │       └── backup.go       # Backup e recuperação
+│   └── utils/
+│       ├── os/                 # Utilitários por SO
+│       │   ├── windows.go      # Utilitários Windows
+│       │   ├── linux.go        # Utilitários Linux
+│       │   └── darwin.go       # Utilitários macOS
+│       ├── crypto/             # Utilitários criptográficos
+│       │   ├── entropy.go      # Fonte de entropia
+│       │   ├── keygen.go       # Geração de chaves
+│       │   └── keystore.go     # Armazenamento seguro
+│       └── filesystem/         # Operações de arquivo
+│           ├── atomic.go       # Operações atômicas
+│           ├── permissions.go  # Gerenciamento de permissões
+│           └── validation.go   # Validação de arquivos
+├── config/
+│   ├── templates/
+│   │   ├── manager.yaml       # Template de configuração principal
 │   │   ├── security.yaml      # Template de configuração de segurança
 │   │   └── network.yaml       # Template de configuração de rede
-│   ├── defaults/               # Configurações padrão
+│   ├── defaults/
 │   │   ├── windows.yaml       # Padrões para Windows
 │   │   ├── linux.yaml         # Padrões para Linux
 │   │   └── darwin.yaml        # Padrões para macOS
-│   └── schemas/                # Schemas de validação
+│   └── schemas/
 │       ├── config.schema.json # Schema de configuração
 │       └── environment.schema.json # Schema de ambiente
-└── tests/                      # Testes do componente
+└── tests/
     ├── unit/                   # Testes unitários
     ├── integration/            # Testes de integração
     └── fixtures/               # Dados de teste
 ```
 
-## Integração com API Central
+## Interfaces e Contratos
 
-**FUNDAMENTAL**: O Setup Component deve integrar-se completamente com a API central localizada em `manager/api/` para reutilização máxima de componentes e consistência.
+### Interface Principal do Setup
+```go
+// setup.go
+type SetupManager interface {
+    // Validação do ambiente
+    Validate() (*ValidationResult, error)
+    
+    // Execução do setup completo
+    Setup(options *SetupOptions) error
+    
+    // Verificação de status
+    Status() (*SetupStatus, error)
+    
+    // Reset do setup
+    Reset(confirm bool) error
+    
+    // Reparo automático
+    Repair() error
+}
 
-### Componentes da API Central (`manager/api/`)
-- **`handlers/config/`**: Reutilização de lógica de configuração dos handlers HTTP
-- **`middleware/auth/`**: Aproveitamento de middleware de autenticação e segurança
-- **`types/config/`**: Estruturas de dados de configuração comuns
-- **`services/validation/`**: Serviços de validação reutilizáveis
-- **`utils/security/`**: Utilitários de segurança compartilhados
-- **`utils/filesystem/`**: Operações de sistema de arquivos padronizadas
-
-### Estratégia de Integração
-1. **Config-First Development**: Sempre verificar se configuração já existe na API
-2. **Shared Types**: Usar tipos de configuração da API central em `internal/types/`
-3. **Service Layer**: Reutilizar lógica de validação e configuração dos handlers
-4. **Middleware**: Aproveitar autenticação e logging da API
-5. **Consistency**: Manter consistência entre configuração da API e CLI
-
-## Dependências por Sistema Operacional
-
-### Windows
-**Ferramentas Obrigatórias:**
-- **PowerShell**: Versão 5.1+ (instalado por padrão no Windows 10/11)
-- **Windows Management Framework**: Para comandos WMI e CIM
-- **.NET Framework**: Versão 4.7.2+ ou .NET Core 3.1+
-- **Git**: Para clonagem de repositórios e versionamento
-- **7-Zip ou WinRAR**: Para extração de arquivos compactados
-- **Windows Subsystem for Linux (WSL)**: Opcional, para compatibilidade com scripts Linux
-
-**Ferramentas Opcionais (Recomendadas):**
-- **Docker Desktop**: Para containerização de serviços
-- **Visual Studio Code**: Para edição de configurações
-- **Windows Terminal**: Para melhor experiência de terminal
-
-**Verificação de Versões:**
-```powershell
-# PowerShell
-$PSVersionTable.PSVersion
-
-# .NET Framework
-Get-ItemProperty "HKLM:SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\" -Name Release
-
-# Git
-git --version
-
-# WSL (se instalado)
-wsl --version
+type SetupOptions struct {
+    Force           bool              `json:"force"`
+    ValidateOnly    bool              `json:"validate_only"`
+    Verbose         bool              `json:"verbose"`
+    Quiet           bool              `json:"quiet"`
+    ConfigPath      string            `json:"config_path"`
+    CustomSettings  map[string]string `json:"custom_settings"`
+}
 ```
 
-### Linux (Ubuntu/Debian)
-**Ferramentas Obrigatórias:**
-- **curl**: Para downloads e comunicação HTTP
-- **wget**: Alternativa ao curl para downloads
-- **unzip**: Para extração de arquivos ZIP
-- **tar**: Para extração de arquivos TAR
-- **git**: Para versionamento e clonagem
-- **build-essential**: Compiladores e ferramentas de build
-- **ca-certificates**: Certificados SSL/TLS
+### Interface de Validação
+```go
+// validator.go
+type Validator interface {
+    // Validação completa do ambiente
+    ValidateEnvironment() (*EnvironmentInfo, error)
+    
+    // Validação de dependências
+    ValidateDependencies() (*DependencyStatus, error)
+    
+    // Validação de rede
+    ValidateNetwork() (*NetworkInfo, error)
+    
+    // Validação de permissões
+    ValidatePermissions() (*PermissionStatus, error)
+    
+    // Correção automática de problemas
+    FixIssues(issues []ValidationIssue) error
+}
 
-**Ferramentas Opcionais (Recomendadas):**
-- **Docker**: Para containerização
-- **jq**: Para processamento de JSON
-- **htop**: Para monitoramento de sistema
-- **tree**: Para visualização de estrutura de diretórios
+type ValidationResult struct {
+    Environment   *EnvironmentInfo   `json:"environment"`
+    Dependencies  *DependencyStatus  `json:"dependencies"`
+    Network       *NetworkInfo       `json:"network"`
+    Permissions   *PermissionStatus  `json:"permissions"`
+    Issues        []ValidationIssue  `json:"issues"`
+    CanProceed    bool               `json:"can_proceed"`
+    Warnings      []string           `json:"warnings"`
+}
+```
 
-**Instalação Automática:**
+### Interface de Configuração
+```go
+// configurator.go
+type Configurator interface {
+    // Geração de configuração principal
+    GenerateConfig(options *ConfigOptions) error
+    
+    // Criação da estrutura de diretórios
+    CreateStructure() error
+    
+    // Geração de chaves criptográficas
+    GenerateKeys() (*KeyPair, error)
+    
+    // Validação de configuração
+    ValidateConfig() error
+    
+    // Backup de configuração
+    BackupConfig(name string) error
+    
+    // Restauração de configuração
+    RestoreConfig(backupPath string) error
+}
+
+type ConfigOptions struct {
+    OwnerName      string            `json:"owner_name"`
+    OwnerEmail     string            `json:"owner_email"`
+    NetworkConfig  *NetworkConfig    `json:"network_config"`
+    SecurityConfig *SecurityConfig   `json:"security_config"`
+    CustomSettings map[string]string `json:"custom_settings"`
+}
+```
+
+### Interface de Gerenciamento de Estado
+```go
+// state_manager.go
+type StateManager interface {
+    // Carregamento do estado atual
+    LoadState() (*SetupState, error)
+    
+    // Salvamento atômico do estado
+    SaveState(state *SetupState) error
+    
+    // Atualização atômica do estado
+    UpdateState(update func(*SetupState) error) error
+    
+    // Backup do estado
+    BackupState(name string) error
+    
+    // Restauração do estado
+    RestoreState(backupPath string) error
+    
+    // Verificação de integridade
+    VerifyIntegrity() error
+}
+
+type SetupState struct {
+    Version        string            `json:"version"`
+    CreatedAt      time.Time         `json:"created_at"`
+    UpdatedAt      time.Time         `json:"updated_at"`
+    Status         SetupStatus       `json:"status"`
+    Environment    *EnvironmentInfo  `json:"environment"`
+    Configuration  *ConfigInfo       `json:"configuration"`
+    Keys           *KeyInfo          `json:"keys"`
+    LastBackup     *BackupInfo       `json:"last_backup"`
+    Metadata       map[string]string `json:"metadata"`
+}
+```
+
+### Interface de Gerenciamento de Chaves
+```go
+// key_manager.go
+type KeyManager interface {
+    // Geração de par de chaves
+    GenerateKeyPair(algorithm string) (*KeyPair, error)
+    
+    // Armazenamento seguro de chaves
+    StoreKeyPair(keyPair *KeyPair, passphrase string) error
+    
+    // Carregamento de chaves
+    LoadKeyPair(keyID string, passphrase string) (*KeyPair, error)
+    
+    // Rotação de chaves
+    RotateKeys(keyID string) error
+    
+    // Verificação de integridade
+    VerifyKeyIntegrity(keyID string) error
+    
+    // Backup de chaves
+    BackupKeys(keyID string, passphrase string) ([]byte, error)
+    
+    // Restauração de chaves
+    RestoreKeys(backupData []byte, passphrase string) error
+}
+
+type KeyPair struct {
+    ID           string    `json:"id"`
+    Algorithm    string    `json:"algorithm"`
+    PrivateKey   []byte    `json:"private_key"`
+    PublicKey    []byte    `json:"public_key"`
+    CreatedAt    time.Time `json:"created_at"`
+    ExpiresAt    time.Time `json:"expires_at"`
+    Fingerprint  string    `json:"fingerprint"`
+    Metadata     map[string]string `json:"metadata"`
+}
+```
+
+## Implementação por Sistema Operacional
+
+### Interface de Validação por SO
+```go
+// internal/services/validator/os_validator.go
+type OSValidator interface {
+    // Detecção do sistema operacional
+    DetectOS() (*OSInfo, error)
+    
+    // Validação de recursos do sistema
+    ValidateResources() (*ResourceInfo, error)
+    
+    // Validação de permissões
+    ValidatePermissions() (*PermissionInfo, error)
+    
+    // Instalação de dependências
+    InstallDependencies(deps []Dependency) error
+    
+    // Configuração de ambiente
+    ConfigureEnvironment() error
+}
+
+type OSInfo struct {
+    Name         string `json:"name"`
+    Version      string `json:"version"`
+    Architecture string `json:"architecture"`
+    Build        string `json:"build"`
+    Kernel       string `json:"kernel"`
+}
+
+// Implementações específicas por SO
+type WindowsValidator struct {
+    logger *logrus.Logger
+}
+
+type LinuxValidator struct {
+    logger *logrus.Logger
+}
+
+type DarwinValidator struct {
+    logger *logrus.Logger
+}
+
+func NewOSValidator(logger *logrus.Logger) OSValidator {
+    switch runtime.GOOS {
+    case "windows":
+        return &WindowsValidator{logger: logger}
+    case "linux":
+        return &LinuxValidator{logger: logger}
+    case "darwin":
+        return &DarwinValidator{logger: logger}
+    default:
+        return nil
+    }
+}
+```
+
+## Sistema de Logging Estruturado
+
+### Interface de Logging
+```go
+// logger.go
+type SetupLogger interface {
+    // Logging de etapas do setup
+    LogStep(step string, data map[string]interface{})
+    
+    // Logging de erros
+    LogError(err error, context map[string]interface{})
+    
+    // Logging de warnings
+    LogWarning(message string, data map[string]interface{})
+    
+    // Logging de informações
+    LogInfo(message string, data map[string]interface{})
+    
+    // Logging de debug
+    LogDebug(message string, data map[string]interface{})
+    
+    // Exportação de logs
+    ExportLogs(format string, outputPath string) error
+}
+
+type LogEntry struct {
+    Timestamp time.Time              `json:"timestamp"`
+    Level     string                 `json:"level"`
+    Message   string                 `json:"message"`
+    Step      string                 `json:"step,omitempty"`
+    Data      map[string]interface{} `json:"data,omitempty"`
+    Error     string                 `json:"error,omitempty"`
+}
+```
+
+## Sistema de Erros Estruturado
+
+### Códigos de Erro e Contexto
+```go
+// internal/types/errors.go
+type SetupError struct {
+    Code        string                 `json:"code"`
+    Message     string                 `json:"message"`
+    Context     map[string]interface{} `json:"context"`
+    Suggestions []string               `json:"suggestions"`
+    Timestamp   time.Time              `json:"timestamp"`
+    Cause       error                  `json:"-"`
+}
+
+// Códigos de erro específicos
+const (
+    ErrOSNotSupported     = "SETUP_001"
+    ErrInsufficientPerms  = "SETUP_002"
+    ErrMissingDependency  = "SETUP_003"
+    ErrInsufficientSpace  = "SETUP_004"
+    ErrKeyGeneration      = "SETUP_005"
+    ErrNetworkConnectivity = "SETUP_006"
+    ErrConfigCorrupted    = "SETUP_007"
+    ErrStateCorrupted     = "SETUP_008"
+    ErrBackupFailed       = "SETUP_009"
+    ErrRestoreFailed      = "SETUP_010"
+)
+
+func (e *SetupError) Error() string {
+    return fmt.Sprintf("[%s] %s", e.Code, e.Message)
+}
+
+func (e *SetupError) Unwrap() error {
+    return e.Cause
+}
+```
+
+## Comandos CLI Simplificados
+
+### Estrutura de Comandos
 ```bash
-# Ubuntu/Debian
-sudo apt update && sudo apt install -y curl wget unzip tar git build-essential ca-certificates
+# Comando principal
+syntropy setup [OPTIONS]
 
-# CentOS/RHEL/Fedora
-sudo yum install -y curl wget unzip tar git gcc gcc-c++ make ca-certificates
-# ou para versões mais recentes:
-sudo dnf install -y curl wget unzip tar git gcc gcc-c++ make ca-certificates
+# Opções disponíveis
+--validate-only     # Apenas validar, não configurar
+--force            # Forçar setup mesmo com warnings
+--verbose          # Saída detalhada
+--quiet            # Saída silenciosa
+--config PATH      # Caminho para arquivo de configuração
+--backup PATH      # Caminho para backup
+--restore PATH     # Restaurar de backup
+
+# Subcomandos
+syntropy setup status    # Status do setup
+syntropy setup reset     # Reset completo
+syntropy setup repair    # Reparo automático
+syntropy setup backup    # Backup manual
+syntropy setup restore   # Restauração
 ```
 
-### macOS (Darwin)
-**Ferramentas Obrigatórias:**
-- **Xcode Command Line Tools**: Compiladores e ferramentas essenciais
-- **Homebrew**: Gerenciador de pacotes (recomendado)
-- **curl**: Para downloads e comunicação HTTP
-- **git**: Para versionamento
-- **unzip**: Para extração de arquivos
-
-**Ferramentas Opcionais (Recomendadas):**
-- **Docker Desktop**: Para containerização
-- **jq**: Para processamento de JSON
-- **tree**: Para visualização de estrutura de diretórios
-
-**Instalação Automática:**
+### Exemplo de Uso
 ```bash
-# Instalar Xcode Command Line Tools
-xcode-select --install
-
-# Instalar Homebrew (se não estiver instalado)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Instalar ferramentas essenciais
-brew install curl git unzip jq tree
-```
-
-## Fluxo de Instalação Automática
-
-### Processo de Autorização do Usuário
-
-**1. Detecção de Dependências Faltantes:**
-```bash
-syntropy setup dependencies check
-```
-
-**2. Solicitação de Autorização:**
-```
-⚠️  Dependências Faltantes Detectadas:
-
-Windows:
-  ❌ Git (não encontrado)
-  ❌ 7-Zip (não encontrado)
-
-Deseja instalar automaticamente as dependências faltantes? [y/N]: 
-```
-
-**3. Confirmação de Instalação:**
-```
-📦 Dependências a serem instaladas:
-  • Git (via winget)
-  • 7-Zip (via winget)
-
-⚠️  ATENÇÃO: Esta operação pode requerer privilégios administrativos.
-Continuar com a instalação? [y/N]: 
-```
-
-**4. Instalação com Feedback:**
-```
-🔄 Instalando dependências...
-
-[1/2] Instalando Git... ✅ Concluído
-[2/2] Instalando 7-Zip... ✅ Concluído
-
-✅ Todas as dependências foram instaladas com sucesso!
-```
-
-### Estratégias de Instalação por SO
-
-**Windows:**
-- **winget**: Gerenciador de pacotes oficial da Microsoft
-- **Chocolatey**: Gerenciador de pacotes alternativo
-- **Download direto**: Para ferramentas sem gerenciador de pacotes
-
-**Linux:**
-- **apt/yum/dnf**: Gerenciadores de pacotes nativos
-- **snap**: Para aplicações universais
-- **AppImage**: Para aplicações portáteis
-
-**macOS:**
-- **Homebrew**: Gerenciador de pacotes principal
-- **MacPorts**: Alternativa ao Homebrew
-- **Download direto**: Para aplicações específicas
-
-## Integração com Rede Existente
-
-O Setup Component utiliza componentes já implementados da rede:
-
-- **USB Service**: Integração com `interfaces/cli/internal/cli/usb/` para preparação de USBs bootáveis
-- **Cloud-Init**: Templates em `infrastructure/cloud-init/` para configuração de nós
-- **Scripts**: Scripts de instalação e configuração já desenvolvidos
-- **Certificados**: Sistema de geração automática de certificados TLS
-- **Network Discovery**: Sistema de descoberta de rede implementado
-- **Security**: Sistema de criptografia quantum-resistente
-
-## Hierarquia de Implementação Baseada em Componentes
-
-### Macro Etapa: Setup Component
-O Setup Component é uma **macro etapa** dentro da CLI Manager, responsável por preparar o ambiente de trabalho.
-
-### Meso Etapas (Subcomponentes)
-1. **Validation Subcomponent** - Detecção e validação do ambiente Windows
-2. **Configuration Subcomponent** - Implementação do setup propriamente dito
-
-### Micro Etapas (Funcionalidades)
-Cada subcomponente é dividido em funcionalidades específicas:
-- **Validation**: Detecção de SO, permissões, recursos, dependências, conectividade
-- **Configuration**: Geração de manager.yaml, criação de estrutura ~/.syntropy/, geração de owner key
-
-### Foco de Implementação
-**Prioridade 1**: Validation → Configuration
-**Prioridade 2**: Integração com API → Testes → Documentação
-
-### Implementação por Sistema Operacional
-**Fase 1**: Windows (implementação completa)
-**Fase 2**: Linux (portabilidade)
-**Fase 3**: macOS (portabilidade)
-
-### Estrutura de Subcomponentes
-
-#### 1. Validation Subcomponent
-**Objetivo**: Detectar e validar se o ambiente está pronto para setup
-**Entregável**: Validação completa do ambiente Windows
-
-**Funcionalidades**:
-- **Detecção de SO**: Versão do Windows, arquitetura
-- **Permissões**: Verificação de privilégios administrativos
-- **Recursos**: Verificação de espaço em disco (mínimo 1GB)
-- **Dependências**: Verificação de PowerShell (versão 5.1+)
-- **Conectividade**: Verificação de conectividade de rede
-
-#### 2. Configuration Subcomponent
-**Objetivo**: Implementar o setup propriamente dito
-**Entregável**: Quartel geral configurado e pronto
-
-**Funcionalidades**:
-- **manager.yaml**: Geração de configuração principal
-- **Estrutura**: Criação de ~/.syntropy/ e subdiretórios
-- **Owner Key**: Geração de chave owner única
-- **Configuração Inicial**: Setup completo do ambiente
-
-## Comandos por Subcomponente
-
-### Setup Component (Comandos Principais)
-```bash
-syntropy setup                    # Setup completo (valida + configura)
-syntropy setup --validate-only    # Só validar, não configurar
-syntropy setup --force            # Forçar setup mesmo com warnings
-syntropy setup status             # Status do setup
-syntropy setup reset              # Reset completo
-```
-
-### Validation Subcomponent
-```bash
-syntropy setup validate           # Validar se está tudo OK
-syntropy setup validate --verbose # Validação detalhada
-```
-
-### Configuration Subcomponent
-```bash
-syntropy setup config generate    # Gerar configuração inicial
-syntropy setup config validate    # Validar configuração
-syntropy setup config backup      # Backup da configuração
-```
-
-## Sistema de Estado Local
-
-### Estrutura de Dados
-```
-~/.syntropy/
-├── config/
-│   └── manager.yaml           # Configuração principal
-├── keys/
-│   ├── owner.key              # Chave privada do administrador
-│   └── owner.key.pub          # Chave pública do administrador
-├── nodes/                     # Nós gerenciados
-│   ├── lab-raspberry-01/      # Nome do nó como pasta
-│   │   ├── metadata.yaml      # Metadados do nó
-│   │   ├── config.yaml        # Configuração do nó
-│   │   ├── status.json        # Status atual
-│   │   ├── community.key      # Chave community do nó
-│   │   └── community.key.pub  # Chave pública do nó
-│   └── mini-pc-02/            # Outro nó
-│       ├── metadata.yaml
-│       ├── config.yaml
-│       ├── status.json
-│       ├── community.key
-│       └── community.key.pub
-├── logs/
-│   ├── setup.log              # Logs do setup
-│   ├── manager.log            # Logs do manager
-│   ├── node-creation.log      # Logs de criação de nós
-│   └── security.log           # Logs de segurança
-├── cache/
-│   └── iso/                   # Cache de imagens ISO
-└── backups/                   # Backups automáticos
-    ├── config/
-    ├── keys/
-    └── nodes/
-```
-
-### Gerenciamento de Estado
-1. **Configuração**: Arquivo `manager.yaml` único
-2. **Chaves**: Owner key única + community keys por nó
-3. **Nós**: Pasta por nó com nome igual ao nó
-4. **Logs**: Logs por funcionalidade
-5. **Cache**: Cache de ISOs
-6. **Backups**: Backups automáticos
-
-## Tecnologias e Padrões
-
-### Backend (Go)
-- **CLI Framework**: Cobra para interface de linha de comando
-- **Configuration**: Viper para configurações YAML/JSON
-- **Build Tags**: `//go:build` para diferentes sistemas operacionais
-- **Security**: golang.org/x/crypto para criptografia
-- **Filesystem**: os, path/filepath para operações de arquivo
-- **Validation**: go-playground/validator para validação
-- **Logging**: logrus para logging estruturado
-
-### Padrões de Desenvolvimento
-- **Component-Based**: Desenvolvimento baseado em subcomponentes
-- **OS-Specific**: Implementações específicas por SO usando build tags
-- **API-First**: Reutilização de componentes da API central (`manager/api/`)
-- **Orchestration**: Orquestração de subcomponentes em arquivos principais
-- **File Size Limit**: Cada arquivo deve ter entre 300-500 linhas
-- **Configuration-Driven**: Configuração externa para flexibilidade
-
-### Integração
-- **API Central**: Reutilização de handlers, types e services
-- **USB Service**: Integração com core USB service para criação de nós
-- **Security**: Sistema de criptografia quantum-resistente
-- **Network Discovery**: Integração com sistema de descoberta
-- **Certificate Management**: Geração e gerenciamento de certificados
-
-### Infraestrutura Windows
-- **PowerShell**: Scripts PowerShell para automação
-- **Windows Services**: Configuração de serviços do Windows
-- **Registry**: Configurações no registro do Windows
-- **Event Log**: Integração com logs de eventos do Windows
-- **WMI**: Consultas WMI para informações do sistema
-
-## Boas Práticas de Desenvolvimento de Software
-
-### Princípios Fundamentais
-
-#### 1. SOLID Principles
-- **Single Responsibility**: Cada subcomponente tem uma única responsabilidade
-- **Open/Closed**: Aberto para extensão, fechado para modificação
-- **Liskov Substitution**: Subtipos devem ser substituíveis por seus tipos base
-- **Interface Segregation**: Interfaces específicas para cada subcomponente
-- **Dependency Inversion**: Depender de abstrações, não de implementações
-
-#### 2. Clean Code
-- **Nomes Descritivos**: Variáveis, funções e tipos com nomes claros
-- **Funções Pequenas**: Máximo 20-30 linhas por função
-- **Comentários Úteis**: Explicar "por que", não "o que"
-- **Consistência**: Padrões consistentes em todo o código
-- **Refatoração Contínua**: Melhorar código existente constantemente
-
-#### 3. Design Patterns
-- **Factory Pattern**: Para criação de configurações complexas
-- **Strategy Pattern**: Para diferentes estratégias por SO
-- **Observer Pattern**: Para notificações de status de setup
-- **Command Pattern**: Para operações de setup
-- **Builder Pattern**: Para construção de configurações
-
-### Arquitetura e Estrutura
-
-#### 1. Layered Architecture
-```
-┌─────────────────────────────────────┐
-│ CLI Commands Layer                  │
-├─────────────────────────────────────┤
-│ Setup Orchestration Layer           │
-├─────────────────────────────────────┤
-│ Subcomponent Layer (Env/Dep/Config) │
-├─────────────────────────────────────┤
-│ Service Layer (API Integration)     │
-├─────────────────────────────────────┤
-│ Data Access Layer (File System)     │
-└─────────────────────────────────────┘
-```
-
-#### 2. Dependency Injection
-- **Constructor Injection**: Injetar dependências via construtor
-- **Interface-based**: Usar interfaces para desacoplamento
-- **Configuration-driven**: Configurações externas para dependências
-
-#### 3. Error Handling Strategy
-- **Error Wrapping**: Usar `fmt.Errorf` com contexto
-- **Custom Error Types**: Tipos específicos para diferentes erros
-- **Error Chains**: Preservar stack trace de erros
-- **Graceful Degradation**: Sistema continua funcionando com erros parciais
-
-### Qualidade de Código
-
-#### 1. Testing Strategy
-- **Unit Tests**: 80%+ de cobertura de código
-- **Integration Tests**: Testes de subcomponentes integrados
-- **Mock Objects**: Para dependências externas
-- **Test-Driven Development**: Red-Green-Refactor cycle
-- **Property-Based Testing**: Para validação de configurações
-
-#### 2. Code Review Process
-- **Pull Request Reviews**: Obrigatório para todas as mudanças
-- **Checklist de Review**: Lista de verificação padronizada
-- **Automated Checks**: Linting, testing, security scanning
-- **Knowledge Sharing**: Reviews como oportunidade de aprendizado
-
-#### 3. Documentation Standards
-- **API Documentation**: GoDoc para todas as funções públicas
-- **Architecture Decision Records (ADRs)**: Decisões arquiteturais documentadas
-- **README.md**: Documentação clara e atualizada
-- **Code Comments**: Comentários inline para lógica complexa
-
-### Performance e Otimização
-
-#### 1. Memory Management
-- **Object Pooling**: Reutilizar objetos para reduzir GC pressure
-- **Lazy Loading**: Carregar configurações apenas quando necessário
-- **Memory Profiling**: Usar pprof para identificar vazamentos
-- **Garbage Collection**: Otimizar para reduzir pauses
-
-#### 2. Concurrency Patterns
-- **Goroutines**: Para operações I/O bound
-- **Channels**: Para comunicação entre goroutines
-- **Context**: Para cancelamento e timeouts
-- **Worker Pools**: Para processamento paralelo de validações
-
-#### 3. Caching Strategy
-- **Configuration Cache**: Cache de configurações validadas
-- **Dependency Cache**: Cache de status das dependências
-- **Validation Cache**: Cache de resultados de validação
-- **Cache Invalidation**: Estratégias de invalidação adequadas
-
-### Segurança e Compliance
-
-#### 1. Secure Coding Practices
-- **Input Validation**: Validar e sanitizar todas as entradas
-- **Output Encoding**: Codificar saídas para prevenir injection
-- **Least Privilege**: Mínimo de permissões necessárias
-- **Defense in Depth**: Múltiplas camadas de segurança
-
-#### 2. Cryptographic Standards
-- **NIST Guidelines**: Seguir guidelines do NIST
-- **Key Management**: Rotação e armazenamento seguro de chaves
-- **Random Number Generation**: Usar geradores criptograficamente seguros
-- **Hash Functions**: SHA-3 ou BLAKE3 para hashing
-
-#### 3. Compliance and Auditing
-- **Audit Logs**: Logs detalhados para auditoria
-- **Data Privacy**: GDPR, CCPA compliance
-- **Security Scanning**: SAST, DAST, dependency scanning
-- **Penetration Testing**: Testes de segurança regulares
-
-### DevOps e CI/CD
-
-#### 1. Continuous Integration
-- **Automated Testing**: Testes automáticos em cada commit
-- **Code Quality Gates**: Linting, security, coverage checks
-- **Build Automation**: Builds reproduzíveis e consistentes
-- **Artifact Management**: Versionamento de artefatos
-
-#### 2. Continuous Deployment
-- **Blue-Green Deployment**: Zero-downtime deployments
-- **Feature Flags**: Toggles para funcionalidades
-- **Rollback Strategy**: Estratégias de rollback rápidas
-- **Monitoring**: Monitoramento de deployments
-
-#### 3. Infrastructure as Code
-- **Version Control**: Infraestrutura versionada
-- **Immutable Infrastructure**: Infraestrutura imutável
-- **Configuration Management**: Configurações centralizadas
-- **Environment Parity**: Ambientes consistentes
-
-### Monitoring e Observabilidade
-
-#### 1. Logging Strategy
-- **Structured Logging**: JSON logs com campos estruturados
-- **Log Levels**: DEBUG, INFO, WARN, ERROR, FATAL
-- **Correlation IDs**: Rastreamento de operações de setup
-- **Log Aggregation**: Centralização de logs
-
-#### 2. Metrics and Monitoring
-- **Setup Metrics**: Métricas de tempo de setup e sucesso
-- **System Metrics**: CPU, memory, disk, network
-- **Custom Dashboards**: Dashboards específicos por subcomponente
-- **Alerting**: Alertas proativos para problemas
-
-#### 3. Distributed Tracing
-- **Operation Tracing**: Rastreamento de operações de setup
-- **Performance Analysis**: Análise de performance end-to-end
-- **Dependency Mapping**: Mapeamento de dependências
-- **Error Tracking**: Rastreamento de erros em produção
-
-### Code Organization and Standards
-
-#### 1. Project Structure
-- **Domain-Driven Design**: Organização por domínio de setup
-- **Package Naming**: Convenções claras de nomenclatura
-- **Import Organization**: Imports organizados e limpos
-- **File Organization**: Arquivos organizados logicamente
-
-#### 2. Go-Specific Best Practices
-- **Effective Go**: Seguir guidelines oficiais do Go
-- **Package Design**: APIs limpas e bem documentadas
-- **Error Handling**: Tratamento de erros idiomático
-- **Concurrency**: Uso correto de goroutines e channels
-
-#### 3. Version Control
-- **Git Flow**: Estratégia de branching adequada
-- **Commit Messages**: Mensagens claras e descritivas
-- **Semantic Versioning**: Versionamento semântico
-- **Changelog**: Log de mudanças mantido
-
-### Code Quality Tools
-
-#### 1. Static Analysis
-- **golangci-lint**: Linting abrangente
-- **gosec**: Análise de segurança
-- **ineffassign**: Detecção de assignments ineficientes
-- **misspell**: Detecção de erros de ortografia
-
-#### 2. Testing Tools
-- **testify**: Assertions e mocks
-- **ginkgo**: BDD testing framework
-- **gomega**: Matcher library
-- **httptest**: Testing HTTP handlers
-
-#### 3. Performance Tools
-- **pprof**: Profiling de CPU e memória
-- **benchmark**: Benchmarking de funções
-- **trace**: Análise de execução
-- **race detector**: Detecção de race conditions
-
-### Documentation and Knowledge Management
-
-#### 1. Technical Documentation
-- **Architecture Documentation**: Documentação arquitetural
-- **API Documentation**: Documentação de APIs
-- **Deployment Guides**: Guias de deployment
-- **Troubleshooting Guides**: Guias de solução de problemas
-
-#### 2. Knowledge Sharing
-- **Code Reviews**: Compartilhamento de conhecimento
-- **Technical Talks**: Apresentações técnicas
-- **Documentation Reviews**: Revisão de documentação
-- **Mentoring**: Mentoria entre desenvolvedores
-
-#### 3. Decision Making
-- **Architecture Decision Records**: Decisões documentadas
-- **Technical Debt Tracking**: Rastreamento de dívida técnica
-- **Performance Budgets**: Orçamentos de performance
-- **Security Reviews**: Revisões de segurança
-
-## Considerações Técnicas
-
-### Segurança
-- **Sistema Owner/Community Keys**: Arquitetura baseada em chaves Ed25519 com owner key única e community keys por nó
-- **Geração Segura de Chaves**: Uso de geradores criptograficamente seguros para criação de chaves
-- **Assinatura Digital**: Owner key assina todas as operações de gerenciamento
-- **Verificação de Integridade**: Community keys verificam assinaturas do owner
-- **Isolamento de Chaves**: Cada nó possui sua própria community key única
-- **Backup Criptografado**: Backups de chaves sempre criptografados com senha forte
-- **Validação de Entrada**: Sanitização e validação rigorosa de todos os inputs de configuração
-- **Auditoria Completa**: Logs de auditoria para todas as operações críticas de setup e gerenciamento
-- **Controle de Acesso**: Permissões restritivas (600) para arquivos de chaves
-- **Zero Trust**: Princípio de zero confiança em comunicações de rede
-- **Secure Defaults**: Configurações seguras por padrão
-- **Key Rotation**: Rotação automática de chaves configurável
-- **Encrypted Storage**: Armazenamento criptografado de configurações sensíveis
-
-### Performance
-- **Cache de Configuração**: Cache em memória para configurações frequentemente acessadas
-- **Validação Assíncrona**: Validação paralela de dependências e configurações
-- **Lazy Loading**: Carregamento sob demanda de componentes pesados
-- **Compressão**: Compressão para backups e cache
-- **Connection Pooling**: Pool de conexões para comunicação com API
-
-### Usabilidade
-- **Interface Intuitiva**: Comandos simples e consistentes
-- **Feedback Visual**: Indicadores de progresso para operações longas
-- **Documentação Integrada**: Ajuda contextual com --help
-- **Múltiplos Formatos**: Suporte a diferentes formatos de saída (table, json, yaml)
-- **Auto-completion**: Completamento automático para comandos e parâmetros
-- **Validação Automática**: Validação em tempo real de configurações
-
-### Extensibilidade
-- **Estrutura Modular**: Arquitetura modular para novos subcomponentes
-- **Sistema de Plugins**: Plugins para funcionalidades customizadas
-- **Templates Parametrizáveis**: Templates configuráveis para diferentes ambientes
-- **API para Integração**: Interface para integração com outras ferramentas
-- **Configuration Schema**: Schemas validáveis para configurações customizadas
-
-## Processo de Desenvolvimento por Subcomponentes
-
-### 1. Environment Subcomponent (Prioridade 1)
-- Criar estrutura de arquivos do subcomponente
-- Implementar detecção de ambiente Windows
-- Implementar validação de permissões
-- Implementar verificação de espaço em disco
-- Integrar com API central para validação
-- Testes e validação
-
-### 2. Dependencies Subcomponent (Prioridade 1)
-- Criar estrutura de arquivos do subcomponente
-- Implementar verificação de dependências Windows
-- Implementar instalação automática de dependências
-- Implementar validação de versões
-- Integrar com sistema de pacotes do Windows
-- Testes e validação
-
-### 3. Configuration Subcomponent (Prioridade 1)
-- Criar estrutura de arquivos do subcomponente
-- Implementar geração de configurações
-- Implementar validação de configurações
-- Implementar sistema de templates
-- Integrar com API central para schemas
-- Testes e validação
-
-### 4. Orquestração Principal (Prioridade 2)
-- Implementar orquestrador principal (setup.go)
-- Implementar versões por SO
-- Integrar subcomponentes
-- Implementar sistema de rollback
-- Testes de integração
-
-### 5. Documentação e Testes (Prioridade 2)
-- Criar documentação completa
-- Implementar testes de integração
-- Criar guias de troubleshooting
-- Implementar métricas e monitoramento
-
-## Primeira Meso Etapa: Environment Subcomponent
-
-### Objetivo
-Implementar o subcomponente de ambiente que detecta e configura o ambiente de trabalho Windows, estabelecendo as bases para o funcionamento do quartel geral.
-
-### Entregáveis
-- Environment Subcomponent completamente funcional no Windows
-- Detecção automática de ambiente Windows
-- Validação de permissões e recursos
-- Integração com API central
-- Sistema de validação robusto
-- Documentação completa (GUIDE.md e README.md)
-
-### Critérios de Sucesso
-- Usuário pode executar `syntropy setup environment check` com sucesso no Windows
-- Ambiente é detectado e validado automaticamente
-- Permissões são verificadas e configuradas
-- Recursos do sistema são validados
-- Sistema funciona offline (validação local)
-- Logs detalhados são gerados para troubleshooting
-
-### Micro Etapas Detalhadas
-
-#### 1.1 Estrutura do Subcomponente (Dias 1-2)
-1. **Criar arquivos** - environment_windows.go (300-500 linhas)
-2. **Estrutura de tipos** - internal/types/environment.go
-3. **Serviços internos** - internal/services/environment/
-4. **Utilitários** - internal/utils/environment.go
-5. **Testes básicos** - tests/unit/environment_test.go
-
-#### 1.2 Detecção de Ambiente Windows (Dias 3-4)
-1. **Detecção de SO** - Versão do Windows, arquitetura, build
-2. **Detecção de recursos** - CPU, RAM, espaço em disco
-3. **Detecção de permissões** - Privilégios administrativos, acesso a recursos
-4. **Validação de compatibilidade** - Verificação de versões suportadas
-5. **Testes de detecção** - Testes unitários para cada funcionalidade
-
-#### 1.3 Validação de Permissões (Dias 5-6)
-1. **Verificação de privilégios** - UAC, privilégios administrativos
-2. **Verificação de acesso a arquivos** - Permissões de escrita em diretórios
-3. **Verificação de acesso a rede** - Portas, firewall, conectividade
-4. **Configuração de permissões** - Configuração automática quando possível
-5. **Testes de permissões** - Testes com diferentes níveis de privilégio
-
-#### 1.4 Validação de Recursos (Dias 7-8)
-1. **Verificação de espaço em disco** - Espaço mínimo necessário
-2. **Verificação de memória** - RAM disponível e utilizável
-3. **Verificação de CPU** - Cores disponíveis e performance
-4. **Verificação de rede** - Conectividade e largura de banda
-5. **Testes de recursos** - Testes com diferentes configurações de hardware
-
-#### 1.5 Integração e Validação (Dias 9-10)
-1. **Integração com API** - Usar serviços de validação da API central
-2. **Integração com logging** - Sistema de logs estruturado
-3. **Integração com configuração** - Geração de configurações de ambiente
-4. **Testes de integração** - Testes completos do subcomponente
-5. **Documentação** - Atualização de documentação e exemplos
-
-## Exemplos de Uso por Subcomponente
-
-### Environment Subcomponent
-```bash
-# Verificar ambiente completo
-syntropy setup environment check
-
-# Verificar apenas recursos do sistema
-syntropy setup environment check --resources-only
-
-# Verificar apenas permissões
-syntropy setup environment check --permissions-only
-
-# Mostrar informações detalhadas do ambiente
-syntropy setup environment info
-
-# Corrigir problemas de ambiente automaticamente
-syntropy setup environment fix
-
-# Validar configuração de ambiente
-syntropy setup environment validate
-```
-
-### Dependencies Subcomponent
-```bash
-# Verificar todas as dependências
-syntropy setup dependencies check
-
-# Instalar dependências faltantes
-syntropy setup dependencies install
-
-# Atualizar dependências para versões mais recentes
-syntropy setup dependencies update
-
-# Validar versões das dependências
-syntropy setup dependencies validate
-
-# Mostrar status detalhado das dependências
-syntropy setup dependencies status
-```
-
-### Configuration Subcomponent
-```bash
-# Gerar configuração inicial
-syntropy setup config generate
-
-# Validar configuração atual
-syntropy setup config validate
-
-# Fazer backup da configuração
-syntropy setup config backup
-
-# Restaurar configuração de backup
-syntropy setup config restore backup_20240115_143022.tar.gz
-
-# Mostrar configuração atual
-syntropy setup config show
-
-# Editar configuração interativamente
-syntropy setup config edit
-```
-
-### Setup Component Completo
-```bash
-# Setup completo do quartel geral
+# Setup completo
 syntropy setup
 
 # Setup com validação detalhada
 syntropy setup --verbose
 
-# Setup forçado (ignorar validações)
+# Apenas validar ambiente
+syntropy setup --validate-only
+
+# Setup forçado
 syntropy setup --force
 
-# Setup em modo silencioso
-syntropy setup --quiet
+# Verificar status
+syntropy setup status
 
-# Verificar status do setup
-syntropy setup --check
+# Reparar problemas
+syntropy setup repair
 
-# Reparar setup corrompido
-syntropy setup --repair
+# Reset completo
+syntropy setup reset --confirm
 ```
 
-## Próximos Passos Pós-Setup
+## Fluxo de Implementação
 
-### Validação Final do Setup
-
-Após a conclusão bem-sucedida do setup, o sistema deve validar automaticamente todos os componentes e fornecer instruções claras para os próximos passos.
-
-**Comando de Validação Final:**
-```bash
-syntropy setup validate --final
-```
-
-**Saída Esperada:**
-```
-✅ Setup do Syntropy Manager Concluído com Sucesso!
-
-📋 Resumo do Setup:
-  • Ambiente: Windows 11 Pro (Build 22621)
-  • Estrutura: ~/.syntropy/ criada com sucesso
-  • Chaves: Owner key gerada e armazenada com segurança
-  • Configuração: manager.yaml criado e validado
-  • Logs: Sistema de logging configurado
-
-🔐 Informações de Segurança:
-  • Owner Key ID: owner_ed25519_abc123...
-  • Backup: ~/.syntropy/backups/keys/backup_20240115_143022.tar.gz
-  • Permissões: Configuradas corretamente (600)
-
-📁 Estrutura Criada:
-  ~/.syntropy/
-  ├── config/manager.yaml
-  ├── keys/owner.key*
-  ├── nodes/ (pronto para novos nós)
-  ├── logs/setup.log
-  └── backups/ (backup automático criado)
-```
-
-### Instruções para Próximos Passos
-
-**1. Verificação do Status:**
-```bash
-# Verificar status geral do sistema
-syntropy status
-
-# Verificar configuração atual
-syntropy config show
-
-# Verificar chaves de segurança
-syntropy keys list
-```
-
-**2. Preparação para Criação de Nós:**
-```bash
-# Verificar conectividade de rede
-syntropy network test
-
-# Verificar espaço disponível para nós
-syntropy storage check
-
-# Verificar permissões para criação de nós
-syntropy permissions check
-```
-
-**3. Transição para Componente de Criação de Nós:**
-```bash
-# O próximo passo é usar o componente de criação de nós
-syntropy node create --help
-
-# Ou começar com um nó de exemplo
-syntropy node create --template raspberry-pi --name lab-raspberry-01
-```
-
-### Fluxo de Transição para Criação de Nós
-
-**Pré-requisitos Verificados:**
-- ✅ Setup do quartel geral concluído
-- ✅ Owner key gerada e armazenada
-- ✅ Estrutura de diretórios criada
-- ✅ Configuração validada
-- ✅ Sistema de logs funcionando
-
-**Próximas Ações Disponíveis:**
-1. **Criação de Nós**: Usar `syntropy node create` para adicionar novos nós
-2. **Gerenciamento de Nós**: Usar `syntropy node list` para ver nós existentes
-3. **Monitoramento**: Usar `syntropy monitor` para acompanhar status
-4. **Configuração Avançada**: Usar `syntropy config edit` para ajustes
-
-### Comandos de Verificação Pós-Setup
-
-**Verificação Completa:**
-```bash
-# Executar verificação completa do sistema
-syntropy setup verify --complete
-
-# Verificar integridade das chaves
-syntropy keys verify
-
-# Verificar permissões de arquivos
-syntropy permissions verify
-
-# Verificar conectividade
-syntropy network verify
-```
-
-**Diagnóstico de Problemas:**
-```bash
-# Executar diagnóstico completo
-syntropy diagnose
-
-# Verificar logs de setup
-syntropy logs show --component setup
-
-# Verificar status de serviços
-syntropy services status
-```
-
-### Backup e Recuperação
-
-**Backup Automático:**
-- Backup automático criado em `~/.syntropy/backups/`
-- Inclui configurações, chaves e logs
-- Rotação automática de backups antigos
-
-**Comandos de Backup Manual:**
-```bash
-# Criar backup manual
-syntropy backup create --name "backup_pre_node_creation"
-
-# Listar backups disponíveis
-syntropy backup list
-
-# Restaurar backup específico
-syntropy backup restore backup_pre_node_creation_20240115_143022.tar.gz
-```
-
-### Monitoramento e Manutenção
-
-**Comandos de Monitoramento:**
-```bash
-# Monitorar status em tempo real
-syntropy monitor --live
-
-# Verificar saúde do sistema
-syntropy health check
-
-# Verificar uso de recursos
-syntropy resources status
-```
-
-**Manutenção Preventiva:**
-```bash
-# Limpeza de logs antigos
-syntropy maintenance cleanup --logs
-
-# Verificação de integridade
-syntropy maintenance verify
-
-# Atualização de configurações
-syntropy maintenance update-config
-```
-
-## Padrões de Nomenclatura de Arquivos
-
-### Estrutura de Arquivos por Subcomponente
-```
-setup/
-├── setup.go                     # Orquestrador principal (300-500 linhas)
-├── setup_windows.go             # Implementação Windows (300-500 linhas)
-├── setup_linux.go               # Implementação Linux (stub, 300-500 linhas)
-├── setup_darwin.go              # Implementação macOS (stub, 300-500 linhas)
-├── environment_windows.go       # Subcomponente Environment Windows (300-500 linhas)
-├── environment_linux.go         # Subcomponente Environment Linux (stub, 300-500 linhas)
-├── environment_darwin.go        # Subcomponente Environment macOS (stub, 300-500 linhas)
-├── dependencies_windows.go      # Subcomponente Dependencies Windows (300-500 linhas)
-├── dependencies_linux.go        # Subcomponente Dependencies Linux (stub, 300-500 linhas)
-├── dependencies_darwin.go       # Subcomponente Dependencies macOS (stub, 300-500 linhas)
-├── configuration_windows.go     # Subcomponente Configuration Windows (300-500 linhas)
-├── configuration_linux.go       # Subcomponente Configuration Linux (stub, 300-500 linhas)
-├── configuration_darwin.go      # Subcomponente Configuration macOS (stub, 300-500 linhas)
-├── GUIDE.md                     # Guia de implementação
-└── README.md                    # Documentação do usuário
-```
-
-### Build Tags
+### 1. Implementação do Orquestrador Principal
 ```go
-//go:build windows
-//go:build linux
-//go:build darwin
-//go:build windows || linux || darwin
-```
-
-### Exemplo de Orquestração
-```go
-// setup.go - Orquestrador principal
-package setup
-
-import (
-    "runtime"
-    "fmt"
-)
-
-func Setup() error {
-    switch runtime.GOOS {
-    case "windows":
-        return setupWindows()
-    case "linux":
-        return setupLinux()
-    case "darwin":
-        return setupDarwin()
-    default:
-        return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
-    }
+// setup.go
+type SetupManager struct {
+    validator    Validator
+    configurator Configurator
+    stateManager StateManager
+    keyManager   KeyManager
+    logger       SetupLogger
 }
 
-func setupWindows() error {
-    // Orquestração específica para Windows
-    if err := setupEnvironmentWindows(); err != nil {
-        return fmt.Errorf("environment setup failed: %w", err)
+func NewSetupManager() (*SetupManager, error) {
+    logger := NewSetupLogger()
+    
+    return &SetupManager{
+        validator:    NewValidator(logger),
+        configurator: NewConfigurator(logger),
+        stateManager: NewStateManager(logger),
+        keyManager:   NewKeyManager(logger),
+        logger:       logger,
+    }, nil
+}
+
+func (sm *SetupManager) Setup(options *SetupOptions) error {
+    sm.logger.LogStep("setup_start", map[string]interface{}{
+        "options": options,
+    })
+    
+    // 1. Validar ambiente
+    result, err := sm.validator.ValidateEnvironment()
+    if err != nil {
+        return sm.handleError(err, "validation_failed")
     }
     
-    if err := setupDependenciesWindows(); err != nil {
-        return fmt.Errorf("dependencies setup failed: %w", err)
+    if !result.CanProceed && !options.Force {
+        return sm.handleError(ErrValidationFailed, "validation_failed")
     }
     
-    if err := setupConfigurationWindows(); err != nil {
-        return fmt.Errorf("configuration setup failed: %w", err)
+    // 2. Criar estrutura de diretórios
+    if err := sm.configurator.CreateStructure(); err != nil {
+        return sm.handleError(err, "structure_creation_failed")
     }
+    
+    // 3. Gerar chaves
+    keyPair, err := sm.keyManager.GenerateKeyPair("ed25519")
+    if err != nil {
+        return sm.handleError(err, "key_generation_failed")
+    }
+    
+    // 4. Gerar configuração
+    if err := sm.configurator.GenerateConfig(&ConfigOptions{
+        OwnerName: options.CustomSettings["owner_name"],
+        OwnerEmail: options.CustomSettings["owner_email"],
+    }); err != nil {
+        return sm.handleError(err, "config_generation_failed")
+    }
+    
+    // 5. Salvar estado
+    state := &SetupState{
+        Version: "1.0.0",
+        CreatedAt: time.Now(),
+        Status: SetupStatusCompleted,
+        Keys: &KeyInfo{
+            OwnerKeyID: keyPair.ID,
+            Algorithm: keyPair.Algorithm,
+        },
+    }
+    
+    if err := sm.stateManager.SaveState(state); err != nil {
+        return sm.handleError(err, "state_save_failed")
+    }
+    
+    sm.logger.LogStep("setup_completed", map[string]interface{}{
+        "key_id": keyPair.ID,
+    })
     
     return nil
 }
 ```
 
-## Documentação por Subcomponente
+### 2. Implementação do Validador
+```go
+// validator.go
+type Validator struct {
+    osValidator OSValidator
+    logger      SetupLogger
+}
 
-### GUIDE.md (Guia de Implementação)
-- Contexto e objetivos do subcomponente
-- Estrutura de funcionalidades
-- Processo de implementação detalhado
-- Integração com API central
-- Testes e validação
-- Exemplos de uso específicos
-- Troubleshooting e debugging
+func NewValidator(logger SetupLogger) *Validator {
+    return &Validator{
+        osValidator: NewOSValidator(logger),
+        logger:      logger,
+    }
+}
 
-### README.md (Documentação do Usuário)
-- Visão geral do subcomponente
-- Funcionalidades e capacidades
-- Comandos disponíveis
-- Configurações e opções
-- Exemplos práticos de uso
-- Troubleshooting comum
-- FAQ e dicas de uso
-
-## Manual de Troubleshooting Expandido
-
-### Diagnóstico de Problemas por Categoria
-
-#### 1. Problemas de Ambiente
-
-**Erro: Sistema Operacional Não Suportado**
-```
-❌ ERRO: Sistema operacional não suportado: FreeBSD
-```
-**Solução:**
-```bash
-# Verificar SO suportado
-syntropy setup validate --check-os
-
-# Listar SOs suportados
-syntropy setup info --supported-os
-```
-
-**Erro: Permissões Insuficientes**
-```
-❌ ERRO: Permissões insuficientes para criar diretório ~/.syntropy/
-```
-**Solução:**
-```bash
-# Verificar permissões atuais
-syntropy setup validate --check-permissions
-
-# Corrigir permissões automaticamente (Windows)
-syntropy setup fix --permissions
-
-# Corrigir permissões manualmente (Linux/macOS)
-sudo chown -R $USER:$USER ~/.syntropy
-chmod 755 ~/.syntropy
-```
-
-**Erro: Espaço em Disco Insuficiente**
-```
-❌ ERRO: Espaço em disco insuficiente. Necessário: 1GB, Disponível: 500MB
-```
-**Solução:**
-```bash
-# Verificar uso de disco
-syntropy setup validate --check-disk
-
-# Limpar cache e logs antigos
-syntropy maintenance cleanup --all
-
-# Verificar diretórios grandes
-syntropy setup diagnose --disk-usage
+func (v *Validator) ValidateEnvironment() (*ValidationResult, error) {
+    v.logger.LogStep("validation_start", nil)
+    
+    // Validar SO
+    osInfo, err := v.osValidator.DetectOS()
+    if err != nil {
+        return nil, err
+    }
+    
+    // Validar recursos
+    resources, err := v.osValidator.ValidateResources()
+    if err != nil {
+        return nil, err
+    }
+    
+    // Validar permissões
+    permissions, err := v.osValidator.ValidatePermissions()
+    if err != nil {
+        return nil, err
+    }
+    
+    // Validar dependências
+    dependencies, err := v.validateDependencies()
+    if err != nil {
+        return nil, err
+    }
+    
+    // Validar rede
+    network, err := v.validateNetwork()
+    if err != nil {
+        return nil, err
+    }
+    
+    result := &ValidationResult{
+        Environment: &EnvironmentInfo{
+            OS: osInfo,
+            Resources: resources,
+            Permissions: permissions,
+        },
+        Dependencies: dependencies,
+        Network: network,
+        CanProceed: true,
+    }
+    
+    v.logger.LogStep("validation_completed", map[string]interface{}{
+        "can_proceed": result.CanProceed,
+        "issues_count": len(result.Issues),
+    })
+    
+    return result, nil
+}
 ```
 
-#### 2. Problemas de Dependências
+### 3. Implementação do Configurador
+```go
+// configurator.go
+type Configurator struct {
+    logger SetupLogger
+}
 
-**Erro: PowerShell Não Encontrado (Windows)**
-```
-❌ ERRO: PowerShell não encontrado ou versão incompatível
-```
-**Solução:**
-```bash
-# Verificar versão do PowerShell
-syntropy setup validate --check-powershell
+func NewConfigurator(logger SetupLogger) *Configurator {
+    return &Configurator{
+        logger: logger,
+    }
+}
 
-# Instalar PowerShell automaticamente
-syntropy setup dependencies install --powershell
+func (c *Configurator) CreateStructure() error {
+    c.logger.LogStep("structure_creation_start", nil)
+    
+    baseDir := filepath.Join(os.Getenv("HOME"), ".syntropy")
+    
+    directories := []string{
+        filepath.Join(baseDir, "config"),
+        filepath.Join(baseDir, "keys"),
+        filepath.Join(baseDir, "nodes"),
+        filepath.Join(baseDir, "logs"),
+        filepath.Join(baseDir, "cache"),
+        filepath.Join(baseDir, "backups"),
+    }
+    
+    for _, dir := range directories {
+        if err := os.MkdirAll(dir, 0755); err != nil {
+            return fmt.Errorf("failed to create directory %s: %w", dir, err)
+        }
+    }
+    
+    c.logger.LogStep("structure_creation_completed", map[string]interface{}{
+        "base_dir": baseDir,
+        "directories": directories,
+    })
+    
+    return nil
+}
 
-# Instalar manualmente via winget
-winget install Microsoft.PowerShell
-```
-
-**Erro: Git Não Instalado**
-```
-❌ ERRO: Git não encontrado no sistema
-```
-**Solução:**
-```bash
-# Verificar Git
-syntropy setup validate --check-git
-
-# Instalar Git automaticamente
-syntropy setup dependencies install --git
-
-# Instalar manualmente por SO:
-# Windows: winget install Git.Git
-# Linux: sudo apt install git
-# macOS: brew install git
-```
-
-**Erro: Ferramentas de Compilação Faltando (Linux)**
-```
-❌ ERRO: build-essential não encontrado
-```
-**Solução:**
-```bash
-# Verificar ferramentas de build
-syntropy setup validate --check-build-tools
-
-# Instalar automaticamente
-syntropy setup dependencies install --build-tools
-
-# Instalar manualmente
-sudo apt update && sudo apt install -y build-essential
-```
-
-#### 3. Problemas de Rede
-
-**Erro: Conectividade de Rede Falhando**
-```
-❌ ERRO: Não foi possível verificar conectividade de rede
-```
-**Solução:**
-```bash
-# Testar conectividade
-syntropy setup validate --check-network
-
-# Diagnóstico de rede
-syntropy network diagnose
-
-# Verificar firewall
-syntropy setup validate --check-firewall
-```
-
-**Erro: Proxy ou Firewall Bloqueando**
-```
-❌ ERRO: Conexão bloqueada por proxy/firewall
-```
-**Solução:**
-```bash
-# Configurar proxy
-syntropy config set --proxy http://proxy.company.com:8080
-
-# Verificar configurações de firewall
-syntropy setup validate --check-firewall
-
-# Adicionar exceção no firewall
-syntropy setup fix --firewall-exception
+func (c *Configurator) GenerateConfig(options *ConfigOptions) error {
+    c.logger.LogStep("config_generation_start", map[string]interface{}{
+        "options": options,
+    })
+    
+    config := &ManagerConfig{
+        Version: "1.0.0",
+        Owner: OwnerConfig{
+            Name:  options.OwnerName,
+            Email: options.OwnerEmail,
+        },
+        Network: options.NetworkConfig,
+        Security: options.SecurityConfig,
+        CreatedAt: time.Now(),
+    }
+    
+    configPath := filepath.Join(os.Getenv("HOME"), ".syntropy", "config", "manager.yaml")
+    
+    data, err := yaml.Marshal(config)
+    if err != nil {
+        return fmt.Errorf("failed to marshal config: %w", err)
+    }
+    
+    if err := os.WriteFile(configPath, data, 0644); err != nil {
+        return fmt.Errorf("failed to write config file: %w", err)
+    }
+    
+    c.logger.LogStep("config_generation_completed", map[string]interface{}{
+        "config_path": configPath,
+    })
+    
+    return nil
+}
 ```
 
-#### 4. Problemas de Segurança
+## Sistema de Segurança
 
-**Erro: Falha na Geração de Chaves**
-```
-❌ ERRO: Falha na geração da owner key
-```
-**Solução:**
-```bash
-# Verificar gerador de números aleatórios
-syntropy setup validate --check-random
+### Geração Segura de Chaves
+```go
+// internal/services/keystore/generator.go
+type KeyGenerator struct {
+    entropySource *crypto.EntropySource
+    logger        SetupLogger
+}
 
-# Regenerar chaves
-syntropy setup config generate --regenerate-keys
+func NewKeyGenerator(logger SetupLogger) *KeyGenerator {
+    return &KeyGenerator{
+        entropySource: crypto.NewEntropySource(),
+        logger:        logger,
+    }
+}
 
-# Verificar permissões do diretório de chaves
-syntropy setup validate --check-key-permissions
-```
-
-**Erro: Permissões de Arquivo Incorretas**
-```
-❌ ERRO: Permissões de arquivo de chave incorretas
-```
-**Solução:**
-```bash
-# Corrigir permissões automaticamente
-syntropy setup fix --key-permissions
-
-# Corrigir manualmente
-chmod 600 ~/.syntropy/keys/owner.key
-chmod 644 ~/.syntropy/keys/owner.key.pub
-```
-
-#### 5. Problemas de Configuração
-
-**Erro: Arquivo de Configuração Corrompido**
-```
-❌ ERRO: Arquivo manager.yaml corrompido ou inválido
-```
-**Solução:**
-```bash
-# Validar configuração
-syntropy setup config validate
-
-# Restaurar configuração padrão
-syntropy setup config reset
-
-# Restaurar de backup
-syntropy backup restore --latest
-```
-
-**Erro: Schema de Configuração Inválido**
-```
-❌ ERRO: Configuração não atende ao schema esperado
-```
-**Solução:**
-```bash
-# Verificar schema
-syntropy setup config validate --schema
-
-# Gerar configuração válida
-syntropy setup config generate --force
-
-# Editar configuração interativamente
-syntropy setup config edit
+func (kg *KeyGenerator) GenerateEd25519KeyPair() (*KeyPair, error) {
+    kg.logger.LogStep("key_generation_start", map[string]interface{}{
+        "algorithm": "ed25519",
+    })
+    
+    // Gerar chave privada usando fonte de entropia segura
+    privateKey, err := kg.entropySource.GeneratePrivateKey(ed25519.PrivateKeySize)
+    if err != nil {
+        return nil, fmt.Errorf("failed to generate private key: %w", err)
+    }
+    
+    // Gerar chave pública
+    publicKey := privateKey.Public().(ed25519.PublicKey)
+    
+    // Criar fingerprint
+    fingerprint := kg.generateFingerprint(publicKey)
+    
+    keyPair := &KeyPair{
+        ID:          kg.generateKeyID(),
+        Algorithm:   "ed25519",
+        PrivateKey:  privateKey,
+        PublicKey:   publicKey,
+        CreatedAt:   time.Now(),
+        ExpiresAt:   time.Now().AddDate(1, 0, 0), // 1 ano
+        Fingerprint: fingerprint,
+        Metadata: map[string]string{
+            "generated_by": "syntropy-setup",
+            "version": "1.0.0",
+        },
+    }
+    
+    kg.logger.LogStep("key_generation_completed", map[string]interface{}{
+        "key_id": keyPair.ID,
+        "fingerprint": keyPair.Fingerprint,
+    })
+    
+    return keyPair, nil
+}
 ```
 
-### Comandos de Diagnóstico Avançado
+### Armazenamento Seguro
+```go
+// internal/services/keystore/storage.go
+type SecureKeyStorage struct {
+    keystorePath string
+    logger       SetupLogger
+}
 
-#### Diagnóstico Completo do Sistema
-```bash
-# Executar diagnóstico completo
-syntropy diagnose --complete
+func NewSecureKeyStorage(logger SetupLogger) *SecureKeyStorage {
+    return &SecureKeyStorage{
+        keystorePath: filepath.Join(os.Getenv("HOME"), ".syntropy", "keys"),
+        logger:       logger,
+    }
+}
 
-# Diagnóstico específico por componente
-syntropy diagnose --environment
-syntropy diagnose --dependencies
-syntropy diagnose --configuration
-syntropy diagnose --security
+func (sks *SecureKeyStorage) StoreKeyPair(keyPair *KeyPair, passphrase string) error {
+    sks.logger.LogStep("key_storage_start", map[string]interface{}{
+        "key_id": keyPair.ID,
+    })
+    
+    // Criptografar chave privada
+    encryptedPrivateKey, err := sks.encryptPrivateKey(keyPair.PrivateKey, passphrase)
+    if err != nil {
+        return fmt.Errorf("failed to encrypt private key: %w", err)
+    }
+    
+    // Salvar chave privada criptografada
+    privateKeyPath := filepath.Join(sks.keystorePath, fmt.Sprintf("%s.key", keyPair.ID))
+    if err := os.WriteFile(privateKeyPath, encryptedPrivateKey, 0600); err != nil {
+        return fmt.Errorf("failed to write private key: %w", err)
+    }
+    
+    // Salvar chave pública
+    publicKeyPath := filepath.Join(sks.keystorePath, fmt.Sprintf("%s.key.pub", keyPair.ID))
+    if err := os.WriteFile(publicKeyPath, keyPair.PublicKey, 0644); err != nil {
+        return fmt.Errorf("failed to write public key: %w", err)
+    }
+    
+    // Salvar metadados
+    metadataPath := filepath.Join(sks.keystorePath, fmt.Sprintf("%s.meta", keyPair.ID))
+    metadata, err := json.Marshal(keyPair.Metadata)
+    if err != nil {
+        return fmt.Errorf("failed to marshal metadata: %w", err)
+    }
+    
+    if err := os.WriteFile(metadataPath, metadata, 0644); err != nil {
+        return fmt.Errorf("failed to write metadata: %w", err)
+    }
+    
+    sks.logger.LogStep("key_storage_completed", map[string]interface{}{
+        "key_id": keyPair.ID,
+        "private_key_path": privateKeyPath,
+        "public_key_path": publicKeyPath,
+    })
+    
+    return nil
+}
 ```
 
-#### Verificação de Integridade
-```bash
-# Verificar integridade de arquivos
-syntropy setup verify --integrity
+## Sistema de Backup e Recuperação
 
-# Verificar checksums
-syntropy setup verify --checksums
+### Backup Automático
+```go
+// internal/services/state/backup.go
+type BackupManager struct {
+    backupPath string
+    logger     SetupLogger
+}
 
-# Verificar assinaturas digitais
-syntropy setup verify --signatures
+func NewBackupManager(logger SetupLogger) *BackupManager {
+    return &BackupManager{
+        backupPath: filepath.Join(os.Getenv("HOME"), ".syntropy", "backups"),
+        logger:     logger,
+    }
+}
+
+func (bm *BackupManager) CreateBackup(name string) error {
+    bm.logger.LogStep("backup_start", map[string]interface{}{
+        "backup_name": name,
+    })
+    
+    timestamp := time.Now().Format("20060102_150405")
+    backupName := fmt.Sprintf("%s_%s.tar.gz", name, timestamp)
+    backupPath := filepath.Join(bm.backupPath, backupName)
+    
+    // Criar arquivo de backup
+    file, err := os.Create(backupPath)
+    if err != nil {
+        return fmt.Errorf("failed to create backup file: %w", err)
+    }
+    defer file.Close()
+    
+    // Criar compressor
+    gzWriter := gzip.NewWriter(file)
+    defer gzWriter.Close()
+    
+    tarWriter := tar.NewWriter(gzWriter)
+    defer tarWriter.Close()
+    
+    // Adicionar arquivos ao backup
+    baseDir := filepath.Join(os.Getenv("HOME"), ".syntropy")
+    if err := bm.addDirectoryToTar(tarWriter, baseDir, ""); err != nil {
+        return fmt.Errorf("failed to add directory to tar: %w", err)
+    }
+    
+    bm.logger.LogStep("backup_completed", map[string]interface{}{
+        "backup_path": backupPath,
+        "backup_name": backupName,
+    })
+    
+    return nil
+}
 ```
 
-#### Análise de Logs
-```bash
-# Analisar logs de setup
-syntropy logs analyze --component setup
+## Testes e Validação
 
-# Verificar erros recentes
-syntropy logs show --errors --last 24h
-
-# Exportar logs para análise
-syntropy logs export --format json --output setup-logs.json
+### Estrutura de Testes
+```go
+// tests/unit/setup_test.go
+func TestSetupManager_Setup(t *testing.T) {
+    // Setup do teste
+    logger := NewTestLogger()
+    manager := NewSetupManager(logger)
+    
+    // Teste de setup completo
+    options := &SetupOptions{
+        Force: false,
+        Verbose: true,
+        CustomSettings: map[string]string{
+            "owner_name": "Test User",
+            "owner_email": "test@example.com",
+        },
+    }
+    
+    err := manager.Setup(options)
+    assert.NoError(t, err)
+    
+    // Verificar se o estado foi salvo
+    state, err := manager.stateManager.LoadState()
+    assert.NoError(t, err)
+    assert.Equal(t, SetupStatusCompleted, state.Status)
+    
+    // Verificar se as chaves foram geradas
+    assert.NotEmpty(t, state.Keys.OwnerKeyID)
+    
+    // Verificar se a configuração foi criada
+    configPath := filepath.Join(os.Getenv("HOME"), ".syntropy", "config", "manager.yaml")
+    assert.FileExists(t, configPath)
+}
 ```
 
-### Soluções Automáticas
+## Configurações e Templates
 
-#### Reparo Automático
-```bash
-# Reparar problemas comuns automaticamente
-syntropy setup repair --auto
-
-# Reparar componente específico
-syntropy setup repair --environment
-syntropy setup repair --dependencies
-syntropy setup repair --configuration
+### Template de Configuração Principal
+```yaml
+# config/templates/manager.yaml
+version: "1.0.0"
+owner:
+  name: "{{.OwnerName}}"
+  email: "{{.OwnerEmail}}"
+  key_id: "{{.OwnerKeyID}}"
+network:
+  discovery:
+    enabled: true
+    port: 8080
+  api:
+    enabled: true
+    port: 9090
+    tls:
+      enabled: true
+      cert_path: "{{.CertPath}}"
+      key_path: "{{.KeyPath}}"
+security:
+  encryption:
+    algorithm: "ed25519"
+    key_rotation:
+      enabled: true
+      interval: "30d"
+  backup:
+    enabled: true
+    interval: "24h"
+    retention: "30d"
+logging:
+  level: "info"
+  format: "json"
+  output: "file"
+  file_path: "{{.LogPath}}"
+  rotation:
+    enabled: true
+    max_size: "100MB"
+    max_age: "7d"
+    max_backups: 10
 ```
 
-#### Reset Completo
-```bash
-# Reset completo do setup (CUIDADO: Remove todas as configurações)
-syntropy setup reset --confirm
-
-# Reset de componente específico
-syntropy setup reset --environment --confirm
-syntropy setup reset --configuration --confirm
+### Schema de Validação
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["version", "owner", "network", "security"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "owner": {
+      "type": "object",
+      "required": ["name", "email", "key_id"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "email": {"type": "string", "format": "email"},
+        "key_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "network": {
+      "type": "object",
+      "required": ["discovery", "api"],
+      "properties": {
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+          }
+        },
+        "api": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+            "tls": {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "cert_path": {"type": "string"},
+                "key_path": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
 ```
 
-### Códigos de Erro e Soluções
+## Considerações de Implementação
 
-#### Códigos de Erro Comuns
+### 1. Tratamento de Erros Robusto
+- Todos os erros devem ser estruturados com código, contexto e sugestões
+- Implementar retry automático para operações de rede
+- Logging detalhado de todos os erros para debugging
 
-**E001 - Sistema Operacional Não Suportado**
-- **Causa**: SO não está na lista de suportados
-- **Solução**: Verificar lista de SOs suportados ou usar modo compatibilidade
+### 2. Operações Atômicas
+- Todas as operações de estado devem ser atômicas
+- Usar locks de arquivo para evitar corrupção
+- Implementar rollback automático em caso de falha
 
-**E002 - Permissões Insuficientes**
-- **Causa**: Usuário não tem permissões para criar arquivos/diretórios
-- **Solução**: Executar como administrador ou corrigir permissões
+### 3. Segurança
+- Usar fontes de entropia criptograficamente seguras
+- Implementar derivação de chaves PBKDF2
+- Armazenar chaves privadas criptografadas
+- Implementar rotação automática de chaves
 
-**E003 - Dependência Faltando**
-- **Causa**: Ferramenta obrigatória não está instalada
-- **Solução**: Instalar dependência automaticamente ou manualmente
+### 4. Performance
+- Operações de I/O assíncronas onde possível
+- Cache de validações para evitar verificações repetidas
+- Compressão de backups para economizar espaço
 
-**E004 - Espaço em Disco Insuficiente**
-- **Causa**: Menos de 1GB de espaço livre
-- **Solução**: Liberar espaço ou especificar diretório alternativo
+### 5. Observabilidade
+- Logging estruturado com níveis apropriados
+- Métricas de performance e uso
+- Rastreamento de operações com correlation IDs
 
-**E005 - Falha na Geração de Chaves**
-- **Causa**: Problema com gerador de números aleatórios
-- **Solução**: Verificar /dev/urandom ou usar fonte alternativa
+### 6. Testabilidade
+- Interfaces bem definidas para mocking
+- Testes unitários com cobertura > 80%
+- Testes de integração para fluxos completos
+- Testes de regressão para diferentes SOs
 
-**E006 - Conectividade de Rede Falhando**
-- **Causa**: Problema de rede, proxy ou firewall
-- **Solução**: Verificar conectividade e configurações de rede
+## Conclusão
 
-### Modo de Recuperação
+Este guia fornece uma arquitetura simplificada e bem estruturada para o componente setup, focando em:
 
-#### Ativação do Modo de Recuperação
-```bash
-# Ativar modo de recuperação
-syntropy setup --recovery-mode
+1. **Simplicidade**: Arquitetura direta sem over-engineering
+2. **Robustez**: Tratamento de erros e operações atômicas
+3. **Segurança**: Sistema de chaves criptográficas robusto
+4. **Manutenibilidade**: Código limpo e bem testado
+5. **Observabilidade**: Logging estruturado e métricas
 
-# Recuperação com backup específico
-syntropy setup --recovery-mode --backup backup_20240115_143022.tar.gz
-```
-
-#### Comandos de Recuperação
-```bash
-# Restaurar configuração de backup
-syntropy recovery restore-config
-
-# Restaurar chaves de backup
-syntropy recovery restore-keys
-
-# Verificar integridade após recuperação
-syntropy recovery verify
-```
-
-### Suporte e Contato
-
-#### Coleta de Informações para Suporte
-```bash
-# Gerar relatório de diagnóstico para suporte
-syntropy support generate-report
-
-# Coletar logs e configurações
-syntropy support collect-info
-
-# Verificar informações do sistema
-syntropy support system-info
-```
-
-#### Canais de Suporte
-- **Documentação**: `syntropy docs`
-- **FAQ**: `syntropy faq`
-- **Comunidade**: `syntropy community`
-- **Suporte Técnico**: `syntropy support contact`
-
----
-
-**Objetivo**: Setup Component como base sólida para criação e gestão de nós no computador de trabalho, funcionando como quartel geral da rede Syntropy, desenvolvido através de subcomponentes modulares e entregáveis, com foco no Windows como sistema operacional principal, seguindo padrões de desenvolvimento baseados em componentes e integração com a API central.
+A implementação deve seguir os padrões Go estabelecidos e garantir que o componente seja confiável, seguro e fácil de manter.
