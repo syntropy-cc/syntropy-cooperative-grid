@@ -1,4 +1,4 @@
-package setup_test
+package unit_test
 
 import (
 	"errors"
@@ -62,9 +62,9 @@ func GetSyntropyDir() string {
 // TestSetup tests the Setup function
 func TestSetup(t *testing.T) {
 	tests := []struct {
-		name     string
-		options  types.SetupOptions
-		mockFunc func(options types.SetupOptions) types.SetupResult
+		name        string
+		options     types.SetupOptions
+		mockFunc    func(options types.SetupOptions) types.SetupResult
 		wantSuccess bool
 		wantError   bool
 	}{
@@ -249,10 +249,10 @@ func TestReset(t *testing.T) {
 // TestGetSyntropyDir tests the GetSyntropyDir function
 func TestGetSyntropyDir(t *testing.T) {
 	dir := GetSyntropyDir()
-	
+
 	assert.NotEmpty(t, dir)
 	assert.Contains(t, dir, ".syntropy")
-	
+
 	// Verify it's an absolute path
 	assert.True(t, filepath.IsAbs(dir))
 }
@@ -260,7 +260,7 @@ func TestGetSyntropyDir(t *testing.T) {
 // TestErrNotImplemented tests the ErrNotImplemented error
 func TestErrNotImplemented(t *testing.T) {
 	err := types.ErrNotImplemented
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not implemented")
 }
@@ -322,7 +322,7 @@ func TestHelperFunctions(t *testing.T) {
 		dir := createTempDir(t)
 		content := "test content"
 		file := createTempFile(t, dir, "test.txt", content)
-		
+
 		assert.FileExists(t, file)
 		data, err := os.ReadFile(file)
 		require.NoError(t, err)

@@ -17,6 +17,22 @@ import (
 func setupLinuxImpl(options types.SetupOptions) (*types.SetupResult, error) {
 	fmt.Println("Iniciando setup para Linux...")
 
+	// Initialize security validator
+	securityValidator := NewSecurityValidator()
+
+	// Validate paths for security
+	if err := securityValidator.ValidatePath(options.ConfigPath, ""); err != nil {
+		return nil, fmt.Errorf("invalid config path: %v", err)
+	}
+	if err := securityValidator.ValidatePath(options.HomeDir, ""); err != nil {
+		return nil, fmt.Errorf("invalid home directory: %v", err)
+	}
+
+	// Check for privilege escalation prevention
+	if options.InstallService && !securityValidator.CheckAdminRights() {
+		return nil, fmt.Errorf("service installation requires administrative privileges")
+	}
+
 	// Create result structure
 	result := &types.SetupResult{
 		Success:     false,

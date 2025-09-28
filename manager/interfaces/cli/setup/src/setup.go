@@ -27,6 +27,22 @@ type SetupResult = types.SetupResult
 func Setup(options types.SetupOptions) (*types.SetupResult, error) {
 	fmt.Println("Starting Syntropy CLI setup...")
 
+	// Initialize security validator
+	securityValidator := NewSecurityValidator()
+
+	// Validate environment for security
+	if err := securityValidator.ValidateEnvironment(); err != nil {
+		fmt.Printf("Security warning: %v\n", err)
+	}
+
+	// Validate paths for security
+	if err := securityValidator.ValidatePath(options.ConfigPath, ""); err != nil {
+		return nil, fmt.Errorf("invalid config path: %v", err)
+	}
+	if err := securityValidator.ValidatePath(options.HomeDir, ""); err != nil {
+		return nil, fmt.Errorf("invalid home directory: %v", err)
+	}
+
 	// Create API integration
 	apiIntegration := NewAPIIntegration()
 

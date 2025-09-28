@@ -20,6 +20,9 @@ import (
 func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options types.SetupOptions) error {
 	fmt.Println("Configurando ambiente Linux...")
 
+	// Initialize security validator
+	securityValidator := NewSecurityValidator()
+
 	// Pré-declarações para evitar shadowing de err e chaves
 	var (
 		err     error
@@ -95,6 +98,10 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 	configPath := filepath.Join(syntropyDir, "config", "manager.yaml")
 	if options.ConfigPath != "" {
 		configPath = options.ConfigPath
+		// Validate config path for security
+		if err := securityValidator.ValidatePath(configPath, syntropyDir); err != nil {
+			return fmt.Errorf("invalid config path: %v", err)
+		}
 		// Ensure directory exists
 		configDir := filepath.Dir(configPath)
 		err = os.MkdirAll(configDir, 0o755)
@@ -108,9 +115,19 @@ func ConfigureLinuxEnvironment(validationResult *types.ValidationResult, options
 		return fmt.Errorf("falha ao serializar configuração: %w", err)
 	}
 
+	// Validate configuration content for security
+	if err := securityValidator.ValidateConfiguration(string(configData)); err != nil {
+		return fmt.Errorf("invalid configuration content: %v", err)
+	}
+
 	err = os.WriteFile(configPath, configData, 0o644)
 	if err != nil {
 		return fmt.Errorf("falha ao salvar configuração: %w", err)
+	}
+
+	// Set secure file permissions
+	if err := securityValidator.SetSecureFilePermissions(configPath); err != nil {
+		fmt.Printf("Warning: Could not set secure permissions for config file: %v\n", err)
 	}
 
 	fmt.Printf("Configuração salva em: %s\n", configPath)
