@@ -1,0 +1,61 @@
+{
+  "missing_id": {
+    "algorithm": "ed25519",
+    "private_key": "test_private_key",
+    "public_key": "test_public_key",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "test_fingerprint",
+    "metadata": {}
+  },
+  "invalid_algorithm": {
+    "id": "test_key_invalid",
+    "algorithm": "invalid_algorithm",
+    "private_key": "test_private_key",
+    "public_key": "test_public_key",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "test_fingerprint",
+    "metadata": {}
+  },
+  "empty_keys": {
+    "id": "test_key_empty",
+    "algorithm": "ed25519",
+    "private_key": "",
+    "public_key": "",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "",
+    "metadata": {}
+  },
+  "invalid_timestamps": {
+    "id": "test_key_timestamps",
+    "algorithm": "ed25519",
+    "private_key": "test_private_key",
+    "public_key": "test_public_key",
+    "created_at": "invalid_timestamp",
+    "expires_at": "also_invalid",
+    "fingerprint": "test_fingerprint",
+    "metadata": {}
+  },
+  "expired_key": {
+    "id": "test_key_expired",
+    "algorithm": "ed25519",
+    "private_key": "test_private_key",
+    "public_key": "test_public_key",
+    "created_at": "2023-01-01T00:00:00Z",
+    "expires_at": "2023-12-31T23:59:59Z",
+    "fingerprint": "test_fingerprint",
+    "metadata": {}
+  },
+  "malformed_metadata": {
+    "id": "test_key_metadata",
+    "algorithm": "ed25519",
+    "private_key": "test_private_key",
+    "public_key": "test_public_key",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "test_fingerprint",
+    "metadata": "not_an_object"
+  }
+}

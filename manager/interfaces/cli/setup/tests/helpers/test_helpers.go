@@ -1,369 +1,463 @@
-// Package helpers provides common test utilities and helper functions
 package helpers
 
 import (
-	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
 )
 
-// TestEnvironment provides a controlled test environment
-type TestEnvironment struct {
-	TempDir    string
-	ConfigPath string
-	HomeDir    string
-	Cleanup    func()
-}
-
-// SetupTestEnvironment creates a temporary test environment
-func SetupTestEnvironment(t *testing.T) *TestEnvironment {
+// LoadFixture carrega um fixture JSON do diretório de fixtures
+func LoadFixture(t *testing.T, category, filename string, target interface{}) {
 	t.Helper()
-	
-	// Create temporary directory
-	tempDir, err := os.MkdirTemp("", "syntropy-test-*")
+
+	fixturePath := filepath.Join("fixtures", category, filename)
+	data, err := os.ReadFile(fixturePath)
 	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
+		t.Fatalf("Failed to read fixture %s: %v", fixturePath, err)
 	}
-	
-	// Create subdirectories
-	homeDir := filepath.Join(tempDir, "home")
-	configDir := filepath.Join(homeDir, ".syntropy")
-	configPath := filepath.Join(configDir, "config.yaml")
-	
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+
+	if err := json.Unmarshal(data, target); err != nil {
+		t.Fatalf("Failed to unmarshal fixture %s: %v", fixturePath, err)
+	}
+}
+
+// CreateTempDir cria um diretório temporário para testes
+func CreateTempDir(t *testing.T, prefix string) string {
+	t.Helper()
+
+	tempDir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	t.Cleanup(func() {
 		os.RemoveAll(tempDir)
-		t.Fatalf("Failed to create config directory: %v", err)
-	}
-	
-	// Cleanup function
-	cleanup := func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Warning: Failed to cleanup temp directory %s: %v", tempDir, err)
-		}
-	}
-	
-	return &TestEnvironment{
-		TempDir:    tempDir,
-		ConfigPath: configPath,
-		HomeDir:    homeDir,
-		Cleanup:    cleanup,
-	}
+	})
+
+	return tempDir
 }
 
-// CreateTestConfig creates a test configuration file
-func CreateTestConfig(t *testing.T, path string, config types.SetupConfig) {
+// CreateTempFile cria um arquivo temporário para testes
+func CreateTempFile(t *testing.T, dir, filename, content string) string {
 	t.Helper()
-	
-	content := `manager:
-  home_dir: ` + config.Manager.HomeDir + `
-  log_level: ` + config.Manager.LogLevel + `
-  api_endpoint: ` + config.Manager.APIEndpoint + `
-environment:
-  os: ` + config.Environment.OS + `
-  architecture: ` + config.Environment.Architecture + `
-  home_dir: ` + config.Environment.HomeDir + `
-`
-	
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create test config: %v", err)
+
+	filePath := filepath.Join(dir, filename)
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create temp file %s: %v", filePath, err)
 	}
+
+	return filePath
 }
 
-// CreateInvalidConfig creates an invalid configuration file for testing
-func CreateInvalidConfig(t *testing.T, path string) {
+// AssertFileExists verifica se um arquivo existe
+func AssertFileExists(t *testing.T, filePath string) {
 	t.Helper()
-	
-	content := `invalid_yaml:
-  - this is not valid
-  - yaml: [unclosed bracket
-`
-	
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create invalid config: %v", err)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		t.Errorf("Expected file to exist: %s", filePath)
 	}
 }
 
-// GetTestSetupOptions returns test setup options
-func GetTestSetupOptions() types.SetupOptions {
-	return types.SetupOptions{
-		Force:          false,
-		InstallService: false,
-		ConfigPath:     "",
-		HomeDir:        "",
+// AssertFileNotExists verifica se um arquivo não existe
+func AssertFileNotExists(t *testing.T, filePath string) {
+	t.Helper()
+
+	if _, err := os.Stat(filePath); err == nil {
+		t.Errorf("Expected file to not exist: %s", filePath)
 	}
 }
 
-// GetTestSetupConfig returns a test setup configuration
-func GetTestSetupConfig(homeDir string) types.SetupConfig {
-	return types.SetupConfig{
-		Manager: types.ManagerConfig{
-			HomeDir:     homeDir,
-			LogLevel:    "info",
-			APIEndpoint: "https://api.syntropy.com",
+// AssertDirExists verifica se um diretório existe
+func AssertDirExists(t *testing.T, dirPath string) {
+	t.Helper()
+
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		t.Errorf("Expected directory to exist: %s", dirPath)
+		return
+	}
+
+	if !info.IsDir() {
+		t.Errorf("Expected %s to be a directory", dirPath)
+	}
+}
+
+// AssertErrorContains verifica se um erro contém uma string específica
+func AssertErrorContains(t *testing.T, err error, expected string) {
+	t.Helper()
+
+	if err == nil {
+		t.Errorf("Expected error to contain '%s', but got nil", expected)
+		return
+	}
+
+	if !contains(err.Error(), expected) {
+		t.Errorf("Expected error to contain '%s', but got: %s", expected, err.Error())
+	}
+}
+
+// AssertSetupError verifica se um erro é do tipo SetupError com código específico
+func AssertSetupError(t *testing.T, err error, expectedCode string) {
+	t.Helper()
+
+	if err == nil {
+		t.Errorf("Expected SetupError with code '%s', but got nil", expectedCode)
+		return
+	}
+
+	setupErr, ok := err.(*types.SetupError)
+	if !ok {
+		t.Errorf("Expected SetupError, but got: %T", err)
+		return
+	}
+
+	if setupErr.Code != expectedCode {
+		t.Errorf("Expected error code '%s', but got: %s", expectedCode, setupErr.Code)
+	}
+}
+
+// CreateValidSetupOptions cria opções de setup válidas para testes
+func CreateValidSetupOptions() *types.SetupOptions {
+	return &types.SetupOptions{
+		Force:        false,
+		ValidateOnly: false,
+		Verbose:      true,
+		Quiet:        false,
+		ConfigPath:   "",
+		CustomSettings: map[string]string{
+			"owner_name":  "Test User",
+			"owner_email": "test@example.com",
 		},
-		Environment: types.Environment{
-			OS:           runtime.GOOS,
-			Architecture: runtime.GOARCH,
-			HomeDir:      homeDir,
+	}
+}
+
+// CreateValidConfigOptions cria opções de configuração válidas para testes
+func CreateValidConfigOptions() *types.ConfigOptions {
+	return &types.ConfigOptions{
+		OwnerName:      "Test User",
+		OwnerEmail:     "test@example.com",
+		NetworkConfig:  nil,
+		SecurityConfig: nil,
+		CustomSettings: map[string]string{},
+	}
+}
+
+// CreateValidKeyPair cria um par de chaves válido para testes
+func CreateValidKeyPair() *types.KeyPair {
+	return &types.KeyPair{
+		ID:          "test_key_12345",
+		Algorithm:   "ed25519",
+		PrivateKey:  []byte("test_private_key"),
+		PublicKey:   []byte("test_public_key"),
+		CreatedAt:   time.Now(),
+		ExpiresAt:   time.Now().AddDate(1, 0, 0),
+		Fingerprint: "test_fingerprint",
+		Metadata: map[string]string{
+			"generated_by": "test",
+			"version":      "1.0.0",
 		},
 	}
 }
 
-// GetTestEnvironmentInfo returns test environment information
-func GetTestEnvironmentInfo() types.EnvironmentInfo {
-	return types.EnvironmentInfo{
-		OS:              runtime.GOOS,
-		Architecture:    runtime.GOARCH,
+// CreateValidSetupState cria um estado de setup válido para testes
+func CreateValidSetupState() *types.SetupState {
+	return &types.SetupState{
+		Version:   "1.0.0",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Status:    types.SetupStatusCompleted,
+		Environment: &types.EnvironmentInfo{
+			OS:              "linux",
+			OSVersion:       "20.04",
+			Architecture:    "amd64",
+			HasAdminRights:  false,
+			AvailableDiskGB: 100.0,
+			HasInternet:     true,
+			HomeDir:         "/home/testuser",
+			CanProceed:      true,
+			Issues:          []string{},
+		},
+		Configuration: &types.ConfigInfo{
+			Path:      "/home/testuser/.syntropy/config/manager.yaml",
+			Valid:     true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+		Keys: &types.KeyInfo{
+			OwnerKeyID: "test_key_12345",
+			Algorithm:  "ed25519",
+			CreatedAt:  time.Now(),
+			ExpiresAt:  time.Now().AddDate(1, 0, 0),
+		},
+		LastBackup: nil,
+		Metadata:   make(map[string]string),
+	}
+}
+
+// CreateValidEnvironmentInfo cria informações de ambiente válidas para testes
+func CreateValidEnvironmentInfo() *types.EnvironmentInfo {
+	return &types.EnvironmentInfo{
+		OS:              "linux",
+		OSVersion:       "20.04",
+		Architecture:    "amd64",
 		HasAdminRights:  false,
 		AvailableDiskGB: 100.0,
 		HasInternet:     true,
-		HomeDir:         "/tmp/test",
-		SystemResources: types.SystemResources{
-			TotalMemoryGB: 16.0,
-			CPUCores:      8,
+		HomeDir:         "/home/testuser",
+		CanProceed:      true,
+		Issues:          []string{},
+	}
+}
+
+// CreateValidValidationResult cria um resultado de validação válido para testes
+func CreateValidValidationResult() *types.ValidationResult {
+	return &types.ValidationResult{
+		Environment: CreateValidEnvironmentInfo(),
+		Dependencies: &types.DependencyStatus{
+			Required:  []types.Dependency{},
+			Installed: []types.Dependency{},
+			Missing:   []types.Dependency{},
+			Outdated:  []types.Dependency{},
+		},
+		Network: &types.NetworkInfo{
+			HasInternet:     true,
+			Connectivity:    true,
+			ProxyConfigured: false,
+			FirewallActive:  false,
+			PortsOpen:       []int{8080, 9090},
+		},
+		Permissions: &types.PermissionStatus{
+			FileSystem: true,
+			Network:    true,
+			Service:    false,
+			Admin:      false,
+			Issues:     []string{},
+		},
+		CanProceed: true,
+		Issues:     []types.ValidationIssue{},
+		Warnings:   []string{},
+	}
+}
+
+// CreateInvalidSetupOptions cria opções de setup inválidas para testes
+func CreateInvalidSetupOptions() *types.SetupOptions {
+	return &types.SetupOptions{
+		Force:        true,
+		ValidateOnly: true, // Conflito: não pode ser force e validate_only
+		Verbose:      true,
+		Quiet:        true, // Conflito: não pode ser verbose e quiet
+		ConfigPath:   "/nonexistent/path",
+		CustomSettings: map[string]string{
+			"invalid_key": "invalid_value",
 		},
 	}
 }
 
-// AssertSetupResult validates a setup result
-func AssertSetupResult(t *testing.T, result types.SetupResult, expectSuccess bool) {
-	t.Helper()
-	
-	if result.Success != expectSuccess {
-		t.Errorf("Expected success=%v, got %v", expectSuccess, result.Success)
-	}
-	
-	if result.StartTime.IsZero() {
-		t.Error("StartTime should not be zero")
-	}
-	
-	if result.EndTime.IsZero() {
-		t.Error("EndTime should not be zero")
-	}
-	
-	if result.EndTime.Before(result.StartTime) {
-		t.Error("EndTime should be after StartTime")
-	}
-	
-	if expectSuccess && result.Error != nil {
-		t.Errorf("Expected no error for successful setup, got: %v", result.Error)
-	}
-	
-	if !expectSuccess && result.Error == nil {
-		t.Error("Expected error for failed setup, got nil")
+// CreateInvalidConfigOptions cria opções de configuração inválidas para testes
+func CreateInvalidConfigOptions() *types.ConfigOptions {
+	return &types.ConfigOptions{
+		OwnerName:      "",              // Nome vazio
+		OwnerEmail:     "invalid-email", // Email inválido
+		NetworkConfig:  nil,
+		SecurityConfig: nil,
+		CustomSettings: map[string]string{
+			"invalid_setting": "invalid_value",
+		},
 	}
 }
 
-// AssertValidationResult validates a validation result
-func AssertValidationResult(t *testing.T, result types.ValidationResult, expectValid bool) {
-	t.Helper()
-	
-	if result.Valid != expectValid {
-		t.Errorf("Expected valid=%v, got %v", expectValid, result.Valid)
-	}
-	
-	if !expectValid && len(result.Errors) == 0 {
-		t.Error("Expected errors for invalid validation result")
-	}
-	
-	if expectValid && len(result.Errors) > 0 {
-		t.Errorf("Expected no errors for valid validation result, got: %v", result.Errors)
+// CreateInvalidKeyPair cria um par de chaves inválido para testes
+func CreateInvalidKeyPair() *types.KeyPair {
+	return &types.KeyPair{
+		ID:          "",                  // ID vazio
+		Algorithm:   "invalid_algorithm", // Algoritmo inválido
+		PrivateKey:  []byte{},            // Chave privada vazia
+		PublicKey:   []byte{},            // Chave pública vazia
+		CreatedAt:   time.Time{},         // Timestamp zero
+		ExpiresAt:   time.Time{},         // Timestamp zero
+		Fingerprint: "",                  // Fingerprint vazio
+		Metadata:    nil,                 // Metadata nil
 	}
 }
 
-// WithTimeout creates a context with timeout for testing
-func WithTimeout(t *testing.T, timeout time.Duration) (context.Context, context.CancelFunc) {
-	t.Helper()
-	return context.WithTimeout(context.Background(), timeout)
-}
-
-// WithCancel creates a cancellable context for testing
-func WithCancel(t *testing.T) (context.Context, context.CancelFunc) {
-	t.Helper()
-	return context.WithCancel(context.Background())
-}
-
-// SkipIfNotLinux skips the test if not running on Linux
-func SkipIfNotLinux(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("Skipping test: only supported on Linux")
+// CreateInvalidSetupState cria um estado de setup inválido para testes
+func CreateInvalidSetupState() *types.SetupState {
+	return &types.SetupState{
+		Version:       "",          // Versão vazia
+		CreatedAt:     time.Time{}, // Timestamp zero
+		UpdatedAt:     time.Time{}, // Timestamp zero
+		Status:        "",          // Status vazio
+		Environment:   nil,         // Environment nil
+		Configuration: nil,         // Configuration nil
+		Keys:          nil,         // Keys nil
+		LastBackup:    nil,
+		Metadata:      nil, // Metadata nil
 	}
 }
 
-// SkipIfNotWindows skips the test if not running on Windows
-func SkipIfNotWindows(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS != "windows" {
-		t.Skip("Skipping test: only supported on Windows")
+// CreateInvalidEnvironmentInfo cria informações de ambiente inválidas para testes
+func CreateInvalidEnvironmentInfo() *types.EnvironmentInfo {
+	return &types.EnvironmentInfo{
+		OS:              "", // OS vazio
+		OSVersion:       "", // Versão vazia
+		Architecture:    "", // Arquitetura vazia
+		HasAdminRights:  false,
+		AvailableDiskGB: -1.0, // Espaço negativo
+		HasInternet:     false,
+		HomeDir:         "", // Home dir vazio
+		CanProceed:      false,
+		Issues:          []string{"Invalid environment"},
 	}
 }
 
-// SkipIfNotDarwin skips the test if not running on macOS
-func SkipIfNotDarwin(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS != "darwin" {
-		t.Skip("Skipping test: only supported on macOS")
+// CreateInvalidValidationResult cria um resultado de validação inválido para testes
+func CreateInvalidValidationResult() *types.ValidationResult {
+	return &types.ValidationResult{
+		Environment:  CreateInvalidEnvironmentInfo(),
+		Dependencies: nil, // Dependencies nil
+		Network:      nil, // Network nil
+		Permissions:  nil, // Permissions nil
+		CanProceed:   false,
+		Issues: []types.ValidationIssue{
+			{
+				Type:        "environment",
+				Severity:    "error",
+				Message:     "Invalid environment",
+				Suggestions: []string{"Fix environment issues"},
+			},
+		},
+		Warnings: []string{"Multiple validation issues found"},
 	}
 }
 
-// RequireAdmin skips the test if not running with admin privileges
-func RequireAdmin(t *testing.T) {
-	t.Helper()
-	if !IsAdmin() {
-		t.Skip("Skipping test: requires admin privileges")
-	}
+// Função auxiliar para verificar se uma string contém outra
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > len(substr) && (s[:len(substr)] == substr ||
+			s[len(s)-len(substr):] == substr ||
+			containsSubstring(s, substr))))
 }
 
-// IsAdmin checks if running with admin privileges
-func IsAdmin() bool {
-	switch runtime.GOOS {
-	case "windows":
-		// On Windows, check if we can write to system directory
-		testFile := filepath.Join(os.Getenv("WINDIR"), "temp", "admin_test")
-		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-			return false
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
 		}
-		os.Remove(testFile)
-		return true
-	case "linux", "darwin":
-		// On Unix-like systems, check if UID is 0
-		return os.Getuid() == 0
+	}
+	return false
+}
+
+// AssertTimeWithinRange verifica se um tempo está dentro de um intervalo
+func AssertTimeWithinRange(t *testing.T, actual time.Time, expected time.Time, tolerance time.Duration) {
+	t.Helper()
+
+	diff := actual.Sub(expected)
+	if diff < -tolerance || diff > tolerance {
+		t.Errorf("Expected time to be within %v of %v, but got %v (diff: %v)",
+			tolerance, expected, actual, diff)
+	}
+}
+
+// AssertStringNotEmpty verifica se uma string não está vazia
+func AssertStringNotEmpty(t *testing.T, str, name string) {
+	t.Helper()
+
+	if str == "" {
+		t.Errorf("Expected %s to not be empty", name)
+	}
+}
+
+// AssertStringEmpty verifica se uma string está vazia
+func AssertStringEmpty(t *testing.T, str, name string) {
+	t.Helper()
+
+	if str != "" {
+		t.Errorf("Expected %s to be empty, but got: %s", name, str)
+	}
+}
+
+// AssertIntGreaterThan verifica se um inteiro é maior que um valor
+func AssertIntGreaterThan(t *testing.T, actual, expected int, name string) {
+	t.Helper()
+
+	if actual <= expected {
+		t.Errorf("Expected %s to be greater than %d, but got: %d", name, expected, actual)
+	}
+}
+
+// AssertIntEqual verifica se dois inteiros são iguais
+func AssertIntEqual(t *testing.T, actual, expected int, name string) {
+	t.Helper()
+
+	if actual != expected {
+		t.Errorf("Expected %s to be %d, but got: %d", name, expected, actual)
+	}
+}
+
+// AssertBoolEqual verifica se dois booleanos são iguais
+func AssertBoolEqual(t *testing.T, actual, expected bool, name string) {
+	t.Helper()
+
+	if actual != expected {
+		t.Errorf("Expected %s to be %t, but got: %t", name, expected, actual)
+	}
+}
+
+// AssertFloat64Equal verifica se dois float64 são iguais (com tolerância)
+func AssertFloat64Equal(t *testing.T, actual, expected, tolerance float64, name string) {
+	t.Helper()
+
+	diff := actual - expected
+	if diff < -tolerance || diff > tolerance {
+		t.Errorf("Expected %s to be %f (tolerance: %f), but got: %f (diff: %f)",
+			name, expected, tolerance, actual, diff)
+	}
+}
+
+// AssertSliceLength verifica se um slice tem o comprimento esperado
+func AssertSliceLength(t *testing.T, actual interface{}, expected int, name string) {
+	t.Helper()
+
+	switch v := actual.(type) {
+	case []string:
+		if len(v) != expected {
+			t.Errorf("Expected %s to have length %d, but got: %d", name, expected, len(v))
+		}
+	case []types.Dependency:
+		if len(v) != expected {
+			t.Errorf("Expected %s to have length %d, but got: %d", name, expected, len(v))
+		}
+	case []types.ValidationIssue:
+		if len(v) != expected {
+			t.Errorf("Expected %s to have length %d, but got: %d", name, expected, len(v))
+		}
+	case []int:
+		if len(v) != expected {
+			t.Errorf("Expected %s to have length %d, but got: %d", name, expected, len(v))
+		}
 	default:
-		return false
+		t.Errorf("Unsupported type for slice length assertion: %T", actual)
 	}
 }
 
-// CreateLargeFile creates a large file for testing disk space scenarios
-func CreateLargeFile(t *testing.T, path string, sizeGB float64) {
+// AssertMapNotEmpty verifica se um map não está vazio
+func AssertMapNotEmpty(t *testing.T, actual map[string]string, name string) {
 	t.Helper()
-	
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("Failed to create large file: %v", err)
-	}
-	defer file.Close()
-	
-	// Write in chunks to avoid memory issues
-	chunkSize := 1024 * 1024 // 1MB chunks
-	totalBytes := int64(sizeGB * 1024 * 1024 * 1024)
-	chunk := make([]byte, chunkSize)
-	
-	for written := int64(0); written < totalBytes; written += int64(chunkSize) {
-		remaining := totalBytes - written
-		if remaining < int64(chunkSize) {
-			chunk = chunk[:remaining]
-		}
-		
-		if _, err := file.Write(chunk); err != nil {
-			t.Fatalf("Failed to write to large file: %v", err)
-		}
+
+	if len(actual) == 0 {
+		t.Errorf("Expected %s to not be empty", name)
 	}
 }
 
-// WaitForCondition waits for a condition to be true with timeout
-func WaitForCondition(t *testing.T, condition func() bool, timeout time.Duration, message string) {
+// AssertMapEmpty verifica se um map está vazio
+func AssertMapEmpty(t *testing.T, actual map[string]string, name string) {
 	t.Helper()
-	
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timeout waiting for condition: %s", message)
-		case <-ticker.C:
-			if condition() {
-				return
-			}
-		}
-	}
-}
 
-// AssertFileExists checks if a file exists
-func AssertFileExists(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Errorf("Expected file to exist: %s", path)
+	if len(actual) != 0 {
+		t.Errorf("Expected %s to be empty, but got: %v", name, actual)
 	}
-}
-
-// AssertFileNotExists checks if a file does not exist
-func AssertFileNotExists(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err == nil {
-		t.Errorf("Expected file to not exist: %s", path)
-	}
-}
-
-// AssertDirectoryExists checks if a directory exists
-func AssertDirectoryExists(t *testing.T, path string) {
-	t.Helper()
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		t.Errorf("Expected directory to exist: %s", path)
-		return
-	}
-	if !info.IsDir() {
-		t.Errorf("Expected %s to be a directory", path)
-	}
-}
-
-// AssertFileContains checks if a file contains specific content
-func AssertFileContains(t *testing.T, path, content string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("Failed to read file %s: %v", path, err)
-	}
-	
-	if !strings.Contains(string(data), content) {
-		t.Errorf("File %s does not contain expected content: %s", path, content)
-	}
-}
-
-// AssertFilePermissions checks file permissions
-func AssertFilePermissions(t *testing.T, path string, expectedPerm os.FileMode) {
-	t.Helper()
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Failed to stat file %s: %v", path, err)
-	}
-	
-	actualPerm := info.Mode().Perm()
-	if actualPerm != expectedPerm {
-		t.Errorf("File %s has permissions %o, expected %o", path, actualPerm, expectedPerm)
-	}
-}
-
-// GetAvailableDiskSpace returns available disk space in GB
-func GetAvailableDiskSpace(t *testing.T, path string) float64 {
-	t.Helper()
-	
-	// This is a simplified implementation
-	// In a real scenario, you'd use syscalls to get actual disk space
-	return 100.0 // Default to 100GB for testing
-}
-
-// SimulateNetworkDelay simulates network delay for testing
-func SimulateNetworkDelay(delay time.Duration) {
-	time.Sleep(delay)
-}
-
-// GenerateTestData generates test data of specified size
-func GenerateTestData(size int) []byte {
-	data := make([]byte, size)
-	for i := range data {
-		data[i] = byte(i % 256)
-	}
-	return data
 }

@@ -1,0 +1,41 @@
+{
+  "ed25519_valid": {
+    "id": "test_key_12345",
+    "algorithm": "ed25519",
+    "private_key": "base64_encoded_private_key_data",
+    "public_key": "base64_encoded_public_key_data",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "sha256_fingerprint_hash",
+    "metadata": {
+      "generated_by": "syntropy-setup",
+      "version": "1.0.0",
+      "created_at": "2024-01-01T00:00:00Z",
+      "expires_at": "2025-01-01T00:00:00Z"
+    }
+  },
+  "ed25519_minimal": {
+    "id": "minimal_key_67890",
+    "algorithm": "ed25519",
+    "private_key": "minimal_private_key",
+    "public_key": "minimal_public_key",
+    "created_at": "2024-01-01T00:00:00Z",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "fingerprint": "minimal_fingerprint",
+    "metadata": {}
+  },
+  "ed25519_expired": {
+    "id": "expired_key_11111",
+    "algorithm": "ed25519",
+    "private_key": "expired_private_key",
+    "public_key": "expired_public_key",
+    "created_at": "2023-01-01T00:00:00Z",
+    "expires_at": "2023-12-31T23:59:59Z",
+    "fingerprint": "expired_fingerprint",
+    "metadata": {
+      "generated_by": "syntropy-setup",
+      "version": "1.0.0",
+      "status": "expired"
+    }
+  }
+}

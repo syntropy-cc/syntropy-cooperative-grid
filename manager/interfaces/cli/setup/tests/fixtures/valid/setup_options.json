@@ -1,0 +1,53 @@
+{
+  "minimal": {
+    "force": false,
+    "validate_only": false,
+    "verbose": false,
+    "quiet": false,
+    "config_path": "",
+    "custom_settings": {}
+  },
+  "complete": {
+    "force": false,
+    "validate_only": false,
+    "verbose": true,
+    "quiet": false,
+    "config_path": "/custom/path/config.yaml",
+    "custom_settings": {
+      "owner_name": "Test User",
+      "owner_email": "test@example.com",
+      "network_config": "custom",
+      "security_level": "high"
+    }
+  },
+  "force_setup": {
+    "force": true,
+    "validate_only": false,
+    "verbose": true,
+    "quiet": false,
+    "config_path": "",
+    "custom_settings": {
+      "owner_name": "Force User",
+      "owner_email": "force@example.com"
+    }
+  },
+  "validate_only": {
+    "force": false,
+    "validate_only": true,
+    "verbose": true,
+    "quiet": false,
+    "config_path": "",
+    "custom_settings": {}
+  },
+  "quiet_mode": {
+    "force": false,
+    "validate_only": false,
+    "verbose": false,
+    "quiet": true,
+    "config_path": "",
+    "custom_settings": {
+      "owner_name": "Quiet User",
+      "owner_email": "quiet@example.com"
+    }
+  }
+}
