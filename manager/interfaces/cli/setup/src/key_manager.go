@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
+	"setup-component/src/internal/types"
 )
 
 // KeyManager implementa a interface KeyManager

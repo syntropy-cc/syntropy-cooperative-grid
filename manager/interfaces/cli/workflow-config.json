@@ -1,0 +1,236 @@
+{
+  "workflow": {
+    "name": "Syntropy CLI Manager - Windows Workflow",
+    "version": "1.0.0",
+    "description": "Workflow completo para desenvolvimento, build e execução da aplicação CLI no Windows",
+    "author": "Syntropy Team",
+    "created": "2024-01-01",
+    "updated": "2024-01-01"
+  },
+  "prerequisites": {
+    "go": {
+      "min_version": "1.22.5",
+      "required": true,
+      "download_url": "https://golang.org/dl/"
+    },
+    "git": {
+      "min_version": "2.0.0",
+      "required": true,
+      "download_url": "https://git-scm.com/download/win"
+    },
+    "powershell": {
+      "min_version": "5.1",
+      "required": true,
+      "description": "Incluído no Windows 10/11"
+    },
+    "chocolatey": {
+      "required": false,
+      "description": "Para instalação automática de dependências",
+      "install_url": "https://chocolatey.org/install"
+    },
+    "winget": {
+      "required": false,
+      "description": "Para instalação automática de dependências",
+      "description": "Incluído no Windows 10/11"
+    }
+  },
+  "scripts": {
+    "start_here": {
+      "file": "start-here.bat",
+      "description": "Script principal para iniciar o workflow",
+      "usage": "start-here.bat"
+    },
+    "quick_start": {
+      "file": "quick-start.bat",
+      "description": "Setup rápido e execução interativa",
+      "usage": "quick-start.bat"
+    },
+    "build_windows": {
+      "file": "build-windows.ps1",
+      "description": "Script principal de build e execução",
+      "usage": ".\\build-windows.ps1 [ação] [argumentos]",
+      "actions": ["build", "run", "test", "install", "uninstall", "clean", "help"]
+    },
+    "dev_workflow": {
+      "file": "dev-workflow.ps1",
+      "description": "Workflow completo de desenvolvimento",
+      "usage": ".\\dev-workflow.ps1 [ação] [argumentos]",
+      "actions": ["setup", "build", "test", "run", "dev", "install", "uninstall", "status", "clean", "help"]
+    },
+    "automation_workflow": {
+      "file": "automation-workflow.ps1",
+      "description": "Workflow de automação e CI/CD",
+      "usage": ".\\automation-workflow.ps1 [ação] [argumentos]",
+      "actions": ["full", "build", "test", "deploy", "ci", "release", "help"]
+    },
+    "run_cli": {
+      "file": "run-cli.bat",
+      "description": "Executor simples da aplicação",
+      "usage": "run-cli.bat [argumentos]"
+    },
+    "setup_environment": {
+      "file": "scripts/setup-environment.ps1",
+      "description": "Configuração automática do ambiente",
+      "usage": ".\\scripts\\setup-environment.ps1 [ação]",
+      "actions": ["check", "install", "configure", "verify", "help"]
+    },
+    "run_examples": {
+      "file": "scripts/run-examples.bat",
+      "description": "Execução de exemplos da CLI",
+      "usage": "scripts\\run-examples.bat"
+    }
+  },
+  "directories": {
+    "build": {
+      "path": "build/",
+      "description": "Binários compilados",
+      "files": ["syntropy.exe"]
+    },
+    "logs": {
+      "path": "logs/",
+      "description": "Logs de execução",
+      "files": ["automation-*.log", "test-results-*.txt", "quality-results-*.txt", "binary-tests-*.txt", "ci-report-*.html"]
+    },
+    "dist": {
+      "path": "dist/",
+      "description": "Artefatos de distribuição",
+      "files": ["syntropy.exe", "build-info.txt"]
+    },
+    "temp": {
+      "path": "temp/",
+      "description": "Arquivos temporários",
+      "cleanup": true
+    },
+    "scripts": {
+      "path": "scripts/",
+      "description": "Scripts auxiliares",
+      "files": ["setup-environment.ps1", "run-examples.bat"]
+    }
+  },
+  "cli_commands": {
+    "help": {
+      "command": "--help",
+      "description": "Mostrar ajuda geral"
+    },
+    "version": {
+      "command": "--version",
+      "description": "Mostrar versão"
+    },
+    "setup_help": {
+      "command": "setup --help",
+      "description": "Ajuda do comando setup"
+    },
+    "setup_validate": {
+      "command": "setup validate",
+      "description": "Validar ambiente sem fazer mudanças"
+    },
+    "setup_status": {
+      "command": "setup status",
+      "description": "Verificar status do setup"
+    },
+    "setup_run": {
+      "command": "setup run",
+      "description": "Executar setup"
+    },
+    "setup_run_force": {
+      "command": "setup run --force",
+      "description": "Executar setup forçado"
+    },
+    "setup_reset": {
+      "command": "setup reset --force",
+      "description": "Resetar configuração"
+    }
+  },
+  "workflows": {
+    "beginner": {
+      "name": "Para Iniciantes",
+      "description": "Workflow simples para quem está começando",
+      "steps": [
+        "1. Execute: start-here.bat",
+        "2. Escolha opção 1 (Início Rápido)",
+        "3. Siga as instruções do menu interativo"
+      ]
+    },
+    "development": {
+      "name": "Para Desenvolvimento",
+      "description": "Workflow completo para desenvolvimento",
+      "steps": [
+        "1. Execute: .\\scripts\\setup-environment.ps1 setup",
+        "2. Execute: .\\dev-workflow.ps1 dev",
+        "3. Execute: .\\dev-workflow.ps1 run"
+      ]
+    },
+    "testing": {
+      "name": "Para Testes",
+      "description": "Workflow para testes e qualidade",
+      "steps": [
+        "1. Execute: .\\automation-workflow.ps1 full",
+        "2. Verifique logs em logs/",
+        "3. Abra relatório HTML em logs/ci-report-*.html"
+      ]
+    },
+    "ci_cd": {
+      "name": "Para CI/CD",
+      "description": "Workflow para integração contínua",
+      "steps": [
+        "1. Execute: .\\automation-workflow.ps1 ci",
+        "2. Verifique artefatos em dist/",
+        "3. Consulte logs detalhados"
+      ]
+    }
+  },
+  "troubleshooting": {
+    "common_issues": {
+      "go_not_found": {
+        "error": "Go não está instalado",
+        "solution": "Instale Go 1.22.5+ de https://golang.org/dl/",
+        "auto_fix": ".\\scripts\\setup-environment.ps1 install"
+      },
+      "git_not_found": {
+        "error": "Git não está instalado",
+        "solution": "Instale Git de https://git-scm.com/download/win",
+        "auto_fix": ".\\scripts\\setup-environment.ps1 install"
+      },
+      "main_go_not_found": {
+        "error": "main.go não encontrado",
+        "solution": "Certifique-se de estar no diretório correto",
+        "check": "Verifique se está em .../manager/interfaces/cli/"
+      },
+      "build_failed": {
+        "error": "Falha na compilação",
+        "solution": "Limpe e tente novamente",
+        "commands": [".\\build-windows.ps1 clean", ".\\build-windows.ps1 build"]
+      },
+      "binary_not_found": {
+        "error": "Binário não encontrado",
+        "solution": "Execute build primeiro",
+        "command": ".\\build-windows.ps1 build"
+      }
+    },
+    "diagnostic_commands": {
+      "check_go": "go version",
+      "check_git": "git --version",
+      "check_powershell": "$PSVersionTable.PSVersion",
+      "check_directory": "Get-Location",
+      "check_binary": "Test-Path .\\build\\syntropy.exe"
+    }
+  },
+  "documentation": {
+    "quick_start": "README_WINDOWS.md",
+    "complete_guide": "WINDOWS_WORKFLOW.md",
+    "build_guide": "BUILD_AND_TEST.md",
+    "full_guide": "GUIDE.md"
+  },
+  "environment_variables": {
+    "GOOS": "windows",
+    "GOARCH": "amd64",
+    "CGO_ENABLED": "0"
+  },
+  "logging": {
+    "enabled": true,
+    "directory": "logs/",
+    "retention": 10,
+    "formats": ["log", "txt", "html", "json"]
+  }
+}
+

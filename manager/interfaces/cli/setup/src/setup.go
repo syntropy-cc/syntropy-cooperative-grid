@@ -10,7 +10,7 @@ import (
 
 	apiTypes "github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
+	"setup-component/src/internal/types"
 )
 
 // Usar tipos definidos em internal/types
