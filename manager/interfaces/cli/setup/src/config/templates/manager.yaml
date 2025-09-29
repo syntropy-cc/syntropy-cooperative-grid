@@ -1,0 +1,37 @@
+# Template de configuração principal do Syntropy Manager
+version: "1.0.0"
+owner:
+  name: "{{.OwnerName}}"
+  email: "{{.OwnerEmail}}"
+  key_id: "{{.OwnerKeyID}}"
+network:
+  discovery:
+    enabled: true
+    port: 8080
+  api:
+    enabled: true
+    port: 9090
+    tls:
+      enabled: true
+      cert_path: "{{.CertPath}}"
+      key_path: "{{.KeyPath}}"
+security:
+  encryption:
+    algorithm: "ed25519"
+    key_rotation:
+      enabled: true
+      interval: "30d"
+  backup:
+    enabled: true
+    interval: "24h"
+    retention: "30d"
+logging:
+  level: "info"
+  format: "json"
+  output: "file"
+  file_path: "{{.LogPath}}"
+  rotation:
+    enabled: true
+    max_size: "100MB"
+    max_age: "7d"
+    max_backups: 10
