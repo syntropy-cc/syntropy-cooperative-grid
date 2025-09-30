@@ -43,23 +43,10 @@ func (sm *StateManager) LoadState() (*types.SetupState, error) {
 
 	// Verificar se o arquivo de estado existe
 	if _, err := os.Stat(sm.statePath); os.IsNotExist(err) {
-		// Criar estado inicial se não existir
-		initialState := &types.SetupState{
-			Version:       "1.0.0",
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
-			Status:        types.SetupStatusNotStarted,
-			Environment:   &types.EnvironmentInfo{},
-			Configuration: &types.ConfigInfo{},
-			Keys:          &types.KeyInfo{},
-			Metadata:      make(map[string]string),
-		}
-
-		sm.logger.LogInfo("Estado inicial criado", map[string]interface{}{
-			"version": initialState.Version,
+		sm.logger.LogDebug("Arquivo de estado não encontrado", map[string]interface{}{
+			"state_path": sm.statePath,
 		})
-
-		return initialState, nil
+		return nil, types.ErrStateLoadError(fmt.Errorf("arquivo de estado não encontrado: %s", sm.statePath))
 	}
 
 	// Ler arquivo de estado
@@ -361,17 +348,7 @@ func (sm *StateManager) CleanupOldBackups(retentionDays int) error {
 func (sm *StateManager) loadStateUnsafe() (*types.SetupState, error) {
 	// Verificar se o arquivo de estado existe
 	if _, err := os.Stat(sm.statePath); os.IsNotExist(err) {
-		// Criar estado inicial se não existir
-		return &types.SetupState{
-			Version:       "1.0.0",
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
-			Status:        types.SetupStatusNotStarted,
-			Environment:   &types.EnvironmentInfo{},
-			Configuration: &types.ConfigInfo{},
-			Keys:          &types.KeyInfo{},
-			Metadata:      make(map[string]string),
-		}, nil
+		return nil, types.ErrStateLoadError(fmt.Errorf("arquivo de estado não encontrado: %s", sm.statePath))
 	}
 
 	// Ler arquivo de estado

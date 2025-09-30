@@ -3,15 +3,36 @@ package setup
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
-	apiTypes "github.com/syntropy-cc/syntropy-cooperative-grid/manager/api/types"
-
 	"setup-component/src/internal/types"
 )
+
+// Public types for external use
+
+// LegacySetupOptions defines the options for the setup process (legacy compatibility)
+type LegacySetupOptions struct {
+	Force          bool   // Force setup even if validations fail
+	InstallService bool   // Install system service
+	ConfigPath     string // Custom configuration file path
+	HomeDir        string // Custom home directory
+}
+
+// LegacySetupResult contains the result of the setup process (legacy compatibility)
+type LegacySetupResult struct {
+	Success     bool               // Indicates if the setup was successful
+	StartTime   time.Time          // Setup start time
+	EndTime     time.Time          // Setup end time
+	ConfigPath  string             // Configuration file path
+	Environment string             // Environment (windows, linux, darwin)
+	Options     LegacySetupOptions // Options used in the setup
+	Error       error              // Error, if any
+	Message     string             // Human-readable message
+}
 
 // Usar tipos definidos em internal/types
 
@@ -66,8 +87,8 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 		return sm.handleError(err, "structure_creation_failed")
 	}
 
-	// 3. Gerar chaves
-	keyPair, err := sm.keyManager.GenerateKeyPair("ed25519")
+	// 3. Gerar ou carregar chaves existentes
+	keyPair, err := sm.keyManager.GenerateOrLoadKeyPair("ed25519")
 	if err != nil {
 		return sm.handleError(err, "key_generation_failed")
 	}
@@ -189,8 +210,53 @@ func (sm *SetupManager) Reset(confirm bool) error {
 
 	sm.logger.LogStep("reset_start", nil)
 
-	// Implementar reset conforme necessário
-	// Por enquanto, apenas log
+	// Remover arquivo de estado
+	homeDir, _ := os.UserHomeDir()
+	statePath := filepath.Join(homeDir, ".syntropy", "state", "setup_state.json")
+	if _, err := os.Stat(statePath); err == nil {
+		if err := os.Remove(statePath); err != nil {
+			sm.logger.LogWarning("Falha ao remover arquivo de estado", map[string]interface{}{
+				"state_path": statePath,
+				"error":      err.Error(),
+			})
+		} else {
+			sm.logger.LogInfo("Arquivo de estado removido", map[string]interface{}{
+				"state_path": statePath,
+			})
+		}
+	}
+
+	// Remover diretório de configuração
+	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	configDir := filepath.Join(syntropyDir, "config")
+
+	if _, err := os.Stat(configDir); err == nil {
+		if err := os.RemoveAll(configDir); err != nil {
+			sm.logger.LogWarning("Falha ao remover diretório de configuração", map[string]interface{}{
+				"config_dir": configDir,
+				"error":      err.Error(),
+			})
+		} else {
+			sm.logger.LogInfo("Diretório de configuração removido", map[string]interface{}{
+				"config_dir": configDir,
+			})
+		}
+	}
+
+	// Remover diretório de chaves
+	keysDir := filepath.Join(syntropyDir, "keys")
+	if _, err := os.Stat(keysDir); err == nil {
+		if err := os.RemoveAll(keysDir); err != nil {
+			sm.logger.LogWarning("Falha ao remover diretório de chaves", map[string]interface{}{
+				"keys_dir": keysDir,
+				"error":    err.Error(),
+			})
+		} else {
+			sm.logger.LogInfo("Diretório de chaves removido", map[string]interface{}{
+				"keys_dir": keysDir,
+			})
+		}
+	}
 
 	sm.logger.LogStep("reset_completed", nil)
 
@@ -227,7 +293,7 @@ func (sm *SetupManager) handleError(err error, context string) error {
 }
 
 // SetupLegacy configura o ambiente para o Syntropy CLI (função legacy para compatibilidade)
-func SetupLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, error) {
+func SetupLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	fmt.Println("Starting Syntropy CLI setup...")
 
 	// Criar novo gerenciador de setup
@@ -236,6 +302,54 @@ func SetupLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, er
 		return nil, fmt.Errorf("falha ao criar gerenciador de setup: %w", err)
 	}
 	defer manager.logger.Close()
+
+	// Verificar se já existe um setup
+	existingState, err := manager.stateManager.LoadState()
+	if err == nil && existingState.Status == types.SetupStatusCompleted {
+		// Setup já existe, perguntar se deve substituir
+		if !options.Force {
+			fmt.Print("⚠️  Já existe uma configuração do Syntropy Manager. Deseja substituí-la? (y/N): ")
+			var response string
+			fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				fmt.Println("Setup cancelado pelo usuário.")
+				return &LegacySetupResult{
+					Success:   false,
+					StartTime: time.Now(),
+					EndTime:   time.Now(),
+					Message:   "Setup cancelado pelo usuário",
+				}, nil
+			}
+		}
+
+		// Criar backup do setup existente
+		fmt.Println("📦 Criando backup do setup existente...")
+		backupName := fmt.Sprintf("pre_setup_%d", time.Now().Unix())
+		if err := manager.stateManager.BackupState(backupName); err != nil {
+			fmt.Printf("⚠️  Aviso: Falha ao criar backup: %v\n", err)
+		} else {
+			fmt.Printf("✅ Backup criado: %s\n", backupName)
+		}
+
+		// Fazer backup de todas as pastas exceto backups
+		homeDir, _ := os.UserHomeDir()
+		syntropyDir := filepath.Join(homeDir, ".syntropy")
+		backupDir := filepath.Join(syntropyDir, "backups", "full_backup")
+
+		if err := os.MkdirAll(backupDir, 0755); err == nil {
+			backupPath := filepath.Join(backupDir, fmt.Sprintf("backup_%d", time.Now().Unix()))
+			if err := backupAllDirectories(syntropyDir, backupPath); err != nil {
+				fmt.Printf("⚠️  Aviso: Falha ao fazer backup completo: %v\n", err)
+			} else {
+				fmt.Printf("✅ Backup completo criado: %s\n", backupPath)
+				fmt.Printf("🔒 AVISO DE SEGURANÇA: Os backups contêm chaves criptográficas sensíveis!\n")
+				fmt.Printf("   - Gerencie os backups com cuidado\n")
+				fmt.Printf("   - Considere criptografar os backups\n")
+				fmt.Printf("   - Remova backups antigos regularmente\n")
+				fmt.Printf("   - Nunca compartilhe backups não criptografados\n")
+			}
+		}
+	}
 
 	// Converter opções legacy para novas opções
 	newOptions := &types.SetupOptions{
@@ -252,7 +366,7 @@ func SetupLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, er
 
 	// Executar setup
 	if err := manager.Setup(newOptions); err != nil {
-		return &types.LegacySetupResult{
+		return &LegacySetupResult{
 			Success:   false,
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
@@ -261,16 +375,22 @@ func SetupLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, er
 		}, err
 	}
 
-	return &types.LegacySetupResult{
-		Success:   true,
-		StartTime: time.Now(),
-		EndTime:   time.Now(),
-		Message:   "Setup concluído com sucesso",
+	// Obter caminho da configuração
+	homeDir, _ := os.UserHomeDir()
+	configPath := filepath.Join(homeDir, ".syntropy", "config", "manager.yaml")
+
+	return &LegacySetupResult{
+		Success:     true,
+		StartTime:   time.Now(),
+		EndTime:     time.Now(),
+		ConfigPath:  configPath,
+		Environment: fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		Message:     "Setup concluído com sucesso",
 	}, nil
 }
 
 // StatusLegacy checks the installation status of the Syntropy CLI
-func StatusLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, error) {
+func StatusLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	fmt.Println("Checking Syntropy CLI status...")
 
 	// Create new setup manager
@@ -280,29 +400,55 @@ func StatusLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, e
 	}
 	defer manager.logger.Close()
 
-	// Get status using new manager
-	status, err := manager.Status()
+	// Check if setup actually exists by trying to load state
+	state, err := manager.stateManager.LoadState()
 	if err != nil {
-		return &types.LegacySetupResult{
+		return &LegacySetupResult{
 			Success:   false,
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
 			Error:     err,
-			Message:   err.Error(),
-		}, err
+			Message:   "Setup não encontrado ou corrompido",
+		}, nil
+	}
+
+	// Check if setup is actually completed (not just initial state)
+	if state.Status != types.SetupStatusCompleted {
+		return &LegacySetupResult{
+			Success:   false,
+			StartTime: time.Now(),
+			EndTime:   time.Now(),
+			Message:   fmt.Sprintf("Setup não concluído. Status atual: %s", state.Status),
+		}, nil
+	}
+
+	// Get environment info
+	homeDir, _ := os.UserHomeDir()
+	configPath := filepath.Join(homeDir, ".syntropy", "config", "manager.yaml")
+
+	// Check if config file actually exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return &LegacySetupResult{
+			Success:   false,
+			StartTime: time.Now(),
+			EndTime:   time.Now(),
+			Message:   "Arquivo de configuração não encontrado",
+		}, nil
 	}
 
 	// Convert status to legacy result
-	return &types.LegacySetupResult{
-		Success:   true,
-		StartTime: time.Now(),
-		EndTime:   time.Now(),
-		Message:   fmt.Sprintf("Status: %s", *status),
+	return &LegacySetupResult{
+		Success:     true,
+		StartTime:   time.Now(),
+		EndTime:     time.Now(),
+		ConfigPath:  configPath,
+		Environment: fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		Message:     "Syntropy Manager está configurado corretamente",
 	}, nil
 }
 
 // ResetLegacy resets the Syntropy CLI configuration
-func ResetLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, error) {
+func ResetLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	fmt.Println("Resetting Syntropy CLI configuration...")
 
 	// Create new setup manager
@@ -315,7 +461,7 @@ func ResetLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, er
 	// Reset using new manager
 	err = manager.Reset(true)
 	if err != nil {
-		return &types.LegacySetupResult{
+		return &LegacySetupResult{
 			Success:   false,
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
@@ -325,7 +471,7 @@ func ResetLegacy(options types.LegacySetupOptions) (*types.LegacySetupResult, er
 	}
 
 	// Return success result
-	return &types.LegacySetupResult{
+	return &LegacySetupResult{
 		Success:   true,
 		StartTime: time.Now(),
 		EndTime:   time.Now(),
@@ -353,42 +499,12 @@ func GetSyntropyDirLegacy() string {
 
 // Funções stub removidas para evitar conflitos de redefinição
 
-// Conversion functions between local and API types
-
-// convertLegacyToAPISetupOptions converts local SetupOptions to API SetupOptions
-func convertLegacyToAPISetupOptions(local types.LegacySetupOptions) *apiTypes.SetupOptions {
-	return &apiTypes.SetupOptions{
-		Force:          local.Force,
-		InstallService: false, // Legacy options don't have this field
-		ConfigPath:     local.ConfigPath,
-		HomeDir:        "", // Legacy options don't have this field
-		Interface:      "cli",
-		CustomOptions: map[string]interface{}{
-			"source": "cli_setup",
-		},
-	}
-}
-
-// convertFromAPIToLegacySetupResult converts API SetupResult to local SetupResult
-func convertFromAPIToLegacySetupResult(api *apiTypes.SetupResult) *types.LegacySetupResult {
-	return &types.LegacySetupResult{
-		Success:     api.Success,
-		StartTime:   api.StartTime,
-		EndTime:     api.EndTime,
-		ConfigPath:  api.ConfigPath,
-		Environment: api.Environment,
-		Options: types.LegacySetupOptions{
-			Force:      api.Options.Force,
-			ConfigPath: api.Options.ConfigPath,
-		},
-		Error: api.Error,
-	}
-}
+// Helper functions for environment detection
 
 // getCurrentEnvironmentInfo gets current environment information
-func getCurrentEnvironmentInfo() *apiTypes.EnvironmentInfo {
+func getCurrentEnvironmentInfo() *types.EnvironmentInfo {
 	homeDir, _ := os.UserHomeDir()
-	return &apiTypes.EnvironmentInfo{
+	return &types.EnvironmentInfo{
 		OS:              runtime.GOOS,
 		OSVersion:       "unknown", // Would be populated by actual detection
 		Architecture:    runtime.GOARCH,
@@ -396,9 +512,8 @@ func getCurrentEnvironmentInfo() *apiTypes.EnvironmentInfo {
 		HasAdminRights:  true,  // Would be detected
 		AvailableDiskGB: 100.0, // Would be calculated
 		HasInternet:     true,  // Would be tested
-		EnvironmentVars: make(map[string]string),
-		Features:        []string{},
-		Capabilities:    []string{},
+		CanProceed:      true,
+		Issues:          []string{},
 	}
 }
 
@@ -422,7 +537,7 @@ func shouldForceLocalSetup() bool {
 }
 
 // convertStatusToLegacySetupResult converts API status to local SetupResult
-func convertStatusToLegacySetupResult(status map[string]interface{}) *types.LegacySetupResult {
+func convertStatusToLegacySetupResult(status map[string]interface{}) *LegacySetupResult {
 	success := true
 	if status["status"] != "active" {
 		success = false
@@ -444,7 +559,7 @@ func convertStatusToLegacySetupResult(status map[string]interface{}) *types.Lega
 		statusStr = s
 	}
 
-	return &types.LegacySetupResult{
+	return &LegacySetupResult{
 		Success:     success,
 		StartTime:   time.Now(),
 		EndTime:     time.Now(),
@@ -452,4 +567,92 @@ func convertStatusToLegacySetupResult(status map[string]interface{}) *types.Lega
 		Environment: environment,
 		Message:     fmt.Sprintf("Status: %s", statusStr),
 	}
+}
+
+// copyDirectory copia um diretório recursivamente
+func copyDirectory(src, dst string) error {
+	// Criar diretório de destino
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	// Ler diretório fonte
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	// Copiar cada entrada
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Recursivamente copiar subdiretório
+			if err := copyDirectory(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			// Copiar arquivo
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// copyFile copia um arquivo
+func copyFile(src, dst string) error {
+	// Abrir arquivo fonte
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Criar arquivo de destino
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	// Copiar conteúdo
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	// Sincronizar arquivo de destino
+	return dstFile.Sync()
+}
+
+// backupAllDirectories faz backup de todas as pastas exceto a pasta backups
+func backupAllDirectories(syntropyDir, backupPath string) error {
+	// Criar diretório de backup
+	if err := os.MkdirAll(backupPath, 0755); err != nil {
+		return err
+	}
+
+	// Ler todas as entradas do diretório .syntropy
+	entries, err := os.ReadDir(syntropyDir)
+	if err != nil {
+		return err
+	}
+
+	// Copiar cada diretório exceto 'backups'
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "backups" {
+			srcPath := filepath.Join(syntropyDir, entry.Name())
+			dstPath := filepath.Join(backupPath, entry.Name())
+
+			if err := copyDirectory(srcPath, dstPath); err != nil {
+				return fmt.Errorf("falha ao copiar diretório %s: %w", entry.Name(), err)
+			}
+		}
+	}
+
+	return nil
 }

@@ -62,11 +62,11 @@ go mod tidy
 
 # Build for Windows
 print_info "Building for Windows..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main.go
+GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main-simple.go
 
 # Build for Linux
 print_info "Building for Linux..."
-go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-linux" main.go
+go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-linux" main-simple.go
 
 # Test binaries
 print_info "Testing binaries..."
@@ -86,11 +86,11 @@ echo -e "${BLUE}🔧 Git Commit:${NC} $GIT_COMMIT"
 
 echo -e "\n${BLUE}📋 Created Binaries:${NC}"
 if [ -f "$BUILD_DIR/syntropy-windows.exe" ]; then
-    local size=$(du -h "$BUILD_DIR/syntropy-windows.exe" | cut -f1)
+    size=$(du -h "$BUILD_DIR/syntropy-windows.exe" | cut -f1)
     echo -e "  ${GREEN}✅${NC} syntropy-windows.exe ($size) - Windows"
 fi
 if [ -f "$BUILD_DIR/syntropy-linux" ]; then
-    local size=$(du -h "$BUILD_DIR/syntropy-linux" | cut -f1)
+    size=$(du -h "$BUILD_DIR/syntropy-linux" | cut -f1)
     echo -e "  ${GREEN}✅${NC} syntropy-linux ($size) - Linux"
 fi
 

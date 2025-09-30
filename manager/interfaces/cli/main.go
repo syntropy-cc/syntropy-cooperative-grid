@@ -5,8 +5,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/spf13/cobra"
 	setup "setup-component/src"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -100,14 +101,14 @@ and prepare the environment for managing nodes in the cooperative grid.`,
 		installService, _ := cmd.Flags().GetBool("install-service")
 		configPath, _ := cmd.Flags().GetString("config-path")
 
-		options := setup.SetupOptions{
+		options := setup.LegacySetupOptions{
 			Force:          force,
 			InstallService: installService,
 			ConfigPath:     configPath,
 		}
 
 		fmt.Println("Starting Syntropy Manager setup...")
-		result, err := setup.Setup(options)
+		result, err := setup.SetupLegacy(options)
 		if err != nil {
 			return fmt.Errorf("setup failed: %w", err)
 		}
@@ -117,8 +118,11 @@ and prepare the environment for managing nodes in the cooperative grid.`,
 			fmt.Printf("📁 Configuration: %s\n", result.ConfigPath)
 			fmt.Printf("⏱️  Duration: %s\n", result.EndTime.Sub(result.StartTime))
 		} else {
-			fmt.Printf("❌ Setup failed: %v\n", result.Error)
-			return result.Error
+			fmt.Printf("❌ Setup failed: %s\n", result.Message)
+			if result.Error != nil {
+				return result.Error
+			}
+			return fmt.Errorf("setup failed: %s", result.Message)
 		}
 
 		return nil
@@ -139,12 +143,12 @@ This will verify:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
 
-		options := setup.SetupOptions{
+		options := setup.LegacySetupOptions{
 			ConfigPath: configPath,
 		}
 
 		fmt.Println("Checking Syntropy Manager status...")
-		result, err := setup.Status(options)
+		result, err := setup.StatusLegacy(options)
 		if err != nil {
 			return fmt.Errorf("status check failed: %w", err)
 		}
@@ -190,13 +194,13 @@ This action cannot be undone. Make sure to backup important data before proceedi
 			}
 		}
 
-		options := setup.SetupOptions{
+		options := setup.LegacySetupOptions{
 			Force:      force,
 			ConfigPath: configPath,
 		}
 
 		fmt.Println("Resetting Syntropy Manager configuration...")
-		result, err := setup.Reset(options)
+		result, err := setup.ResetLegacy(options)
 		if err != nil {
 			return fmt.Errorf("reset failed: %w", err)
 		}
@@ -228,12 +232,12 @@ This command performs all validation checks without making any changes:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
 
-		options := setup.SetupOptions{
+		options := setup.LegacySetupOptions{
 			ConfigPath: configPath,
 		}
 
 		fmt.Println("Validating system environment...")
-		result, err := setup.Status(options)
+		result, err := setup.StatusLegacy(options)
 		if err != nil {
 			return fmt.Errorf("validation failed: %w", err)
 		}

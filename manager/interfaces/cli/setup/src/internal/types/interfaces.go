@@ -87,6 +87,9 @@ type KeyManager interface {
 	// Geração de par de chaves
 	GenerateKeyPair(algorithm string) (*KeyPair, error)
 
+	// Geração ou carregamento de chaves existentes
+	GenerateOrLoadKeyPair(algorithm string) (*KeyPair, error)
+
 	// Armazenamento seguro de chaves
 	StoreKeyPair(keyPair *KeyPair, passphrase string) error
 

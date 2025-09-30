@@ -64,6 +64,67 @@ func (km *KeyManager) GenerateKeyPair(algorithm string) (*types.KeyPair, error) 
 	return keyPair, nil
 }
 
+// GenerateOrLoadKeyPair gera um novo par de chaves ou carrega um existente
+func (km *KeyManager) GenerateOrLoadKeyPair(algorithm string) (*types.KeyPair, error) {
+	km.logger.LogStep("key_generation_or_load_start", map[string]interface{}{
+		"algorithm": algorithm,
+	})
+
+	// Verificar se já existem chaves
+	existingKeys, err := km.listExistingKeys()
+	if err != nil {
+		km.logger.LogWarning("Falha ao listar chaves existentes", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	// Se existem chaves, carregar a primeira
+	if len(existingKeys) > 0 {
+		keyID := existingKeys[0]
+		km.logger.LogInfo("Carregando chave existente", map[string]interface{}{
+			"key_id": keyID,
+		})
+
+		keyPair, err := km.LoadKeyPair(keyID, "default_passphrase")
+		if err != nil {
+			km.logger.LogWarning("Falha ao carregar chave existente, gerando nova", map[string]interface{}{
+				"key_id": keyID,
+				"error":  err.Error(),
+			})
+		} else {
+			return keyPair, nil
+		}
+	}
+
+	// Gerar nova chave
+	km.logger.LogInfo("Gerando nova chave", map[string]interface{}{
+		"algorithm": algorithm,
+	})
+
+	keyPair, err := km.GenerateKeyPair(algorithm)
+	if err != nil {
+		return nil, err
+	}
+
+	// Salvar a nova chave
+	if err := km.StoreKeyPair(keyPair, "default_passphrase"); err != nil {
+		return nil, err
+	}
+
+	return keyPair, nil
+}
+
+// listExistingKeys lista as chaves existentes
+func (km *KeyManager) listExistingKeys() ([]string, error) {
+	// Verificar se o arquivo owner.key existe
+	ownerKeyPath := filepath.Join(km.keysDir, "owner.key")
+	if _, err := os.Stat(ownerKeyPath); err == nil {
+		return []string{"owner"}, nil
+	}
+
+	return []string{}, nil
+}
+
 // StoreKeyPair armazena um par de chaves de forma segura
 func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) error {
 	km.logger.LogStep("key_storage_start", map[string]interface{}{
@@ -83,13 +144,13 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 	}
 
 	// Salvar chave privada criptografada
-	privateKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key", keyPair.ID))
+	privateKeyPath := filepath.Join(km.keysDir, "owner.key")
 	if err := os.WriteFile(privateKeyPath, encryptedPrivateKey, 0600); err != nil {
 		return types.ErrKeyStorageError(keyPair.ID, err)
 	}
 
 	// Salvar chave pública
-	publicKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key.pub", keyPair.ID))
+	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
 	if err := os.WriteFile(publicKeyPath, keyPair.PublicKey, 0644); err != nil {
 		// Limpar chave privada em caso de erro
 		os.Remove(privateKeyPath)
@@ -97,7 +158,7 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 	}
 
 	// Salvar metadados
-	metadataPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.meta", keyPair.ID))
+	metadataPath := filepath.Join(km.keysDir, "owner.meta")
 	metadata, err := json.MarshalIndent(keyPair.Metadata, "", "  ")
 	if err != nil {
 		// Limpar arquivos em caso de erro
@@ -129,10 +190,10 @@ func (km *KeyManager) LoadKeyPair(keyID string, passphrase string) (*types.KeyPa
 		"key_id": keyID,
 	})
 
-	// Verificar se os arquivos existem
-	privateKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key", keyID))
-	publicKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key.pub", keyID))
-	metadataPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.meta", keyID))
+	// Verificar se os arquivos existem (usando nomes fixos)
+	privateKeyPath := filepath.Join(km.keysDir, "owner.key")
+	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
+	metadataPath := filepath.Join(km.keysDir, "owner.meta")
 
 	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("chave privada não encontrada: %s", keyID)
@@ -248,9 +309,9 @@ func (km *KeyManager) VerifyKeyIntegrity(keyID string) error {
 		"key_id": keyID,
 	})
 
-	// Verificar se os arquivos existem
-	privateKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key", keyID))
-	publicKeyPath := filepath.Join(km.keysDir, fmt.Sprintf("%s.key.pub", keyID))
+	// Verificar se os arquivos existem (usando nomes fixos)
+	privateKeyPath := filepath.Join(km.keysDir, "owner.key")
+	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
 
 	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
 		return fmt.Errorf("chave privada não encontrada: %s", keyID)
