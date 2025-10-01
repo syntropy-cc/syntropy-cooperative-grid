@@ -78,11 +78,11 @@ require (
 replace setup-component => ./setup
 ```
 
-### 5. Criação de main-simple.go
+### 5. Unificação dos arquivos main
 
-**Problema:** O main.go original tinha dependências complexas que causavam erros de compilação
+**Problema:** Havia dois arquivos main (`main.go` e `main-simple.go`) causando confusão e duplicação.
 
-**Solução:** Criado `main-simple.go` com funcionalidade básica mas funcional:
+**Solução:** Unificado em um único `main.go` com funcionalidade completa:
 - ✅ Comandos setup básicos
 - ✅ Sem dependências externas complexas
 - ✅ Funcionalidade simulada mas realista
@@ -131,8 +131,7 @@ cli/
 ├── build.sh                    # ✅ Script principal para Linux/WSL
 ├── build.bat                   # ✅ Script principal para Windows
 ├── install.sh                  # ✅ Instalação simples para Linux/WSL
-├── main-simple.go              # ✅ Main simplificado e funcional
-├── main.go                     # ⚠️  Main original (com dependências complexas)
+├── main.go                     # ✅ Main unificado e funcional
 ├── scripts/                    # ✅ Scripts organizados
 │   ├── linux/                 # ✅ Scripts para Linux
 │   │   ├── install-syntropy.sh # ✅ Funcionando
@@ -189,4 +188,7 @@ cli/
 - Documentação atualizada
 
 O workflow está pronto para uso no Windows e Linux!
+
+
+
 

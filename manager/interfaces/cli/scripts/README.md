@@ -21,7 +21,7 @@ scripts/
 
 ### Scripts Auxiliares
 - **`quick-start.bat`** - Setup rápido e execução interativa
-- **`run-cli.bat`** - Executor simples da aplicação
+- **`run-cli.bat`** - Executor da aplicação
 - **`run-examples.bat`** - Execução de exemplos da CLI
 - **`setup-environment.ps1`** - Configuração automática do ambiente
 
@@ -40,12 +40,12 @@ scripts/
 ## 🐧 Linux Scripts (`linux/`)
 
 ### Scripts Principais
-- **`install-syntropy.sh`** - Script mais simples para instalação
+- **`install-syntropy.sh`** - Script para instalação
 - **`build-and-test.sh`** - Script completo de build e teste
 
 ### Como Usar
 ```bash
-# Instalação simples
+# Instalação
 ./scripts/linux/install-syntropy.sh
 
 # Build completo

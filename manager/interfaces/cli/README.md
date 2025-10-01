@@ -4,18 +4,25 @@
 
 ### Linux/WSL
 ```bash
-# Instalação simples
-./install.sh
-
-# Build completo
+# Instalação completa (recomendada)
 ./build.sh
+
+# Instalação alternativa
+./install.sh
 ```
 
 ### Windows
 ```cmd
-# Build e teste
+# Build completo
 build.bat
+
+# Build simplificado
+scripts\shared\build-and-test.bat
 ```
+
+### ⚠️ Importante - Versões Disponíveis:
+- **Versão Completa**: Funcionalidade total com `setup-component`
+- **Versão Simplificada**: Versão demo para testes básicos
 
 ## 📁 Estrutura Organizada
 
@@ -23,7 +30,7 @@ build.bat
 cli/
 ├── build.sh                    # Script principal para Linux/WSL
 ├── build.bat                   # Script principal para Windows
-├── install.sh                  # Instalação simples para Linux/WSL
+├── install.sh                  # Instalação para Linux/WSL
 ├── scripts/                    # Scripts organizados por plataforma
 │   ├── windows/               # Scripts específicos para Windows
 │   │   ├── build-windows.ps1  # Build principal
@@ -34,7 +41,7 @@ cli/
 │   │   ├── run-examples.bat   # Exemplos
 │   │   └── setup-environment.ps1 # Setup automático
 │   ├── linux/                 # Scripts específicos para Linux
-│   │   ├── install-syntropy.sh # Instalação simples
+│   │   ├── install-syntropy.sh # Instalação
 │   │   └── build-and-test.sh  # Build completo
 │   ├── shared/                # Scripts compartilhados
 │   │   ├── build-and-test.bat # Build para Windows
@@ -45,14 +52,13 @@ cli/
 │   └── syntropy-linux         # Para Linux
 └── docs/                      # Documentação
     ├── QUICK_START.md         # Início rápido
-    ├── SIMPLE_BUILD_README.md # Build simples
     └── WINDOWS_WORKFLOW.md    # Workflow Windows
 ```
 
 ## 🎯 Scripts Principais
 
 ### Para Linux/WSL
-- **`./install.sh`** - Instalação mais simples
+- **`./install.sh`** - Instalação alternativa
 - **`./build.sh`** - Build completo
 
 ### Para Windows
@@ -83,7 +89,6 @@ build\syntropy-windows.exe setup run --force
 ## 📚 Documentação
 
 - **`QUICK_START.md`** - Início rápido
-- **`SIMPLE_BUILD_README.md`** - Build simples
 - **`WINDOWS_WORKFLOW.md`** - Workflow Windows
 - **`scripts/README.md`** - Documentação dos scripts
 

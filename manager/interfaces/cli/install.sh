@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Syntropy CLI Manager - Simple Install Script
-# Script mais simples para instalar a aplicação CLI
+# Syntropy CLI Manager - Install Script
+# Script para instalar a aplicação CLI
 
 set -e
 
@@ -25,7 +25,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Banner
 echo -e "\n${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║              SYNTROPY CLI MANAGER                           ║${NC}"
-echo -e "${CYAN}║                Simple Install Script                        ║${NC}"
+echo -e "${CYAN}║                Install Script                               ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 
 # Check if install script exists

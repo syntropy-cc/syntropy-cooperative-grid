@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Syntropy CLI Manager - Simple Install Script
+# Syntropy CLI Manager - Install Script
 # Script para instalar e testar a aplicação CLI do Syntropy
 
 set -e
@@ -29,7 +29,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Banner
 echo -e "\n${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║              SYNTROPY CLI MANAGER                           ║${NC}"
-echo -e "${CYAN}║                Simple Install Script                        ║${NC}"
+echo -e "${CYAN}║                Install Script                               ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 
 # Check Go
@@ -62,11 +62,11 @@ go mod tidy
 
 # Build for Windows
 print_info "Building for Windows..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main-simple.go
+GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main.go
 
 # Build for Linux
 print_info "Building for Linux..."
-go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-linux" main-simple.go
+go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-linux" main.go
 
 # Test binaries
 print_info "Testing binaries..."

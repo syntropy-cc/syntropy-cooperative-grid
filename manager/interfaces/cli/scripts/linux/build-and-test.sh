@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Syntropy CLI Manager - Simple Build and Test Workflow
+# Syntropy CLI Manager - Build and Test Workflow
 # Script para compilar e testar a aplicação CLI no Windows e Linux
 
 set -e  # Exit on any error
@@ -46,7 +46,7 @@ print_step() {
 show_banner() {
     echo -e "\n${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║              SYNTROPY CLI MANAGER                           ║${NC}"
-    echo -e "${CYAN}║                Simple Build & Test                          ║${NC}"
+    echo -e "${CYAN}║                Build & Test                                 ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 }
 
