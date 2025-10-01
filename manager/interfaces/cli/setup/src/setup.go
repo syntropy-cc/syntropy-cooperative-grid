@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"setup-component/src/internal/types"
@@ -308,7 +309,9 @@ func SetupLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	if err == nil && existingState.Status == types.SetupStatusCompleted {
 		// Setup já existe, perguntar se deve substituir
 		if !options.Force {
-			fmt.Print("⚠️  Já existe uma configuração do Syntropy Manager. Deseja substituí-la? (y/N): ")
+			fmt.Println("⚠️  Já existe uma configuração do Syntropy Manager.")
+			fmt.Printf("   📁 Configuração atual: %s\n", filepath.Join(os.Getenv("HOME"), ".syntropy"))
+			fmt.Print("   Deseja substituí-la? (y/N): ")
 			var response string
 			fmt.Scanln(&response)
 			if response != "y" && response != "Y" {
@@ -364,15 +367,30 @@ func SetupLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 		},
 	}
 
-	// Executar setup
+	// Executar setup com fallback para validação
 	if err := manager.Setup(newOptions); err != nil {
-		return &LegacySetupResult{
-			Success:   false,
-			StartTime: time.Now(),
-			EndTime:   time.Now(),
-			Error:     err,
-			Message:   err.Error(),
-		}, err
+		// Se a validação falhou e não estamos forçando, tentar novamente com force
+		if !options.Force && strings.Contains(err.Error(), "Falha na validação do ambiente") {
+			fmt.Println("⚠️  Validação do ambiente falhou, mas prosseguindo com setup básico...")
+			newOptions.Force = true
+			if err := manager.Setup(newOptions); err != nil {
+				return &LegacySetupResult{
+					Success:   false,
+					StartTime: time.Now(),
+					EndTime:   time.Now(),
+					Error:     err,
+					Message:   err.Error(),
+				}, err
+			}
+		} else {
+			return &LegacySetupResult{
+				Success:   false,
+				StartTime: time.Now(),
+				EndTime:   time.Now(),
+				Error:     err,
+				Message:   err.Error(),
+			}, err
+		}
 	}
 
 	// Obter caminho da configuração
@@ -403,6 +421,20 @@ func StatusLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	// Check if setup actually exists by trying to load state
 	state, err := manager.stateManager.LoadState()
 	if err != nil {
+		// Check if this is specifically a "file not found" error (setup not run yet)
+		if setupErr, ok := err.(*types.SetupError); ok && setupErr.Code == types.ErrStateLoad {
+			// Check if the error message indicates file not found
+			if setupErr.Cause != nil && strings.Contains(setupErr.Cause.Error(), "arquivo de estado não encontrado") {
+				return &LegacySetupResult{
+					Success:   false,
+					StartTime: time.Now(),
+					EndTime:   time.Now(),
+					Message:   "Setup não foi executado ainda",
+				}, nil
+			}
+		}
+
+		// For other errors (corruption, permission issues, etc.)
 		return &LegacySetupResult{
 			Success:   false,
 			StartTime: time.Now(),
