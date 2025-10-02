@@ -61,6 +61,11 @@ func NewSetupManager() (*SetupManager, error) {
 
 // Setup executa o setup completo conforme especificado no guia
 func (sm *SetupManager) Setup(options *SetupOptions) error {
+	// Check for nil options
+	if options == nil {
+		return sm.handleError(fmt.Errorf("setup options cannot be nil"), "invalid_options")
+	}
+
 	sm.logger.LogStep("setup_start", map[string]interface{}{
 		"options": options,
 	})

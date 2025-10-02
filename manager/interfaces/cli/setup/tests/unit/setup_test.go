@@ -1,4 +1,4 @@
-package setup_test
+package unit
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/types"
+	"setup-component/tests/types"
 )
 
 // Mock setup functions for testing

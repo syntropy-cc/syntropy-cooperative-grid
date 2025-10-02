@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"time"
 )
 
@@ -134,4 +135,69 @@ type WorkflowStep struct {
 	Expected    ExpectedResult         `json:"expected"`
 	Timeout     time.Duration          `json:"timeout"`
 	Data        map[string]interface{} `json:"data,omitempty"`
+}
+
+// SetupOptions representa as opções de configuração do setup
+type SetupOptions struct {
+	ConfigPath     string                 `json:"config_path,omitempty"`
+	Environment    string                 `json:"environment,omitempty"`
+	Force          bool                   `json:"force,omitempty"`
+	Verbose        bool                   `json:"verbose,omitempty"`
+	InstallService bool                   `json:"install_service,omitempty"`
+	HomeDir        string                 `json:"home_dir,omitempty"`
+	Data           map[string]interface{} `json:"data,omitempty"`
+}
+
+// SetupResult representa o resultado de uma operação de setup
+type SetupResult struct {
+	Success     bool                   `json:"success"`
+	StartTime   time.Time              `json:"start_time"`
+	EndTime     time.Time              `json:"end_time"`
+	ConfigPath  string                 `json:"config_path,omitempty"`
+	Environment string                 `json:"environment,omitempty"`
+	Options     SetupOptions           `json:"options"`
+	Message     string                 `json:"message,omitempty"`
+	Error       error                  `json:"error,omitempty"`
+	Data        map[string]interface{} `json:"data,omitempty"`
+}
+
+// ConfigOptions representa as opções de configuração
+type ConfigOptions struct {
+	OwnerName      string            `json:"owner_name"`
+	OwnerEmail     string            `json:"owner_email"`
+	NetworkConfig  interface{}       `json:"network_config"`
+	SecurityConfig interface{}       `json:"security_config"`
+	CustomSettings map[string]string `json:"custom_settings"`
+}
+
+// Errors
+var (
+	ErrNotImplemented = errors.New("not implemented")
+)
+
+// ValidationIssue representa um problema encontrado durante a validação
+type ValidationIssue struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"`
+	Component   string `json:"component"`
+	Fixable     bool   `json:"fixable"`
+}
+
+// ValidationResult representa o resultado de uma validação
+type ValidationResult struct {
+	Valid       bool              `json:"valid"`
+	Warnings    []string          `json:"warnings"`
+	Errors      []string          `json:"errors"`
+	Environment EnvironmentInfo   `json:"environment"`
+}
+
+// EnvironmentInfo representa informações do ambiente
+type EnvironmentInfo struct {
+	OS              string `json:"os"`
+	Architecture    string `json:"architecture"`
+	GoVersion       string `json:"go_version"`
+	WorkingDir      string `json:"working_dir"`
+	HomeDir         string `json:"home_dir"`
+	TempDir         string `json:"temp_dir"`
 }

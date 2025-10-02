@@ -170,7 +170,9 @@ manager:
 				Warnings: []string{},
 				Errors:   []string{"Insufficient disk space: 1GB available, 10GB required"},
 				Environment: types.EnvironmentInfo{
-					AvailableDiskGB: 1.0,
+					OS:           "linux",
+					Architecture: "amd64",
+					HomeDir:      "/tmp",
 				},
 			}
 
@@ -184,11 +186,13 @@ manager:
 				Warnings: []string{"Limited internet connectivity"},
 				Errors:   []string{},
 				Environment: types.EnvironmentInfo{
-					HasInternet: false,
+					OS:           "linux",
+					Architecture: "amd64",
+					HomeDir:      "/tmp",
 				},
 			}
 
-			assert.False(t, validation.Environment.HasInternet)
+			assert.False(t, validation.Valid)
 			assert.Contains(t, validation.Warnings[0], "internet connectivity")
 		})
 	})
@@ -277,12 +281,9 @@ func performEnvironmentValidation(t *testing.T, homeDir string) types.Validation
 		Warnings: []string{},
 		Errors:   []string{},
 		Environment: types.EnvironmentInfo{
-			OS:              runtime.GOOS,
-			Architecture:    runtime.GOARCH,
-			HasAdminRights:  false,
-			AvailableDiskGB: 100.0,
-			HasInternet:     true,
-			HomeDir:         homeDir,
+			OS:           runtime.GOOS,
+			Architecture: runtime.GOARCH,
+			HomeDir:      homeDir,
 		},
 	}
 }

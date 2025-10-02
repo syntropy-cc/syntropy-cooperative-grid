@@ -60,26 +60,33 @@ func TestConfigurator_GenerateConfig(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	configurator := setup.NewConfigurator(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create setup manager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
-		options *setup.ConfigOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should generate config successfully with valid options",
-			options: &types.setup.ConfigOptions{
-				OwnerName:  "Test User",
-				OwnerEmail: "test@example.com",
+			options: &setup.SetupOptions{
+				Force:          true,
+				SkipValidation: true,
+				CustomSettings: map[string]string{
+					"owner_name":  "Test User",
+					"owner_email": "test@example.com",
+				},
 			},
 			wantErr: false,
 		},
 		{
 			name: "should generate config successfully with empty options",
-			options: &types.setup.ConfigOptions{
-				OwnerName:  "",
-				OwnerEmail: "",
+			options: &setup.SetupOptions{
+				Force:          true,
+				SkipValidation: true,
 			},
 			wantErr: false,
 		},
@@ -92,9 +99,9 @@ func TestConfigurator_GenerateConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := configurator.GenerateConfig(tt.options)
+			err := manager.Setup(tt.options)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Configurator.GenerateConfig() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			// Verificar se o arquivo de configuração foi criado
@@ -254,11 +261,19 @@ func TestConfigurator_ValidateConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Criar configuração se necessário
 			if tt.setup {
-				options := &types.setup.ConfigOptions{
-					OwnerName:  "Test User",
-					OwnerEmail: "test@example.com",
+				options := &setup.SetupOptions{
+					Force:          true,
+					SkipValidation: true,
+					CustomSettings: map[string]string{
+						"owner_name":  "Test User",
+						"owner_email": "test@example.com",
+					},
 				}
-				err := configurator.GenerateConfig(options)
+				manager, err := setup.NewSetupManager()
+				if err != nil {
+					t.Fatalf("Failed to create setup manager: %v", err)
+				}
+				err = manager.Setup(options)
 				if err != nil {
 					t.Fatalf("Failed to generate config: %v", err)
 				}
@@ -306,11 +321,19 @@ func TestConfigurator_BackupConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Criar configuração se necessário
 			if tt.setup {
-				options := &types.setup.ConfigOptions{
-					OwnerName:  "Test User",
-					OwnerEmail: "test@example.com",
+				options := &setup.SetupOptions{
+					Force:          true,
+					SkipValidation: true,
+					CustomSettings: map[string]string{
+						"owner_name":  "Test User",
+						"owner_email": "test@example.com",
+					},
 				}
-				err := configurator.GenerateConfig(options)
+				manager, err := setup.NewSetupManager()
+				if err != nil {
+					t.Fatalf("Failed to create setup manager: %v", err)
+				}
+				err = manager.Setup(options)
 				if err != nil {
 					t.Fatalf("Failed to generate config: %v", err)
 				}
@@ -368,11 +391,19 @@ func TestConfigurator_RestoreConfig(t *testing.T) {
 
 			// Criar backup se necessário
 			if tt.setup {
-				options := &types.setup.ConfigOptions{
-					OwnerName:  "Test User",
-					OwnerEmail: "test@example.com",
+				options := &setup.SetupOptions{
+					Force:          true,
+					SkipValidation: true,
+					CustomSettings: map[string]string{
+						"owner_name":  "Test User",
+						"owner_email": "test@example.com",
+					},
 				}
-				err := configurator.GenerateConfig(options)
+				manager, err := setup.NewSetupManager()
+				if err != nil {
+					t.Fatalf("Failed to create setup manager: %v", err)
+				}
+				err = manager.Setup(options)
 				if err != nil {
 					t.Fatalf("Failed to generate config: %v", err)
 				}
