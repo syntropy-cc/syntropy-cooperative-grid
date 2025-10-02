@@ -6,22 +6,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
+	setup "setup-component/src"
+	"setup-component/tests/helpers"
 )
 
 // TestConfigPerformance_ConfigurationGenerationSpeed testa a velocidade da geração de configuração
 func TestConfigPerformance_ConfigurationGenerationSpeed(t *testing.T) {
 	tests := []struct {
 		name        string
-		options     *types.ConfigOptions
+		options     *setup.ConfigOptions
 		maxDuration time.Duration
 		wantErr     bool
 	}{
 		{
 			name: "should generate configuration within reasonable time",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -42,7 +41,7 @@ func TestConfigPerformance_ConfigurationGenerationSpeed(t *testing.T) {
 		},
 		{
 			name: "should handle minimal configuration quickly",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -484,7 +483,7 @@ func TestConfigPerformance_ConcurrentConfiguration(t *testing.T) {
 			done := make(chan bool, tt.concurrency)
 			for i := 0; i < tt.concurrency; i++ {
 				go func(instance int) {
-					options := &types.ConfigOptions{
+					options := &types.setup.ConfigOptions{
 						OwnerName:      "Test User " + string(rune(instance)),
 						OwnerEmail:     "test" + string(rune(instance)) + "@example.com",
 						NetworkConfig:  nil,
@@ -527,13 +526,13 @@ func TestConfigPerformance_ConcurrentConfiguration(t *testing.T) {
 func TestConfigPerformance_MemoryUsage(t *testing.T) {
 	tests := []struct {
 		name        string
-		options     *types.ConfigOptions
+		options     *setup.ConfigOptions
 		maxMemoryMB int64
 		wantErr     bool
 	}{
 		{
 			name: "should use reasonable amount of memory",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -618,7 +617,7 @@ func TestConfigPerformance_StressTest(t *testing.T) {
 
 			// Executar múltiplas iterações
 			for i := 0; i < tt.iterations; i++ {
-				options := &types.ConfigOptions{
+				options := &types.setup.ConfigOptions{
 					OwnerName:      "Test User " + string(rune(i)),
 					OwnerEmail:     "test" + string(rune(i)) + "@example.com",
 					NetworkConfig:  nil,

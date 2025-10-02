@@ -1,5 +1,5 @@
-//go:build darwin && !integration && !e2e && !performance && !security
-// +build darwin,!integration,!e2e,!performance,!security
+//go:build !windows && !linux && !darwin && !integration && !e2e && !performance && !security
+// +build !windows,!linux,!darwin,!integration,!e2e,!performance,!security
 
 package unit
 
@@ -10,8 +10,8 @@ import (
 	setup "setup-component/src"
 )
 
-// TestDarwinValidator_DetectOS testa a detecção do SO macOS
-func TestDarwinValidator_DetectOS(t *testing.T) {
+// TestGenericValidator_DetectOS testa a detecção do SO genérico
+func TestGenericValidator_DetectOS(t *testing.T) {
 	// Criar diretório temporário para testes
 	tempDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -21,15 +21,15 @@ func TestDarwinValidator_DetectOS(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	validator := setup.NewDarwinValidator(logger)
+	validator := setup.NewGenericValidator(logger)
 
 	tests := []struct {
 		name string
 		want string
 	}{
 		{
-			name: "should detect Darwin OS",
-			want: "darwin",
+			name: "should detect generic OS",
+			want: "generic",
 		},
 	}
 
@@ -37,14 +37,14 @@ func TestDarwinValidator_DetectOS(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := validator.DetectOS()
 			if result != tt.want {
-				t.Errorf("DarwinValidator.DetectOS() = %v, want %v", result, tt.want)
+				t.Errorf("GenericValidator.DetectOS() = %v, want %v", result, tt.want)
 			}
 		})
 	}
 }
 
-// TestDarwinValidator_ValidateResources testa a validação de recursos
-func TestDarwinValidator_ValidateResources(t *testing.T) {
+// TestGenericValidator_ValidateResources testa a validação de recursos
+func TestGenericValidator_ValidateResources(t *testing.T) {
 	// Criar diretório temporário para testes
 	tempDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -54,7 +54,7 @@ func TestDarwinValidator_ValidateResources(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	validator := setup.NewDarwinValidator(logger)
+	validator := setup.NewGenericValidator(logger)
 
 	tests := []struct {
 		name    string
@@ -70,14 +70,14 @@ func TestDarwinValidator_ValidateResources(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ValidateResources()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DarwinValidator.ValidateResources() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GenericValidator.ValidateResources() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestDarwinValidator_ValidatePermissions testa a validação de permissões
-func TestDarwinValidator_ValidatePermissions(t *testing.T) {
+// TestGenericValidator_ValidatePermissions testa a validação de permissões
+func TestGenericValidator_ValidatePermissions(t *testing.T) {
 	// Criar diretório temporário para testes
 	tempDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -87,7 +87,7 @@ func TestDarwinValidator_ValidatePermissions(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	validator := setup.NewDarwinValidator(logger)
+	validator := setup.NewGenericValidator(logger)
 
 	tests := []struct {
 		name    string
@@ -103,14 +103,14 @@ func TestDarwinValidator_ValidatePermissions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ValidatePermissions()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DarwinValidator.ValidatePermissions() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GenericValidator.ValidatePermissions() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestDarwinValidator_InstallDependencies testa a instalação de dependências
-func TestDarwinValidator_InstallDependencies(t *testing.T) {
+// TestGenericValidator_InstallDependencies testa a instalação de dependências
+func TestGenericValidator_InstallDependencies(t *testing.T) {
 	// Criar diretório temporário para testes
 	tempDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -120,7 +120,7 @@ func TestDarwinValidator_InstallDependencies(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	validator := setup.NewDarwinValidator(logger)
+	validator := setup.NewGenericValidator(logger)
 
 	tests := []struct {
 		name    string
@@ -136,14 +136,14 @@ func TestDarwinValidator_InstallDependencies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.InstallDependencies()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DarwinValidator.InstallDependencies() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GenericValidator.InstallDependencies() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestDarwinValidator_ConfigureEnvironment testa a configuração do ambiente
-func TestDarwinValidator_ConfigureEnvironment(t *testing.T) {
+// TestGenericValidator_ConfigureEnvironment testa a configuração do ambiente
+func TestGenericValidator_ConfigureEnvironment(t *testing.T) {
 	// Criar diretório temporário para testes
 	tempDir := t.TempDir()
 	originalHome := os.Getenv("HOME")
@@ -153,7 +153,7 @@ func TestDarwinValidator_ConfigureEnvironment(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	validator := setup.NewDarwinValidator(logger)
+	validator := setup.NewGenericValidator(logger)
 
 	tests := []struct {
 		name    string
@@ -169,7 +169,7 @@ func TestDarwinValidator_ConfigureEnvironment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validator.ConfigureEnvironment()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DarwinValidator.ConfigureEnvironment() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GenericValidator.ConfigureEnvironment() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

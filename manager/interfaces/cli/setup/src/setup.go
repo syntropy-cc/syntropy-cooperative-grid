@@ -60,7 +60,7 @@ func NewSetupManager() (*SetupManager, error) {
 }
 
 // Setup executa o setup completo conforme especificado no guia
-func (sm *SetupManager) Setup(options *types.SetupOptions) error {
+func (sm *SetupManager) Setup(options *SetupOptions) error {
 	sm.logger.LogStep("setup_start", map[string]interface{}{
 		"options": options,
 	})

@@ -12,8 +12,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	setup "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/types"
+	"setup-component/tests/types"
 )
 
 // TestLoadPerformance tests system performance under various load conditions
@@ -525,12 +526,12 @@ func BenchmarkLargeConfigProcessing(b *testing.B) {
 }
 
 // performOptimizedConcurrentSetup performs concurrent setup operations with optimizations
-func performOptimizedConcurrentSetup(optionsList []types.SetupOptions, maxConcurrency int) ([]*types.SetupResult, error) {
+func performOptimizedConcurrentSetup(optionsList []types.SetupOptions, maxConcurrency int) ([]*setup.SetupResult, error) {
 	if maxConcurrency <= 0 {
 		maxConcurrency = runtime.NumCPU()
 	}
 
-	results := make([]*types.SetupResult, len(optionsList))
+	results := make([]*setup.SetupResult, len(optionsList))
 	semaphore := make(chan struct{}, maxConcurrency)
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(optionsList))
@@ -571,13 +572,13 @@ func performOptimizedConcurrentSetup(optionsList []types.SetupOptions, maxConcur
 }
 
 // performOptimizedSetupOperation performs a single setup operation with optimizations
-func performOptimizedSetupOperation(options types.SetupOptions) *types.SetupResult {
+func performOptimizedSetupOperation(options types.SetupOptions) *setup.SetupResult {
 	startTime := time.Now()
 
 	// Simulate optimized setup with reduced overhead
 	time.Sleep(5 * time.Millisecond) // Reduced from default simulation time
 
-	return &types.SetupResult{
+	return &types.setup.SetupResult{
 		Success:     true,
 		StartTime:   startTime,
 		EndTime:     time.Now(),

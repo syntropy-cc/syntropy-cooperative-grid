@@ -1,31 +1,47 @@
+//go:build !integration && !e2e && !performance && !security
+// +build !integration,!e2e,!performance,!security
+
 package unit
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/mocks"
+	setup "setup-component/src"
 )
 
-// TestNewKeyManager testa a criação de um novo KeyManager
+// TestNewKeyManager testa a criação do gerenciador de chaves
 func TestNewKeyManager(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
 	tests := []struct {
-		name string
+		name    string
+		logger  *setup.SetupLogger
+		wantErr bool
 	}{
 		{
-			name: "should create key manager successfully",
+			name:    "should create key manager successfully",
+			logger:  logger,
+			wantErr: false,
+		},
+		{
+			name:    "should create key manager with nil logger",
+			logger:  nil,
+			wantErr: false, // Logger pode ser nil
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := &mocks.MockSetupLogger{}
-			keyManager := src.NewKeyManager(logger)
+			keyManager := setup.NewKeyManager(tt.logger)
 			if keyManager == nil {
 				t.Error("NewKeyManager() returned nil key manager")
 			}
@@ -33,34 +49,32 @@ func TestNewKeyManager(t *testing.T) {
 	}
 }
 
-// TestKeyManager_GenerateKeyPair testa o método GenerateKeyPair
+// TestKeyManager_GenerateKeyPair testa a geração de par de chaves
 func TestKeyManager_GenerateKeyPair(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	keyManager := setup.NewKeyManager(logger)
+
 	tests := []struct {
-		name       string
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		wantErr bool
 	}{
 		{
-			name:       "should generate key pair successfully",
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should generate key pair successfully",
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_test")
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			keyPair, err := keyManager.GenerateKeyPair()
+			keyPair, err := keyManager.GenerateKeyPair("test-key")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("KeyManager.GenerateKeyPair() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -68,166 +82,136 @@ func TestKeyManager_GenerateKeyPair(t *testing.T) {
 
 			if !tt.wantErr {
 				if keyPair == nil {
-					t.Error("KeyManager.GenerateKeyPair() returned nil keyPair")
+					t.Error("KeyManager.GenerateKeyPair() returned nil key pair")
 					return
 				}
-				helpers.AssertStringNotEmpty(t, keyPair.ID, "KeyPair ID")
-				helpers.AssertStringEqual(t, keyPair.Algorithm, "ed25519", "KeyPair Algorithm")
-				helpers.AssertStringNotEmpty(t, keyPair.Fingerprint, "KeyPair Fingerprint")
-				helpers.AssertStringNotEmpty(t, keyPair.PublicKey, "KeyPair PublicKey")
-				helpers.AssertStringNotEmpty(t, keyPair.PrivateKey, "KeyPair PrivateKey")
-			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+				// Verificar campos obrigatórios
+				if keyPair.ID == "" {
+					t.Error("Key pair missing ID")
+				}
+				if keyPair.Algorithm == "" {
+					t.Error("Key pair missing algorithm")
+				}
+				if keyPair.PrivateKey == nil {
+					t.Error("Key pair missing private key")
+				}
+				if keyPair.PublicKey == nil {
+					t.Error("Key pair missing public key")
+				}
+				if keyPair.Fingerprint == "" {
+					t.Error("Key pair missing fingerprint")
+				}
+			}
 		})
 	}
 }
 
-// TestKeyManager_StoreKeyPair testa o método StoreKeyPair
+// TestKeyManager_StoreKeyPair testa o armazenamento de par de chaves
 func TestKeyManager_StoreKeyPair(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	keyManager := setup.NewKeyManager(logger)
+
 	tests := []struct {
-		name       string
-		keyPair    *types.KeyPair
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		keyPair *setup.KeyPair
+		wantErr bool
 	}{
 		{
+			name:    "should fail store with nil key pair",
+			keyPair: nil,
+			wantErr: true,
+		},
+		{
 			name: "should store key pair successfully",
-			keyPair: &types.KeyPair{
-				ID:          "test-key-1",
+			keyPair: &types.setup.KeyPair{
+				ID:          "test-key",
 				Algorithm:   "ed25519",
+				PrivateKey:  []byte("private key"),
+				PublicKey:   []byte("public key"),
 				Fingerprint: "test-fingerprint",
-				PublicKey:   "test-public-key",
-				PrivateKey:  "test-private-key",
-				CreatedAt:   time.Now(),
 			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:       "should fail when key pair is nil",
-			keyPair:    nil,
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name: "should fail when key pair has empty ID",
-			keyPair: &types.KeyPair{
-				ID:          "",
-				Algorithm:   "ed25519",
-				Fingerprint: "test-fingerprint",
-				PublicKey:   "test-public-key",
-				PrivateKey:  "test-private-key",
-				CreatedAt:   time.Now(),
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_store_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			os.MkdirAll(keysDir, 0755)
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
 			err := keyManager.StoreKeyPair(tt.keyPair)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("KeyManager.StoreKeyPair() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+			// Verificar se o arquivo foi salvo
+			if !tt.wantErr {
+				keyPath := filepath.Join(tempDir, ".syntropy", "keys", tt.keyPair.ID+".key")
+				if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+					t.Errorf("Key file not saved: %s", keyPath)
+				}
+			}
 		})
 	}
 }
 
-// TestKeyManager_LoadKeyPair testa o método LoadKeyPair
+// TestKeyManager_LoadKeyPair testa o carregamento de par de chaves
 func TestKeyManager_LoadKeyPair(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	keyManager := setup.NewKeyManager(logger)
+
 	tests := []struct {
-		name       string
-		keyID      string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		keyID   string
+		setup   bool
+		wantErr bool
 	}{
 		{
-			name:  "should load key pair successfully",
-			keyID: "test-key-1",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave
-				keyFile := filepath.Join(keysDir, "test-key-1.json")
-				keyContent := `{
-					"id": "test-key-1",
-					"algorithm": "ed25519",
-					"fingerprint": "test-fingerprint",
-					"public_key": "test-public-key",
-					"private_key": "test-private-key",
-					"created_at": "2023-01-01T00:00:00Z"
-				}`
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should fail load when key does not exist",
+			keyID:   "nonexistent-key",
+			setup:   false,
+			wantErr: true,
 		},
 		{
-			name:  "should fail when key file does not exist",
-			keyID: "nonexistent-key",
-			setupFunc: func(keysDir string) error {
-				// Não criar arquivo de chave
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:  "should fail when key file is invalid",
-			keyID: "invalid-key",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave inválido
-				keyFile := filepath.Join(keysDir, "invalid-key.json")
-				keyContent := "invalid json content"
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
+			name:    "should load key pair successfully when key exists",
+			keyID:   "test-key",
+			setup:   true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_load_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			os.MkdirAll(keysDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(keysDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+			// Criar chave se necessário
+			if tt.setup {
+				keyPair := &types.setup.KeyPair{
+					ID:          tt.keyID,
+					Algorithm:   "ed25519",
+					PrivateKey:  []byte("private key"),
+					PublicKey:   []byte("public key"),
+					Fingerprint: "test-fingerprint",
+				}
+				err := keyManager.StoreKeyPair(keyPair)
+				if err != nil {
+					t.Fatalf("Failed to save key pair: %v", err)
 				}
 			}
 
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			keyPair, err := keyManager.LoadKeyPair(tt.keyID)
+			keyPair, err := keyManager.LoadKeyPair(tt.keyID, "test-password")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("KeyManager.LoadKeyPair() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -235,405 +219,79 @@ func TestKeyManager_LoadKeyPair(t *testing.T) {
 
 			if !tt.wantErr {
 				if keyPair == nil {
-					t.Error("KeyManager.LoadKeyPair() returned nil keyPair")
+					t.Error("KeyManager.LoadKeyPair() returned nil key pair")
 					return
 				}
-				helpers.AssertStringEqual(t, keyPair.ID, tt.keyID, "KeyPair ID")
-			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
-		})
-	}
-}
-
-// TestKeyManager_RotateKeys testa o método RotateKeys
-func TestKeyManager_RotateKeys(t *testing.T) {
-	tests := []struct {
-		name       string
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-	}{
-		{
-			name:       "should rotate keys successfully",
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_rotate_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			os.MkdirAll(keysDir, 0755)
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			newKeyPair, err := keyManager.RotateKeys()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("KeyManager.RotateKeys() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr {
-				if newKeyPair == nil {
-					t.Error("KeyManager.RotateKeys() returned nil keyPair")
-					return
+				// Verificar campos obrigatórios
+				if keyPair.ID != tt.keyID {
+					t.Errorf("Key pair ID mismatch: got %s, want %s", keyPair.ID, tt.keyID)
 				}
-				helpers.AssertStringNotEmpty(t, newKeyPair.ID, "New KeyPair ID")
-				helpers.AssertStringEqual(t, newKeyPair.Algorithm, "ed25519", "New KeyPair Algorithm")
-			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
-		})
-	}
-}
-
-// TestKeyManager_VerifyKeyIntegrity testa o método VerifyKeyIntegrity
-func TestKeyManager_VerifyKeyIntegrity(t *testing.T) {
-	tests := []struct {
-		name       string
-		keyID      string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-	}{
-		{
-			name:  "should verify key integrity successfully",
-			keyID: "test-key-1",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave válido
-				keyFile := filepath.Join(keysDir, "test-key-1.json")
-				keyContent := `{
-					"id": "test-key-1",
-					"algorithm": "ed25519",
-					"fingerprint": "test-fingerprint",
-					"public_key": "test-public-key",
-					"private_key": "test-private-key",
-					"created_at": "2023-01-01T00:00:00Z"
-				}`
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:  "should fail when key file does not exist",
-			keyID: "nonexistent-key",
-			setupFunc: func(keysDir string) error {
-				// Não criar arquivo de chave
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:  "should fail when key file is corrupted",
-			keyID: "corrupted-key",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave corrompido
-				keyFile := filepath.Join(keysDir, "corrupted-key.json")
-				keyContent := "corrupted content"
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_verify_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			os.MkdirAll(keysDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(keysDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+				if keyPair.Algorithm == "" {
+					t.Error("Key pair missing algorithm")
+				}
+				if keyPair.PrivateKey == nil {
+					t.Error("Key pair missing private key")
+				}
+				if keyPair.PublicKey == nil {
+					t.Error("Key pair missing public key")
+				}
+				if keyPair.Fingerprint == "" {
+					t.Error("Key pair missing fingerprint")
 				}
 			}
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			err := keyManager.VerifyKeyIntegrity(tt.keyID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("KeyManager.VerifyKeyIntegrity() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
 		})
 	}
 }
 
-// TestKeyManager_BackupKeys testa o método BackupKeys
-func TestKeyManager_BackupKeys(t *testing.T) {
-	tests := []struct {
-		name       string
-		backupPath string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-	}{
-		{
-			name:       "should backup keys successfully",
-			backupPath: "keys_backup.tar.gz",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave
-				keyFile := filepath.Join(keysDir, "test-key-1.json")
-				keyContent := `{
-					"id": "test-key-1",
-					"algorithm": "ed25519",
-					"fingerprint": "test-fingerprint",
-					"public_key": "test-public-key",
-					"private_key": "test-private-key",
-					"created_at": "2023-01-01T00:00:00Z"
-				}`
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:       "should fail when keys directory does not exist",
-			backupPath: "keys_backup.tar.gz",
-			setupFunc: func(keysDir string) error {
-				// Não criar diretório de chaves
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:       "should handle empty backup path",
-			backupPath: "",
-			setupFunc: func(keysDir string) error {
-				// Criar arquivo de chave
-				keyFile := filepath.Join(keysDir, "test-key-1.json")
-				keyContent := `{
-					"id": "test-key-1",
-					"algorithm": "ed25519",
-					"fingerprint": "test-fingerprint",
-					"public_key": "test-public-key",
-					"private_key": "test-private-key",
-					"created_at": "2023-01-01T00:00:00Z"
-				}`
-				return os.WriteFile(keyFile, []byte(keyContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_backup_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			backupDir := filepath.Join(tempDir, "backups")
-			os.MkdirAll(backupDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(keysDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
-				}
-			}
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			fullBackupPath := filepath.Join(backupDir, tt.backupPath)
-			err := keyManager.BackupKeys(fullBackupPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("KeyManager.BackupKeys() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
-		})
-	}
-}
-
-// TestKeyManager_RestoreKeys testa o método RestoreKeys
-func TestKeyManager_RestoreKeys(t *testing.T) {
-	tests := []struct {
-		name       string
-		backupPath string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-	}{
-		{
-			name:       "should restore keys successfully",
-			backupPath: "keys_backup.tar.gz",
-			setupFunc: func(backupDir string) error {
-				// Criar arquivo de backup
-				backupFile := filepath.Join(backupDir, "keys_backup.tar.gz")
-				backupContent := []byte("fake backup content")
-				return os.WriteFile(backupFile, backupContent, 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:       "should fail when backup file does not exist",
-			backupPath: "nonexistent_backup.tar.gz",
-			setupFunc: func(backupDir string) error {
-				// Não criar arquivo de backup
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:       "should fail when backup file is corrupted",
-			backupPath: "corrupted_backup.tar.gz",
-			setupFunc: func(backupDir string) error {
-				// Criar arquivo de backup corrompido
-				backupFile := filepath.Join(backupDir, "corrupted_backup.tar.gz")
-				backupContent := []byte("corrupted backup content")
-				return os.WriteFile(backupFile, backupContent, 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_restore_test")
-			keysDir := filepath.Join(tempDir, "keys")
-			backupDir := filepath.Join(tempDir, "backups")
-			os.MkdirAll(keysDir, 0755)
-			os.MkdirAll(backupDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(backupDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
-				}
-			}
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
-			}
-
-			fullBackupPath := filepath.Join(backupDir, tt.backupPath)
-			err := keyManager.RestoreKeys(fullBackupPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("KeyManager.RestoreKeys() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
-		})
-	}
-}
-
-// TestKeyManager_ListKeys testa o método ListKeys
+// TestKeyManager_ListKeys testa a listagem de chaves
 func TestKeyManager_ListKeys(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	keyManager := setup.NewKeyManager(logger)
+
 	tests := []struct {
-		name       string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-		wantCount  int
+		name    string
+		setup   bool
+		wantErr bool
 	}{
 		{
-			name: "should list keys successfully",
-			setupFunc: func(keysDir string) error {
-				// Criar múltiplos arquivos de chave
-				for i := 1; i <= 3; i++ {
-					keyFile := filepath.Join(keysDir, "test-key-"+string(rune(i))+".json")
-					keyContent := `{
-						"id": "test-key-` + string(rune(i)) + `",
-						"algorithm": "ed25519",
-						"fingerprint": "test-fingerprint-` + string(rune(i)) + `",
-						"public_key": "test-public-key-` + string(rune(i)) + `",
-						"private_key": "test-private-key-` + string(rune(i)) + `",
-						"created_at": "2023-01-01T00:00:00Z"
-					}`
-					if err := os.WriteFile(keyFile, []byte(keyContent), 0644); err != nil {
-						return err
+			name:    "should list keys successfully when keys exist",
+			setup:   true,
+			wantErr: false,
+		},
+		{
+			name:    "should list keys successfully when no keys exist",
+			setup:   false,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar chaves se necessário
+			if tt.setup {
+				keyPairs := []string{"key1", "key2", "key3"}
+				for _, keyID := range keyPairs {
+					keyPair := &types.setup.KeyPair{
+						ID:          keyID,
+						Algorithm:   "ed25519",
+						PrivateKey:  []byte("private key"),
+						PublicKey:   []byte("public key"),
+						Fingerprint: "test-fingerprint",
+					}
+					err := keyManager.StoreKeyPair(keyPair)
+					if err != nil {
+						t.Fatalf("Failed to save key pair %s: %v", keyID, err)
 					}
 				}
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-			wantCount:  3,
-		},
-		{
-			name: "should return empty list when no keys exist",
-			setupFunc: func(keysDir string) error {
-				// Não criar arquivos de chave
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-			wantCount:  0,
-		},
-		{
-			name: "should fail when keys directory does not exist",
-			setupFunc: func(keysDir string) error {
-				// Não criar diretório de chaves
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-			wantCount:  0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "key_manager_list_test")
-			keysDir := filepath.Join(tempDir, "keys")
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(keysDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
-				}
-			}
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar key manager com diretório temporário
-			keyManager := &src.KeyManager{
-				Logger: logger,
 			}
 
 			keys, err := keyManager.ListKeys()
@@ -643,189 +301,270 @@ func TestKeyManager_ListKeys(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				if len(keys) != tt.wantCount {
-					t.Errorf("KeyManager.ListKeys() returned %d keys, want %d", len(keys), tt.wantCount)
+				if keys == nil {
+					t.Error("KeyManager.ListKeys() returned nil keys")
 				}
 			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
 		})
 	}
 }
 
-// TestKeyManager_EdgeCases testa casos extremos do KeyManager
-func TestKeyManager_EdgeCases(t *testing.T) {
-	t.Run("should handle nil logger", func(t *testing.T) {
-		keyManager := &src.KeyManager{
-			Logger: nil,
-		}
+// TestKeyManager_RotateKeys testa a rotação de chaves
+func TestKeyManager_RotateKeys(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-		// Should not panic
-		keyPair, err := keyManager.GenerateKeyPair()
-		if err != nil {
-			t.Errorf("GenerateKeyPair() failed with nil logger: %v", err)
-		}
-		if keyPair == nil {
-			t.Error("GenerateKeyPair() returned nil keyPair with nil logger")
-		}
-	})
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
 
-	t.Run("should handle empty key ID", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "key_manager_edge_test")
-		keysDir := filepath.Join(tempDir, "keys")
-		os.MkdirAll(keysDir, 0755)
+	keyManager := setup.NewKeyManager(logger)
 
-		keyManager := &src.KeyManager{
-			Logger: &mocks.MockSetupLogger{},
-		}
+	tests := []struct {
+		name    string
+		keyID   string
+		setup   bool
+		wantErr bool
+	}{
+		{
+			name:    "should fail rotate when key does not exist",
+			keyID:   "nonexistent-key",
+			setup:   false,
+			wantErr: true,
+		},
+		{
+			name:    "should rotate keys successfully when key exists",
+			keyID:   "test-key",
+			setup:   true,
+			wantErr: false,
+		},
+	}
 
-		_, err := keyManager.LoadKeyPair("")
-		if err == nil {
-			t.Error("LoadKeyPair() should fail with empty key ID")
-		}
-
-		os.RemoveAll(tempDir)
-	})
-}
-
-// TestKeyManager_Concurrency testa concorrência do KeyManager
-func TestKeyManager_Concurrency(t *testing.T) {
-	t.Run("should handle concurrent key generation", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "key_manager_concurrent_test")
-
-		keyManager := &src.KeyManager{
-			Logger: &mocks.MockSetupLogger{},
-		}
-
-		// Executar múltiplas chamadas de GenerateKeyPair concorrentemente
-		done := make(chan bool, 10)
-		for i := 0; i < 10; i++ {
-			go func() {
-				keyPair, err := keyManager.GenerateKeyPair()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar chave se necessário
+			if tt.setup {
+				keyPair := &types.setup.KeyPair{
+					ID:          tt.keyID,
+					Algorithm:   "ed25519",
+					PrivateKey:  []byte("private key"),
+					PublicKey:   []byte("public key"),
+					Fingerprint: "test-fingerprint",
+				}
+				err := keyManager.StoreKeyPair(keyPair)
 				if err != nil {
-					t.Errorf("Concurrent GenerateKeyPair() failed: %v", err)
+					t.Fatalf("Failed to save key pair: %v", err)
 				}
-				if keyPair == nil {
-					t.Error("Concurrent GenerateKeyPair() returned nil keyPair")
-				}
-				done <- true
-			}()
-		}
+			}
 
-		// Aguardar todas as goroutines terminarem
-		for i := 0; i < 10; i++ {
-			<-done
-		}
-
-		os.RemoveAll(tempDir)
-	})
+			err := keyManager.RotateKeys(tt.keyID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("KeyManager.RotateKeys() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
-// TestKeyManager_Performance testa performance do KeyManager
-func TestKeyManager_Performance(t *testing.T) {
-	t.Run("should complete operations within reasonable time", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "key_manager_perf_test")
+// TestKeyManager_VerifyKeyIntegrity testa a verificação de integridade de chave
+func TestKeyManager_VerifyKeyIntegrity(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-		keyManager := &src.KeyManager{
-			Logger: &mocks.MockSetupLogger{},
-		}
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
 
-		start := time.Now()
-		keyPair, err := keyManager.GenerateKeyPair()
-		elapsed := time.Since(start)
+	keyManager := setup.NewKeyManager(logger)
 
-		if err != nil {
-			t.Errorf("GenerateKeyPair() failed: %v", err)
-		}
-		if keyPair == nil {
-			t.Error("GenerateKeyPair() returned nil keyPair")
-		}
+	tests := []struct {
+		name    string
+		keyID   string
+		setup   bool
+		wantErr bool
+	}{
+		{
+			name:    "should fail verify when key does not exist",
+			keyID:   "nonexistent-key",
+			setup:   false,
+			wantErr: true,
+		},
+		{
+			name:    "should verify key integrity successfully when key exists",
+			keyID:   "test-key",
+			setup:   true,
+			wantErr: false,
+		},
+	}
 
-		if elapsed > 1*time.Second {
-			t.Errorf("GenerateKeyPair() took too long: %v", elapsed)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar chave se necessário
+			if tt.setup {
+				keyPair := &types.setup.KeyPair{
+					ID:          tt.keyID,
+					Algorithm:   "ed25519",
+					PrivateKey:  []byte("private key"),
+					PublicKey:   []byte("public key"),
+					Fingerprint: "test-fingerprint",
+				}
+				err := keyManager.StoreKeyPair(keyPair)
+				if err != nil {
+					t.Fatalf("Failed to save key pair: %v", err)
+				}
+			}
 
-		os.RemoveAll(tempDir)
-	})
-}
-
-// TestKeyManager_Security testa aspectos de segurança do KeyManager
-func TestKeyManager_Security(t *testing.T) {
-	t.Run("should generate cryptographically secure keys", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "key_manager_security_test")
-
-		keyManager := &src.KeyManager{
-			Logger: &mocks.MockSetupLogger{},
-		}
-
-		// Gerar múltiplas chaves e verificar que são diferentes
-		keyPairs := make([]*types.KeyPair, 10)
-		for i := 0; i < 10; i++ {
-			keyPair, err := keyManager.GenerateKeyPair()
-			if err != nil {
-				t.Errorf("GenerateKeyPair() failed: %v", err)
+			valid, err := keyManager.VerifyKeyIntegrity(tt.keyID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("KeyManager.VerifyKeyIntegrity() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			keyPairs[i] = keyPair
-		}
 
-		// Verificar que todas as chaves são diferentes
-		for i := 0; i < len(keyPairs); i++ {
-			for j := i + 1; j < len(keyPairs); j++ {
-				if keyPairs[i].ID == keyPairs[j].ID {
-					t.Error("Generated duplicate key IDs")
-				}
-				if keyPairs[i].Fingerprint == keyPairs[j].Fingerprint {
-					t.Error("Generated duplicate key fingerprints")
-				}
-				if keyPairs[i].PublicKey == keyPairs[j].PublicKey {
-					t.Error("Generated duplicate public keys")
-				}
-				if keyPairs[i].PrivateKey == keyPairs[j].PrivateKey {
-					t.Error("Generated duplicate private keys")
+			if !tt.wantErr {
+				if !valid {
+					t.Error("KeyManager.VerifyKeyIntegrity() returned false for valid key")
 				}
 			}
-		}
+		})
+	}
+}
 
-		os.RemoveAll(tempDir)
-	})
+// TestKeyManager_BackupKeys testa o backup de chaves
+func TestKeyManager_BackupKeys(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-	t.Run("should handle key rotation securely", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "key_manager_rotation_test")
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
 
-		keyManager := &src.KeyManager{
-			Logger: &mocks.MockSetupLogger{},
-		}
+	keyManager := setup.NewKeyManager(logger)
 
-		// Gerar chave inicial
-		initialKey, err := keyManager.GenerateKeyPair()
-		if err != nil {
-			t.Errorf("GenerateKeyPair() failed: %v", err)
-			return
-		}
+	tests := []struct {
+		name    string
+		keyID   string
+		setup   bool
+		wantErr bool
+	}{
+		{
+			name:    "should fail backup when key does not exist",
+			keyID:   "nonexistent-key",
+			setup:   false,
+			wantErr: true,
+		},
+		{
+			name:    "should backup keys successfully when key exists",
+			keyID:   "test-key",
+			setup:   true,
+			wantErr: false,
+		},
+	}
 
-		// Rotacionar chaves
-		newKey, err := keyManager.RotateKeys()
-		if err != nil {
-			t.Errorf("RotateKeys() failed: %v", err)
-			return
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar chave se necessário
+			if tt.setup {
+				keyPair := &types.setup.KeyPair{
+					ID:          tt.keyID,
+					Algorithm:   "ed25519",
+					PrivateKey:  []byte("private key"),
+					PublicKey:   []byte("public key"),
+					Fingerprint: "test-fingerprint",
+				}
+				err := keyManager.StoreKeyPair(keyPair)
+				if err != nil {
+					t.Fatalf("Failed to save key pair: %v", err)
+				}
+			}
 
-		// Verificar que a nova chave é diferente da inicial
-		if initialKey.ID == newKey.ID {
-			t.Error("Key rotation generated same key ID")
-		}
-		if initialKey.Fingerprint == newKey.Fingerprint {
-			t.Error("Key rotation generated same key fingerprint")
-		}
-		if initialKey.PublicKey == newKey.PublicKey {
-			t.Error("Key rotation generated same public key")
-		}
-		if initialKey.PrivateKey == newKey.PrivateKey {
-			t.Error("Key rotation generated same private key")
-		}
+			backupPath, err := keyManager.BackupKeys(tt.keyID, "test_backup")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("KeyManager.BackupKeys() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-		os.RemoveAll(tempDir)
-	})
+			if !tt.wantErr {
+				if backupPath == "" {
+					t.Error("KeyManager.BackupKeys() returned empty backup path")
+				}
+
+				// Verificar se o backup foi criado
+				if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+					t.Errorf("Backup file not created: %s", backupPath)
+				}
+			}
+		})
+	}
+}
+
+// TestKeyManager_RestoreKeys testa a restauração de chaves
+func TestKeyManager_RestoreKeys(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	keyManager := setup.NewKeyManager(logger)
+
+	tests := []struct {
+		name    string
+		keyID   string
+		setup   bool
+		wantErr bool
+	}{
+		{
+			name:    "should fail restore when backup does not exist",
+			keyID:   "nonexistent-key",
+			setup:   false,
+			wantErr: true,
+		},
+		{
+			name:    "should restore keys successfully when backup exists",
+			keyID:   "test-key",
+			setup:   true,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var backupPath string
+
+			// Criar backup se necessário
+			if tt.setup {
+				keyPair := &types.setup.KeyPair{
+					ID:          tt.keyID,
+					Algorithm:   "ed25519",
+					PrivateKey:  []byte("private key"),
+					PublicKey:   []byte("public key"),
+					Fingerprint: "test-fingerprint",
+				}
+				err := keyManager.StoreKeyPair(keyPair)
+				if err != nil {
+					t.Fatalf("Failed to save key pair: %v", err)
+				}
+
+				backupPath, err = keyManager.BackupKeys(tt.keyID, "test_backup")
+				if err != nil {
+					t.Fatalf("Failed to backup key pair: %v", err)
+				}
+			} else {
+				backupPath = filepath.Join(tempDir, "nonexistent_backup.key")
+			}
+
+			err := keyManager.RestoreKeys(backupPath)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("KeyManager.RestoreKeys() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }

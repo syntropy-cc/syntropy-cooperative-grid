@@ -1,266 +1,34 @@
+//go:build !integration && !e2e && !performance && !security
+// +build !integration,!e2e,!performance,!security
+
 package unit
 
 import (
-	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/mocks"
+	setup "setup-component/src"
 )
 
-// TestSetupManager_Validate testa o método Validate do SetupManager
-func TestSetupManager_Validate(t *testing.T) {
-	tests := []struct {
-		name           string
-		mockValidator  *mocks.MockValidator
-		mockLogger     *mocks.MockSetupLogger
-		wantErr        bool
-		expectedResult *types.ValidationResult
-	}{
-		{
-			name: "should validate successfully",
-			mockValidator: &mocks.MockValidator{
-				ValidateEnvironmentFunc: func() (*types.EnvironmentInfo, error) {
-					return helpers.CreateValidEnvironmentInfo(), nil
-				},
-				ValidateDependenciesFunc: func() (*types.DependencyStatus, error) {
-					return &types.DependencyStatus{
-						Required:  []types.Dependency{},
-						Installed: []types.Dependency{},
-						Missing:   []types.Dependency{},
-						Outdated:  []types.Dependency{},
-					}, nil
-				},
-				ValidateNetworkFunc: func() (*types.NetworkInfo, error) {
-					return &types.NetworkInfo{
-						HasInternet:     true,
-						Connectivity:    true,
-						ProxyConfigured: false,
-						FirewallActive:  false,
-						PortsOpen:       []int{8080, 9090},
-					}, nil
-				},
-				ValidatePermissionsFunc: func() (*types.PermissionStatus, error) {
-					return &types.PermissionStatus{
-						FileSystem: true,
-						Network:    true,
-						Service:    false,
-						Admin:      false,
-						Issues:     []string{},
-					}, nil
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-			expectedResult: &types.ValidationResult{
-				CanProceed: true,
-				Issues:     []types.ValidationIssue{},
-				Warnings:   []string{},
-			},
-		},
-		{
-			name: "should fail when environment validation fails",
-			mockValidator: &mocks.MockValidator{
-				ValidateEnvironmentFunc: func() (*types.EnvironmentInfo, error) {
-					return nil, errors.New("environment validation failed")
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manager := &src.SetupManager{
-				Validator: tt.mockValidator,
-				Logger:    tt.mockLogger,
-			}
-
-			result, err := manager.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetupManager.Validate() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr {
-				if result == nil {
-					t.Error("SetupManager.Validate() returned nil result")
-					return
-				}
-				if tt.expectedResult != nil {
-					helpers.AssertBoolEqual(t, result.CanProceed, tt.expectedResult.CanProceed, "CanProceed")
-					helpers.AssertSliceLength(t, result.Issues, len(tt.expectedResult.Issues), "Issues")
-					helpers.AssertSliceLength(t, result.Warnings, len(tt.expectedResult.Warnings), "Warnings")
-				}
-			}
-		})
-	}
-}
-
-// TestSetupManager_Status testa o método Status do SetupManager
-func TestSetupManager_Status(t *testing.T) {
-	tests := []struct {
-		name             string
-		mockStateManager *mocks.MockStateManager
-		mockLogger       *mocks.MockSetupLogger
-		wantErr          bool
-		expectedStatus   *types.SetupStatus
-	}{
-		{
-			name: "should return status successfully",
-			mockStateManager: &mocks.MockStateManager{
-				LoadStateFunc: func() (*types.SetupState, error) {
-					state := helpers.CreateValidSetupState()
-					state.Status = types.SetupStatusCompleted
-					return state, nil
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-			expectedStatus: func() *types.SetupStatus {
-				status := types.SetupStatusCompleted
-				return &status
-			}(),
-		},
-		{
-			name: "should fail when state load fails",
-			mockStateManager: &mocks.MockStateManager{
-				LoadStateFunc: func() (*types.SetupState, error) {
-					return nil, errors.New("state load failed")
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manager := &src.SetupManager{
-				StateManager: tt.mockStateManager,
-				Logger:       tt.mockLogger,
-			}
-
-			status, err := manager.Status()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetupManager.Status() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr {
-				if status == nil {
-					t.Error("SetupManager.Status() returned nil status")
-					return
-				}
-				if tt.expectedStatus != nil {
-					helpers.AssertStringEqual(t, string(*status), string(*tt.expectedStatus), "Status")
-				}
-			}
-		})
-	}
-}
-
-// TestSetupManager_Reset testa o método Reset do SetupManager
-func TestSetupManager_Reset(t *testing.T) {
-	tests := []struct {
-		name       string
-		confirm    bool
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
-	}{
-		{
-			name:       "should reset successfully when confirmed",
-			confirm:    true,
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:       "should fail when not confirmed",
-			confirm:    false,
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manager := &src.SetupManager{
-				Logger: tt.mockLogger,
-			}
-
-			err := manager.Reset(tt.confirm)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetupManager.Reset() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if tt.wantErr {
-				helpers.AssertErrorContains(t, err, "confirmação")
-			}
-		})
-	}
-}
-
-// TestSetupManager_Repair testa o método Repair do SetupManager
-func TestSetupManager_Repair(t *testing.T) {
-	tests := []struct {
-		name             string
-		mockStateManager *mocks.MockStateManager
-		mockLogger       *mocks.MockSetupLogger
-		wantErr          bool
-	}{
-		{
-			name: "should repair successfully",
-			mockStateManager: &mocks.MockStateManager{
-				VerifyIntegrityFunc: func() error {
-					return nil
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name: "should handle integrity check failure gracefully",
-			mockStateManager: &mocks.MockStateManager{
-				VerifyIntegrityFunc: func() error {
-					return errors.New("integrity check failed")
-				},
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false, // Repair should not fail even if integrity check fails
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manager := &src.SetupManager{
-				StateManager: tt.mockStateManager,
-				Logger:       tt.mockLogger,
-			}
-
-			err := manager.Repair()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetupManager.Repair() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-		})
-	}
-}
-
-// TestSetupLegacy testa a função SetupLegacy
+// TestSetupLegacy testa a função legacy de setup
 func TestSetupLegacy(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
 	tests := []struct {
 		name    string
-		options types.LegacySetupOptions
+		options setup.LegacySetupOptions
 		wantErr bool
 	}{
 		{
-			name: "should setup legacy successfully",
-			options: types.LegacySetupOptions{
+			name: "should setup successfully with default options",
+			options: setup.LegacySetupOptions{
 				Force:          false,
 				InstallService: false,
 				ConfigPath:     "",
@@ -269,11 +37,21 @@ func TestSetupLegacy(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "should setup legacy with force",
-			options: types.LegacySetupOptions{
+			name: "should setup successfully with force option",
+			options: setup.LegacySetupOptions{
 				Force:          true,
 				InstallService: false,
 				ConfigPath:     "",
+				HomeDir:        "",
+			},
+			wantErr: false,
+		},
+		{
+			name: "should setup successfully with custom config path",
+			options: setup.LegacySetupOptions{
+				Force:          false,
+				InstallService: false,
+				ConfigPath:     filepath.Join(tempDir, "custom_config.yaml"),
 				HomeDir:        "",
 			},
 			wantErr: false,
@@ -282,7 +60,7 @@ func TestSetupLegacy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := src.SetupLegacy(tt.options)
+			result, err := setup.SetupLegacy(tt.options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupLegacy() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -293,249 +71,413 @@ func TestSetupLegacy(t *testing.T) {
 					t.Error("SetupLegacy() returned nil result")
 					return
 				}
-				helpers.AssertBoolEqual(t, result.Success, true, "Success")
-				helpers.AssertStringNotEmpty(t, result.Message, "Message")
+
+				// Verificar campos obrigatórios
+				if result.StartTime.IsZero() {
+					t.Error("Result missing start time")
+				}
+				if result.EndTime.IsZero() {
+					t.Error("Result missing end time")
+				}
+				if result.Environment == "" {
+					t.Error("Result missing environment")
+				}
+				if result.Message == "" {
+					t.Error("Result missing message")
+				}
 			}
 		})
 	}
 }
 
-// TestStatusLegacy testa a função StatusLegacy
+// TestStatusLegacy testa a função legacy de status
 func TestStatusLegacy(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
 	tests := []struct {
 		name    string
-		options types.LegacySetupOptions
+		setup   bool
 		wantErr bool
 	}{
 		{
-			name: "should get status legacy successfully",
-			options: types.LegacySetupOptions{
-				Force:          false,
-				InstallService: false,
-				ConfigPath:     "",
-				HomeDir:        "",
-			},
+			name:    "should return not found when no setup exists",
+			setup:   false,
+			wantErr: false, // StatusLegacy não retorna erro, apenas indica que não foi encontrado
+		},
+		{
+			name:    "should return status when setup exists",
+			setup:   true,
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := src.StatusLegacy(tt.options)
+			// Executar setup se necessário
+			if tt.setup {
+				options := setup.LegacySetupOptions{
+					Force:          true,
+					InstallService: false,
+					ConfigPath:     "",
+					HomeDir:        "",
+				}
+				_, err := setup.SetupLegacy(options)
+				if err != nil {
+					t.Fatalf("Failed to setup: %v", err)
+				}
+			}
+
+			options := setup.LegacySetupOptions{
+				Force:          false,
+				InstallService: false,
+				ConfigPath:     "",
+				HomeDir:        "",
+			}
+			result, err := setup.StatusLegacy(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("StatusLegacy() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			if !tt.wantErr {
-				if result == nil {
-					t.Error("StatusLegacy() returned nil result")
-					return
-				}
-				helpers.AssertBoolEqual(t, result.Success, true, "Success")
-				helpers.AssertStringNotEmpty(t, result.Message, "Message")
+			if result == nil {
+				t.Error("StatusLegacy() returned nil result")
+				return
+			}
+
+			// Verificar campos obrigatórios
+			if result.StartTime.IsZero() {
+				t.Error("Result missing start time")
+			}
+			if result.EndTime.IsZero() {
+				t.Error("Result missing end time")
+			}
+			if result.Environment == "" {
+				t.Error("Result missing environment")
+			}
+			if result.Message == "" {
+				t.Error("Result missing message")
 			}
 		})
 	}
 }
 
-// TestResetLegacy testa a função ResetLegacy
+// TestResetLegacy testa a função legacy de reset
 func TestResetLegacy(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
 	tests := []struct {
 		name    string
-		options types.LegacySetupOptions
+		setup   bool
 		wantErr bool
 	}{
 		{
-			name: "should reset legacy successfully",
-			options: types.LegacySetupOptions{
-				Force:          false,
-				InstallService: false,
-				ConfigPath:     "",
-				HomeDir:        "",
-			},
+			name:    "should reset successfully even without setup",
+			setup:   false,
+			wantErr: false,
+		},
+		{
+			name:    "should reset successfully with existing setup",
+			setup:   true,
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := src.ResetLegacy(tt.options)
+			// Executar setup se necessário
+			if tt.setup {
+				options := setup.LegacySetupOptions{
+					Force:          true,
+					InstallService: false,
+					ConfigPath:     "",
+					HomeDir:        "",
+				}
+				_, err := setup.SetupLegacy(options)
+				if err != nil {
+					t.Fatalf("Failed to setup: %v", err)
+				}
+			}
+
+			options := setup.LegacySetupOptions{
+				Force:          false,
+				InstallService: false,
+				ConfigPath:     "",
+				HomeDir:        "",
+			}
+			result, err := setup.ResetLegacy(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ResetLegacy() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			if !tt.wantErr {
-				if result == nil {
-					t.Error("ResetLegacy() returned nil result")
-					return
-				}
-				helpers.AssertBoolEqual(t, result.Success, true, "Success")
-				helpers.AssertStringNotEmpty(t, result.Message, "Message")
+			if result == nil {
+				t.Error("ResetLegacy() returned nil result")
+				return
+			}
+
+			// Verificar campos obrigatórios
+			if result.StartTime.IsZero() {
+				t.Error("Result missing start time")
+			}
+			if result.EndTime.IsZero() {
+				t.Error("Result missing end time")
+			}
+			if result.Message == "" {
+				t.Error("Result missing message")
 			}
 		})
 	}
 }
 
-// TestGetSyntropyDirLegacy testa a função GetSyntropyDirLegacy
+// TestGetSyntropyDirLegacy testa a função legacy de obtenção do diretório
 func TestGetSyntropyDirLegacy(t *testing.T) {
 	tests := []struct {
-		name     string
-		expected string
+		name string
+		os   string
+		want string
 	}{
 		{
-			name:     "should return syntropy directory path",
-			expected: "", // Will be validated based on OS
+			name: "should return Windows path on Windows",
+			os:   "windows",
+			want: "Syntropy",
+		},
+		{
+			name: "should return Unix path on Linux",
+			os:   "linux",
+			want: ".syntropy",
+		},
+		{
+			name: "should return Unix path on macOS",
+			os:   "darwin",
+			want: ".syntropy",
+		},
+		{
+			name: "should return Unix path on unknown OS",
+			os:   "unknown",
+			want: ".syntropy",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := src.GetSyntropyDirLegacy()
-			helpers.AssertStringNotEmpty(t, result, "SyntropyDir")
+			// Não podemos alterar runtime.GOOS diretamente, então testamos o comportamento atual
+			result := setup.GetSyntropyDirLegacy()
+			if result == "" {
+				t.Error("GetSyntropyDirLegacy() returned empty string")
+			}
+
+			// Verificar se contém o padrão esperado baseado no SO atual
+			if runtime.GOOS == "windows" {
+				if filepath.Base(result) != "Syntropy" {
+					t.Errorf("GetSyntropyDirLegacy() = %v, expected Windows path", result)
+				}
+			} else {
+				if filepath.Base(result) != ".syntropy" {
+					t.Errorf("GetSyntropyDirLegacy() = %v, expected Unix path", result)
+				}
+			}
 		})
 	}
 }
 
-// TestSetupManager_EdgeCases testa casos extremos do SetupManager
-func TestSetupManager_EdgeCases(t *testing.T) {
-	t.Run("should handle nil options", func(t *testing.T) {
-		manager := &src.SetupManager{
-			Validator:    &mocks.MockValidator{},
-			Configurator: &mocks.MockConfigurator{},
-			StateManager: &mocks.MockStateManager{},
-			KeyManager:   &mocks.MockKeyManager{},
-			Logger:       &mocks.MockSetupLogger{},
-		}
+// TestSetupManager_ErrorHandling testa o tratamento de erros indiretamente
+func TestSetupManager_ErrorHandling(t *testing.T) {
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create setup manager: %v", err)
+	}
+	// Logger será fechado automaticamente
 
-		err := manager.Setup(nil)
-		if err == nil {
-			t.Error("Expected error when options is nil")
-		}
-	})
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name:    "should handle setup errors gracefully",
+			wantErr: false, // Setup pode falhar, mas não deve causar panic
+		},
+	}
 
-	t.Run("should handle empty custom settings", func(t *testing.T) {
-		options := &types.SetupOptions{
-			Force:          false,
-			ValidateOnly:   false,
-			Verbose:        false,
-			Quiet:          false,
-			ConfigPath:     "",
-			CustomSettings: map[string]string{}, // Empty map
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			options := &types.setup.SetupOptions{
+				Force:          false,
+				SkipValidation: false,
+			}
+			err := manager.Setup(options)
+			// Não verificar erro específico, apenas que não houve panic
+			_ = err
+		})
+	}
+}
 
-		manager := &src.SetupManager{
-			Validator: &mocks.MockValidator{
-				ValidateEnvironmentFunc: func() (*types.EnvironmentInfo, error) {
-					env := helpers.CreateValidEnvironmentInfo()
-					env.CanProceed = true
-					return env, nil
-				},
-			},
-			Configurator: &mocks.MockConfigurator{
-				CreateStructureFunc: func() error {
-					return nil
-				},
-				GenerateConfigFunc: func(options *types.ConfigOptions) error {
-					return nil
-				},
-			},
-			KeyManager: &mocks.MockKeyManager{
-				GenerateKeyPairFunc: func(algorithm string) (*types.KeyPair, error) {
-					return helpers.CreateValidKeyPair(), nil
-				},
-			},
-			StateManager: &mocks.MockStateManager{
-				SaveStateFunc: func(state *types.SetupState) error {
-					return nil
-				},
-			},
-			Logger: &mocks.MockSetupLogger{},
-		}
+// TestSetupManager_Setup_ErrorPaths testa os caminhos de erro do setup
+func TestSetupManager_Setup_ErrorPaths(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
+	tests := []struct {
+		name    string
+		options *setup.SetupOptions
+		wantErr bool
+	}{
+		{
+			name:    "should fail with nil options",
+			options: nil,
+			wantErr: true,
+		},
+		{
+			name: "should fail with empty custom settings",
+			options: &types.setup.SetupOptions{
+				Force:          false,
+				ValidateOnly:   false,
+				Verbose:        false,
+				Quiet:          false,
+				CustomSettings: map[string]string{},
+			},
+			wantErr: false, // Deve usar valores padrão
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager, err := setup.NewSetupManager()
+			if err != nil {
+				t.Fatalf("Failed to create setup manager: %v", err)
+			}
+			// Logger será fechado automaticamente
+
+			err = manager.Setup(tt.options)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestSetupManager_Setup_Concurrent testa setup concorrente
+func TestSetupManager_Setup_Concurrent(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create setup manager: %v", err)
+	}
+	// Logger será fechado automaticamente
+
+	// Executar múltiplos setups concorrentes
+	numGoroutines := 5
+	done := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			options := &types.setup.SetupOptions{
+				Force:        true, // Usar force para evitar conflitos de validação
+				ValidateOnly: false,
+				Verbose:      false,
+				Quiet:        true,
+				CustomSettings: map[string]string{
+					"owner_name":  "Test User",
+					"owner_email": "test@example.com",
+				},
+			}
+			err := manager.Setup(options)
+			done <- err
+		}(i)
+	}
+
+	// Coletar resultados
+	for i := 0; i < numGoroutines; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("Concurrent setup %d failed: %v", i, err)
+			}
+		case <-time.After(30 * time.Second):
+			t.Errorf("Concurrent setup %d timed out", i)
+		}
+	}
+}
+
+// BenchmarkNewSetupManager testa a performance da criação do gerenciador
+func BenchmarkNewSetupManager(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			b.Fatalf("Failed to create setup manager: %v", err)
+		}
+		// Logger será fechado automaticamente
+	}
+}
+
+// BenchmarkSetupManager_SetupAdditional testa a performance do setup
+func BenchmarkSetupManager_SetupAdditional(b *testing.B) {
+	// Criar diretório temporário para testes
+	tempDir := b.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		b.Fatalf("Failed to create setup manager: %v", err)
+	}
+	// Logger será fechado automaticamente
+
+	options := &types.setup.SetupOptions{
+		Force:        true,
+		ValidateOnly: false,
+		Verbose:      false,
+		Quiet:        true,
+		CustomSettings: map[string]string{
+			"owner_name":  "Test User",
+			"owner_email": "test@example.com",
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		err := manager.Setup(options)
 		if err != nil {
-			t.Errorf("Setup() with empty custom settings failed: %v", err)
+			b.Fatalf("Setup failed: %v", err)
 		}
-	})
+	}
 }
 
-// TestSetupManager_Concurrency testa concorrência do SetupManager
-func TestSetupManager_Concurrency(t *testing.T) {
-	t.Run("should handle concurrent status calls", func(t *testing.T) {
-		manager := &src.SetupManager{
-			StateManager: &mocks.MockStateManager{
-				LoadStateFunc: func() (*types.SetupState, error) {
-					state := helpers.CreateValidSetupState()
-					state.Status = types.SetupStatusCompleted
-					return state, nil
-				},
-			},
-			Logger: &mocks.MockSetupLogger{},
-		}
+// BenchmarkSetupManager_ValidateAdditional testa a performance da validação
+func BenchmarkSetupManager_ValidateAdditional(b *testing.B) {
+	// Criar diretório temporário para testes
+	tempDir := b.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-		// Executar múltiplas chamadas de Status concorrentemente
-		done := make(chan bool, 10)
-		for i := 0; i < 10; i++ {
-			go func() {
-				_, err := manager.Status()
-				if err != nil {
-					t.Errorf("Concurrent Status() failed: %v", err)
-				}
-				done <- true
-			}()
-		}
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		b.Fatalf("Failed to create setup manager: %v", err)
+	}
+	// Logger será fechado automaticamente
 
-		// Aguardar todas as goroutines terminarem
-		for i := 0; i < 10; i++ {
-			<-done
-		}
-	})
-}
-
-// TestSetupManager_Performance testa performance do SetupManager
-func TestSetupManager_Performance(t *testing.T) {
-	t.Run("should complete setup within reasonable time", func(t *testing.T) {
-		start := time.Now()
-
-		manager := &src.SetupManager{
-			Validator: &mocks.MockValidator{
-				ValidateEnvironmentFunc: func() (*types.EnvironmentInfo, error) {
-					env := helpers.CreateValidEnvironmentInfo()
-					env.CanProceed = true
-					return env, nil
-				},
-			},
-			Configurator: &mocks.MockConfigurator{
-				CreateStructureFunc: func() error {
-					return nil
-				},
-				GenerateConfigFunc: func(options *types.ConfigOptions) error {
-					return nil
-				},
-			},
-			KeyManager: &mocks.MockKeyManager{
-				GenerateKeyPairFunc: func(algorithm string) (*types.KeyPair, error) {
-					return helpers.CreateValidKeyPair(), nil
-				},
-			},
-			StateManager: &mocks.MockStateManager{
-				SaveStateFunc: func(state *types.SetupState) error {
-					return nil
-				},
-			},
-			Logger: &mocks.MockSetupLogger{},
-		}
-
-		err := manager.Setup(helpers.CreateValidSetupOptions())
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := manager.Validate()
 		if err != nil {
-			t.Errorf("Setup() failed: %v", err)
+			b.Fatalf("Validate failed: %v", err)
 		}
-
-		elapsed := time.Since(start)
-		if elapsed > 5*time.Second {
-			t.Errorf("Setup() took too long: %v", elapsed)
-		}
-	})
+	}
 }

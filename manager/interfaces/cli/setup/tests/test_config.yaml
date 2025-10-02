@@ -1,0 +1,221 @@
+# Configuração de Testes para o Componente Setup
+# Este arquivo contém configurações específicas para os testes
+
+# Configurações gerais
+test:
+  # Diretório temporário para testes
+  temp_dir: "/tmp/syntropy-setup-tests"
+  
+  # Timeout para operações de teste
+  timeout: "30s"
+  
+  # Nível de log para testes
+  log_level: "debug"
+  
+  # Configurações de cobertura
+  coverage:
+    # Diretório para relatórios de cobertura
+    output_dir: "./coverage"
+    
+    # Formato do relatório (html, xml, json)
+    format: "html"
+    
+    # Limite mínimo de cobertura (0-100)
+    threshold: 100
+
+# Configurações de setup
+setup:
+  # Configurações padrão para testes
+  default_options:
+    force: false
+    skip_validation: false
+    
+  # Configurações de validação
+  validation:
+    # Timeout para validações
+    timeout: "10s"
+    
+    # Configurações de rede
+    network:
+      # Timeout para testes de conectividade
+      connectivity_timeout: "5s"
+      
+      # URLs para testes de conectividade
+      test_urls:
+        - "https://www.google.com"
+        - "https://www.github.com"
+    
+    # Configurações de dependências
+    dependencies:
+      # Lista de dependências obrigatórias
+      required:
+        - "curl"
+        - "wget"
+        - "git"
+      
+      # Lista de dependências opcionais
+      optional:
+        - "docker"
+        - "kubectl"
+
+# Configurações de performance
+performance:
+  # Limites de tempo para operações
+  timeouts:
+    setup: "30s"
+    validation: "10s"
+    status: "1s"
+    reset: "10s"
+    repair: "15s"
+  
+  # Configurações de benchmark
+  benchmark:
+    # Número de iterações para benchmarks
+    iterations: 100
+    
+    # Duração mínima para benchmarks
+    min_duration: "1s"
+
+# Configurações de segurança
+security:
+  # Configurações de permissões
+  permissions:
+    # Permissões mínimas para arquivos
+    file_mode: "0644"
+    
+    # Permissões mínimas para diretórios
+    dir_mode: "0755"
+    
+    # Permissões para arquivos de chave
+    key_file_mode: "0600"
+  
+  # Configurações de integridade
+  integrity:
+    # Verificar integridade de arquivos
+    check_files: true
+    
+    # Verificar integridade de diretórios
+    check_directories: true
+    
+    # Verificar integridade de chaves
+    check_keys: true
+
+# Configurações de integração
+integration:
+  # Configurações de ambiente
+  environment:
+    # Variáveis de ambiente para testes
+    env_vars:
+      HOME: "/tmp/syntropy-setup-tests"
+      USER: "testuser"
+    
+    # Configurações de sistema
+    system:
+      # Simular diferentes sistemas operacionais
+      os: "linux"
+      
+      # Simular diferentes arquiteturas
+      arch: "amd64"
+
+# Configurações end-to-end
+e2e:
+  # Configurações de fluxo completo
+  flow:
+    # Executar validação antes do setup
+    validate_before_setup: true
+    
+    # Executar repair após setup
+    repair_after_setup: true
+    
+    # Executar reset após testes
+    reset_after_tests: true
+  
+  # Configurações de dados de teste
+  test_data:
+    # Dados de configuração para testes
+    config:
+      owner_name: "Test User"
+      owner_email: "test@example.com"
+    
+    # Dados de estado para testes
+    state:
+      status: "completed"
+      version: "1.0.0"
+      timestamp: "2023-01-01T00:00:00Z"
+
+# Configurações de mock
+mock:
+  # Configurações de serviços mock
+  services:
+    # Mock de serviços de arquivo
+    file_service: true
+    
+    # Mock de serviços de rede
+    network_service: true
+    
+    # Mock de serviços de sistema
+    system_service: true
+  
+  # Configurações de dados mock
+  data:
+    # Dados mock para validação
+    validation:
+      # Resultados mock para validação de ambiente
+      environment: "valid"
+      
+      # Resultados mock para validação de dependências
+      dependencies: "valid"
+      
+      # Resultados mock para validação de rede
+      network: "valid"
+      
+      # Resultados mock para validação de permissões
+      permissions: "valid"
+
+# Configurações de relatórios
+reports:
+  # Configurações de relatórios de teste
+  test_reports:
+    # Diretório para relatórios
+    output_dir: "./reports"
+    
+    # Formato dos relatórios (json, xml, html)
+    format: "json"
+    
+    # Incluir logs nos relatórios
+    include_logs: true
+  
+  # Configurações de relatórios de cobertura
+  coverage_reports:
+    # Diretório para relatórios de cobertura
+    output_dir: "./coverage"
+    
+    # Formato dos relatórios (html, xml, json)
+    format: "html"
+    
+    # Incluir detalhes de cobertura
+    include_details: true
+
+# Configurações de limpeza
+cleanup:
+  # Configurações de limpeza após testes
+  after_tests:
+    # Remover arquivos temporários
+    remove_temp_files: true
+    
+    # Remover diretórios temporários
+    remove_temp_dirs: true
+    
+    # Remover logs de teste
+    remove_test_logs: true
+  
+  # Configurações de limpeza de recursos
+  resources:
+    # Limpar recursos de rede
+    network: true
+    
+    # Limpar recursos de arquivo
+    files: true
+    
+    # Limpar recursos de sistema
+    system: true

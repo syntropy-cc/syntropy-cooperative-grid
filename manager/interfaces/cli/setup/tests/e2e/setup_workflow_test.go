@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/types"
+	"setup-component/tests/types"
 )
 
 // TestCompleteSetupWorkflow tests the complete setup workflow end-to-end
@@ -250,7 +250,7 @@ func TestSetupWorkflowPerformance(t *testing.T) {
 			// Create a large configuration file
 			configPath := filepath.Join(tempDir, "large-config.yaml")
 			largeConfig := generateLargeConfig(1000) // 1000 entries
-			
+
 			err := os.WriteFile(configPath, []byte(largeConfig), 0644)
 			require.NoError(t, err)
 
@@ -289,10 +289,10 @@ func performEnvironmentValidation(t *testing.T, homeDir string) types.Validation
 
 func performSetup(t *testing.T, options types.SetupOptions) types.SetupResult {
 	startTime := time.Now()
-	
+
 	// Simulate setup process
 	time.Sleep(100 * time.Millisecond) // Simulate work
-	
+
 	// Create platform-specific config path
 	var configPath string
 	switch runtime.GOOS {
@@ -303,7 +303,7 @@ func performSetup(t *testing.T, options types.SetupOptions) types.SetupResult {
 	default:
 		configPath = filepath.Join(options.HomeDir, ".syntropy", "config.yaml")
 	}
-	
+
 	return types.SetupResult{
 		Success:     true,
 		StartTime:   startTime,

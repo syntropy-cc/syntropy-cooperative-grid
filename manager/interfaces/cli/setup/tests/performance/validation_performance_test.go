@@ -5,9 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
+	"setup-component/src/internal/types"
+	"setup-component/tests/helpers"
 )
 
 // TestValidationPerformance_EnvironmentValidationSpeed testa a velocidade da validação do ambiente

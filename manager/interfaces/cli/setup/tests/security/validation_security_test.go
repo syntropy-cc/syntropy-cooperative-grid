@@ -5,21 +5,20 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
+	setup "setup-component/src"
+	"setup-component/tests/helpers"
 )
 
 // TestValidationSecurity_InputValidation testa validação de entrada
 func TestValidationSecurity_InputValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should reject malicious owner name",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "../../../etc/passwd",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -34,7 +33,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should reject malicious email",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com'; DROP TABLE users; --",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -49,7 +48,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should reject path traversal in config path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "../../../etc/passwd",
@@ -64,7 +63,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should reject path traversal in keys path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -79,7 +78,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should reject path traversal in backup path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -94,7 +93,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should reject path traversal in log path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -109,7 +108,7 @@ func TestValidationSecurity_InputValidation(t *testing.T) {
 		},
 		{
 			name: "should accept valid inputs",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -209,12 +208,12 @@ func TestValidationSecurity_FilePermissions(t *testing.T) {
 func TestValidationSecurity_DirectoryTraversal(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should prevent directory traversal in config path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "../../../etc/passwd",
@@ -229,7 +228,7 @@ func TestValidationSecurity_DirectoryTraversal(t *testing.T) {
 		},
 		{
 			name: "should prevent directory traversal in keys path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -244,7 +243,7 @@ func TestValidationSecurity_DirectoryTraversal(t *testing.T) {
 		},
 		{
 			name: "should prevent directory traversal in backup path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -259,7 +258,7 @@ func TestValidationSecurity_DirectoryTraversal(t *testing.T) {
 		},
 		{
 			name: "should prevent directory traversal in log path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -316,12 +315,12 @@ func TestValidationSecurity_DirectoryTraversal(t *testing.T) {
 func TestValidationSecurity_CommandInjection(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should prevent command injection in owner name",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User; rm -rf /",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -336,7 +335,7 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent command injection in email",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com; rm -rf /",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -351,7 +350,7 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent command injection in config path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config; rm -rf /",
@@ -366,7 +365,7 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent command injection in keys path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -381,7 +380,7 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent command injection in backup path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -396,7 +395,7 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent command injection in log path",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -453,12 +452,12 @@ func TestValidationSecurity_CommandInjection(t *testing.T) {
 func TestValidationSecurity_SQLInjection(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should prevent SQL injection in owner name",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User'; DROP TABLE users; --",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -473,7 +472,7 @@ func TestValidationSecurity_SQLInjection(t *testing.T) {
 		},
 		{
 			name: "should prevent SQL injection in email",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com'; DROP TABLE users; --",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -522,12 +521,12 @@ func TestValidationSecurity_SQLInjection(t *testing.T) {
 func TestValidationSecurity_XSSProtection(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should prevent XSS in owner name",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "<script>alert('XSS')</script>",
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -542,7 +541,7 @@ func TestValidationSecurity_XSSProtection(t *testing.T) {
 		},
 		{
 			name: "should prevent XSS in email",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com<script>alert('XSS')</script>",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -591,12 +590,12 @@ func TestValidationSecurity_XSSProtection(t *testing.T) {
 func TestValidationSecurity_ResourceExhaustion(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.SetupOptions
+		options *setup.SetupOptions
 		wantErr bool
 	}{
 		{
 			name: "should handle extremely long owner name",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      string(make([]byte, 10000)), // 10KB string
 				OwnerEmail:     "test@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",
@@ -611,7 +610,7 @@ func TestValidationSecurity_ResourceExhaustion(t *testing.T) {
 		},
 		{
 			name: "should handle extremely long email",
-			options: &types.SetupOptions{
+			options: &types.setup.SetupOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     string(make([]byte, 10000)) + "@example.com",
 				ConfigPath:     "/tmp/syntropy_test/config",

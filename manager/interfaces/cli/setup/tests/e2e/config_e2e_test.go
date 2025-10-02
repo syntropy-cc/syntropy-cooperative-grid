@@ -6,21 +6,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
+	setup "setup-component/src"
+	"setup-component/tests/helpers"
 )
 
 // TestConfigE2E_ConfigurationGeneration testa a geração de configuração end-to-end
 func TestConfigE2E_ConfigurationGeneration(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.ConfigOptions
+		options *setup.ConfigOptions
 		wantErr bool
 	}{
 		{
 			name: "should generate complete configuration end-to-end successfully",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -40,7 +39,7 @@ func TestConfigE2E_ConfigurationGeneration(t *testing.T) {
 		},
 		{
 			name: "should handle minimal configuration end-to-end",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -51,7 +50,7 @@ func TestConfigE2E_ConfigurationGeneration(t *testing.T) {
 		},
 		{
 			name: "should handle empty owner name end-to-end",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "",
 				OwnerEmail:     "test@example.com",
 				NetworkConfig:  nil,
@@ -486,7 +485,7 @@ environment:
 func TestConfigE2E_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name    string
-		options *types.ConfigOptions
+		options *setup.ConfigOptions
 		wantErr bool
 	}{
 		{
@@ -496,7 +495,7 @@ func TestConfigE2E_ErrorHandling(t *testing.T) {
 		},
 		{
 			name: "should handle invalid email end-to-end",
-			options: &types.ConfigOptions{
+			options: &types.setup.ConfigOptions{
 				OwnerName:      "Test User",
 				OwnerEmail:     "invalid-email",
 				NetworkConfig:  nil,
@@ -551,7 +550,7 @@ func TestConfigE2E_Concurrency(t *testing.T) {
 		done := make(chan bool, 10)
 		for i := 0; i < 10; i++ {
 			go func(instance int) {
-				options := &types.ConfigOptions{
+				options := &types.setup.ConfigOptions{
 					OwnerName:      "Test User " + string(rune(instance)),
 					OwnerEmail:     "test" + string(rune(instance)) + "@example.com",
 					NetworkConfig:  nil,
@@ -593,7 +592,7 @@ func TestConfigE2E_Performance(t *testing.T) {
 			t.Fatal("NewConfigurator() returned nil")
 		}
 
-		options := &types.ConfigOptions{
+		options := &types.setup.ConfigOptions{
 			OwnerName:      "Test User",
 			OwnerEmail:     "test@example.com",
 			NetworkConfig:  nil,

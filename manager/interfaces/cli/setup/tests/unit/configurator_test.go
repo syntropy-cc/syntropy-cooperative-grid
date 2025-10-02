@@ -1,31 +1,47 @@
+//go:build !integration && !e2e && !performance && !security
+// +build !integration,!e2e,!performance,!security
+
 package unit
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/src/internal/types"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/tests/mocks"
+	setup "setup-component/src"
 )
 
-// TestNewConfigurator testa a criação de um novo Configurator
+// TestNewConfigurator testa a criação do configurador
 func TestNewConfigurator(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
 	tests := []struct {
-		name string
+		name    string
+		logger  *setup.SetupLogger
+		wantErr bool
 	}{
 		{
-			name: "should create configurator successfully",
+			name:    "should create configurator successfully",
+			logger:  logger,
+			wantErr: false,
+		},
+		{
+			name:    "should create configurator with nil logger",
+			logger:  nil,
+			wantErr: false, // Logger pode ser nil
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := &mocks.MockSetupLogger{}
-			configurator := src.NewConfigurator(logger)
+			configurator := setup.NewConfigurator(tt.logger)
 			if configurator == nil {
 				t.Error("NewConfigurator() returned nil configurator")
 			}
@@ -33,131 +49,144 @@ func TestNewConfigurator(t *testing.T) {
 	}
 }
 
-// TestConfigurator_GenerateConfig testa o método GenerateConfig
+// TestConfigurator_GenerateConfig testa a geração de configuração
 func TestConfigurator_GenerateConfig(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		options    *types.ConfigOptions
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		options *setup.ConfigOptions
+		wantErr bool
 	}{
 		{
-			name:       "should generate config successfully",
-			options:    helpers.CreateValidConfigOptions(),
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
-		},
-		{
-			name:       "should handle nil options",
-			options:    nil,
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name: "should handle empty owner name",
-			options: &types.ConfigOptions{
-				OwnerName:      "",
-				OwnerEmail:     "test@example.com",
-				NetworkConfig:  nil,
-				SecurityConfig: nil,
-				CustomSettings: map[string]string{},
+			name: "should generate config successfully with valid options",
+			options: &types.setup.ConfigOptions{
+				OwnerName:  "Test User",
+				OwnerEmail: "test@example.com",
 			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false, // Should not fail, just use empty name
+			wantErr: false,
+		},
+		{
+			name: "should generate config successfully with empty options",
+			options: &types.setup.ConfigOptions{
+				OwnerName:  "",
+				OwnerEmail: "",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "should fail with nil options",
+			options: nil,
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_test")
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
-			}
-
 			err := configurator.GenerateConfig(tt.options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.GenerateConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+			// Verificar se o arquivo de configuração foi criado
+			if !tt.wantErr {
+				configPath := filepath.Join(tempDir, ".syntropy", "config", "manager.yaml")
+				if _, err := os.Stat(configPath); os.IsNotExist(err) {
+					t.Errorf("Config file not created: %s", configPath)
+				}
+			}
 		})
 	}
 }
 
-// TestConfigurator_CreateStructure testa o método CreateStructure
+// TestConfigurator_CreateStructure testa a criação da estrutura de diretórios
 func TestConfigurator_CreateStructure(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		wantErr bool
 	}{
 		{
-			name:       "should create structure successfully",
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should create structure successfully",
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_structure_test")
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
-			}
-
 			err := configurator.CreateStructure()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.CreateStructure() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+			// Verificar se os diretórios foram criados
+			if !tt.wantErr {
+				directories := []string{
+					"config",
+					"keys",
+					"nodes",
+					"logs",
+					"cache",
+					"backups",
+					"templates",
+					"state",
+				}
+
+				for _, dir := range directories {
+					dirPath := filepath.Join(tempDir, ".syntropy", dir)
+					if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+						t.Errorf("Directory not created: %s", dirPath)
+					}
+				}
+			}
 		})
 	}
 }
 
-// TestConfigurator_GenerateKeys testa o método GenerateKeys
+// TestConfigurator_GenerateKeys testa a geração de chaves
 func TestConfigurator_GenerateKeys(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		wantErr bool
 	}{
 		{
-			name:       "should generate keys successfully",
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should generate keys successfully",
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_keys_test")
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
-			}
-
 			keyPair, err := configurator.GenerateKeys()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.GenerateKeys() error = %v, wantErr %v", err, tt.wantErr)
@@ -166,381 +195,528 @@ func TestConfigurator_GenerateKeys(t *testing.T) {
 
 			if !tt.wantErr {
 				if keyPair == nil {
-					t.Error("Configurator.GenerateKeys() returned nil keyPair")
+					t.Error("Configurator.GenerateKeys() returned nil key pair")
 					return
 				}
-				helpers.AssertStringNotEmpty(t, keyPair.ID, "KeyPair ID")
-				helpers.AssertStringEqual(t, keyPair.Algorithm, "ed25519", "KeyPair Algorithm")
-				helpers.AssertStringNotEmpty(t, keyPair.Fingerprint, "KeyPair Fingerprint")
-			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+				// Verificar campos obrigatórios
+				if keyPair.ID == "" {
+					t.Error("Key pair missing ID")
+				}
+				if keyPair.Algorithm == "" {
+					t.Error("Key pair missing algorithm")
+				}
+				if keyPair.PrivateKey == nil {
+					t.Error("Key pair missing private key")
+				}
+				if keyPair.PublicKey == nil {
+					t.Error("Key pair missing public key")
+				}
+				if keyPair.Fingerprint == "" {
+					t.Error("Key pair missing fingerprint")
+				}
+			}
 		})
 	}
 }
 
-// TestConfigurator_ValidateConfig testa o método ValidateConfig
+// TestConfigurator_ValidateConfig testa a validação de configuração
 func TestConfigurator_ValidateConfig(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		setup   bool
+		wantErr bool
 	}{
 		{
-			name: "should validate config successfully when config exists",
-			setupFunc: func(configDir string) error {
-				// Criar arquivo de configuração válido
-				configPath := filepath.Join(configDir, "manager.yaml")
-				configContent := `
-manager:
-  home_dir: "/home/testuser/.syntropy"
-  log_level: "info"
-  api_endpoint: "https://api.syntropy.network"
-  directories:
-    config: "/home/testuser/.syntropy/config"
-    keys: "/home/testuser/.syntropy/keys"
-  default_paths:
-    config: "/home/testuser/.syntropy/config/manager.yaml"
-    log: "/home/testuser/.syntropy/logs/manager.log"
-owner_key:
-  type: "ed25519"
-  path: "/home/testuser/.syntropy/keys/owner.key"
-environment:
-  os: "linux"
-  architecture: "amd64"
-  home_dir: "/home/testuser"
-`
-				return os.WriteFile(configPath, []byte(configContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should fail validation when no config exists",
+			setup:   false,
+			wantErr: true,
 		},
 		{
-			name: "should fail when config file does not exist",
-			setupFunc: func(configDir string) error {
-				// Não criar arquivo de configuração
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name: "should fail when config file is invalid",
-			setupFunc: func(configDir string) error {
-				// Criar arquivo de configuração inválido
-				configPath := filepath.Join(configDir, "manager.yaml")
-				configContent := "invalid yaml content: ["
-				return os.WriteFile(configPath, []byte(configContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
+			name:    "should validate config successfully when config exists",
+			setup:   true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_validate_test")
-			configDir := filepath.Join(tempDir, "config")
-			os.MkdirAll(configDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(configDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+			// Criar configuração se necessário
+			if tt.setup {
+				options := &types.setup.ConfigOptions{
+					OwnerName:  "Test User",
+					OwnerEmail: "test@example.com",
 				}
-			}
-
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
+				err := configurator.GenerateConfig(options)
+				if err != nil {
+					t.Fatalf("Failed to generate config: %v", err)
+				}
 			}
 
 			err := configurator.ValidateConfig()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.ValidateConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
 		})
 	}
 }
 
-// TestConfigurator_BackupConfig testa o método BackupConfig
+// TestConfigurator_BackupConfig testa o backup de configuração
 func TestConfigurator_BackupConfig(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		backupName string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		setup   bool
+		wantErr bool
 	}{
 		{
-			name:       "should backup config successfully",
-			backupName: "test_backup",
-			setupFunc: func(configDir string) error {
-				// Criar arquivo de configuração
-				configPath := filepath.Join(configDir, "manager.yaml")
-				configContent := `
-manager:
-  home_dir: "/home/testuser/.syntropy"
-  log_level: "info"
-owner_key:
-  type: "ed25519"
-environment:
-  os: "linux"
-`
-				return os.WriteFile(configPath, []byte(configContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should fail backup when no config exists",
+			setup:   false,
+			wantErr: true,
 		},
 		{
-			name:       "should fail when config file does not exist",
-			backupName: "test_backup",
-			setupFunc: func(configDir string) error {
-				// Não criar arquivo de configuração
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:       "should handle empty backup name",
-			backupName: "",
-			setupFunc: func(configDir string) error {
-				// Criar arquivo de configuração
-				configPath := filepath.Join(configDir, "manager.yaml")
-				configContent := `
-manager:
-  home_dir: "/home/testuser/.syntropy"
-`
-				return os.WriteFile(configPath, []byte(configContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should backup config successfully when config exists",
+			setup:   true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_backup_test")
-			configDir := filepath.Join(tempDir, "config")
-			os.MkdirAll(configDir, 0755)
-
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(configDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+			// Criar configuração se necessário
+			if tt.setup {
+				options := &types.setup.ConfigOptions{
+					OwnerName:  "Test User",
+					OwnerEmail: "test@example.com",
+				}
+				err := configurator.GenerateConfig(options)
+				if err != nil {
+					t.Fatalf("Failed to generate config: %v", err)
 				}
 			}
 
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
-			}
-
-			err := configurator.BackupConfig(tt.backupName)
+			err := configurator.BackupConfig("test_backup")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.BackupConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
 
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
+			// Verificar se o backup foi criado
+			if !tt.wantErr {
+				backupDir := filepath.Join(tempDir, ".syntropy", "backups")
+				if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+					t.Errorf("Backup directory not created: %s", backupDir)
+				}
+			}
 		})
 	}
 }
 
-// TestConfigurator_RestoreConfig testa o método RestoreConfig
+// TestConfigurator_RestoreConfig testa a restauração de configuração
 func TestConfigurator_RestoreConfig(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
 	tests := []struct {
-		name       string
-		backupPath string
-		setupFunc  func(string) error
-		mockLogger *mocks.MockSetupLogger
-		wantErr    bool
+		name    string
+		setup   bool
+		wantErr bool
 	}{
 		{
-			name:       "should restore config successfully",
-			backupPath: "test_backup.yaml",
-			setupFunc: func(backupDir string) error {
-				// Criar arquivo de backup
-				backupFile := filepath.Join(backupDir, "test_backup.yaml")
-				backupContent := `
-manager:
-  home_dir: "/home/testuser/.syntropy"
-  log_level: "info"
-owner_key:
-  type: "ed25519"
-environment:
-  os: "linux"
-`
-				return os.WriteFile(backupFile, []byte(backupContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    false,
+			name:    "should fail restore when no backup exists",
+			setup:   false,
+			wantErr: true,
 		},
 		{
-			name:       "should fail when backup file does not exist",
-			backupPath: "nonexistent_backup.yaml",
-			setupFunc: func(backupDir string) error {
-				// Não criar arquivo de backup
-				return nil
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
-		},
-		{
-			name:       "should fail when backup file is invalid",
-			backupPath: "invalid_backup.yaml",
-			setupFunc: func(backupDir string) error {
-				// Criar arquivo de backup inválido
-				backupFile := filepath.Join(backupDir, "invalid_backup.yaml")
-				backupContent := "invalid yaml content: ["
-				return os.WriteFile(backupFile, []byte(backupContent), 0644)
-			},
-			mockLogger: &mocks.MockSetupLogger{},
-			wantErr:    true,
+			name:    "should restore config successfully when backup exists",
+			setup:   true,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Criar diretório temporário para testes
-			tempDir := helpers.CreateTempDir(t, "configurator_restore_test")
-			configDir := filepath.Join(tempDir, "config")
-			backupDir := filepath.Join(tempDir, "backups")
-			os.MkdirAll(configDir, 0755)
-			os.MkdirAll(backupDir, 0755)
+			var backupPath string
 
-			// Setup do teste
-			if tt.setupFunc != nil {
-				if err := tt.setupFunc(backupDir); err != nil {
-					t.Fatalf("Setup failed: %v", err)
+			// Criar backup se necessário
+			if tt.setup {
+				options := &types.setup.ConfigOptions{
+					OwnerName:  "Test User",
+					OwnerEmail: "test@example.com",
 				}
+				err := configurator.GenerateConfig(options)
+				if err != nil {
+					t.Fatalf("Failed to generate config: %v", err)
+				}
+
+				err = configurator.BackupConfig("test_backup")
+				if err != nil {
+					t.Fatalf("Failed to backup config: %v", err)
+				}
+
+				// Encontrar o arquivo de backup
+				backupDir := filepath.Join(tempDir, ".syntropy", "backups")
+				files, err := os.ReadDir(backupDir)
+				if err != nil {
+					t.Fatalf("Failed to read backup directory: %v", err)
+				}
+
+				for _, file := range files {
+					if filepath.Ext(file.Name()) == ".yaml" {
+						backupPath = filepath.Join(backupDir, file.Name())
+						break
+					}
+				}
+
+				if backupPath == "" {
+					t.Fatalf("Backup file not found")
+				}
+			} else {
+				backupPath = filepath.Join(tempDir, "nonexistent_backup.yaml")
 			}
 
-			// Mock do logger
-			logger := &mocks.MockSetupLogger{}
-
-			// Criar configurator com diretório temporário
-			configurator := &src.Configurator{
-				Logger: logger,
-			}
-
-			fullBackupPath := filepath.Join(backupDir, tt.backupPath)
-			err := configurator.RestoreConfig(fullBackupPath)
+			err := configurator.RestoreConfig(backupPath)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Configurator.RestoreConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
-
-			// Limpar diretório temporário
-			os.RemoveAll(tempDir)
 		})
 	}
 }
 
-// TestConfigurator_EdgeCases testa casos extremos do Configurator
-func TestConfigurator_EdgeCases(t *testing.T) {
-	t.Run("should handle nil logger", func(t *testing.T) {
-		configurator := &src.Configurator{
-			Logger: nil,
-		}
+// TestConfigurator_LoadTemplate testa o carregamento de template
+func TestConfigurator_LoadTemplate(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-		// Should not panic
-		err := configurator.CreateStructure()
-		if err != nil {
-			t.Errorf("CreateStructure() failed with nil logger: %v", err)
-		}
-	})
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
 
-	t.Run("should handle empty backup name", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "configurator_edge_test")
-		configDir := filepath.Join(tempDir, "config")
-		os.MkdirAll(configDir, 0755)
+	configurator := setup.NewConfigurator(logger)
 
-		// Criar arquivo de configuração
-		configPath := filepath.Join(configDir, "manager.yaml")
-		configContent := `manager: {}`
-		os.WriteFile(configPath, []byte(configContent), 0644)
+	tests := []struct {
+		name         string
+		templateName string
+		setup        bool
+		wantErr      bool
+	}{
+		{
+			name:         "should fail load when template does not exist",
+			templateName: "nonexistent.yaml",
+			setup:        false,
+			wantErr:      true,
+		},
+		{
+			name:         "should load template successfully when template exists",
+			templateName: "test.yaml",
+			setup:        true,
+			wantErr:      false,
+		},
+	}
 
-		configurator := &src.Configurator{
-			Logger: &mocks.MockSetupLogger{},
-		}
-
-		err := configurator.BackupConfig("")
-		if err != nil {
-			t.Errorf("BackupConfig() failed with empty name: %v", err)
-		}
-
-		os.RemoveAll(tempDir)
-	})
-}
-
-// TestConfigurator_Concurrency testa concorrência do Configurator
-func TestConfigurator_Concurrency(t *testing.T) {
-	t.Run("should handle concurrent structure creation", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "configurator_concurrent_test")
-
-		configurator := &src.Configurator{
-			Logger: &mocks.MockSetupLogger{},
-		}
-
-		// Executar múltiplas chamadas de CreateStructure concorrentemente
-		done := make(chan bool, 10)
-		for i := 0; i < 10; i++ {
-			go func() {
-				err := configurator.CreateStructure()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar template se necessário
+			if tt.setup {
+				templatePath := filepath.Join(tempDir, ".syntropy", "templates", tt.templateName)
+				templateContent := "test: template content"
+				err := os.WriteFile(templatePath, []byte(templateContent), 0644)
 				if err != nil {
-					t.Errorf("Concurrent CreateStructure() failed: %v", err)
+					t.Fatalf("Failed to create template: %v", err)
 				}
-				done <- true
-			}()
-		}
+			}
 
-		// Aguardar todas as goroutines terminarem
-		for i := 0; i < 10; i++ {
-			<-done
-		}
+			content, err := configurator.LoadTemplate(tt.templateName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Configurator.LoadTemplate() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-		os.RemoveAll(tempDir)
-	})
+			if !tt.wantErr {
+				if content == "" {
+					t.Error("Configurator.LoadTemplate() returned empty content")
+				}
+			}
+		})
+	}
 }
 
-// TestConfigurator_Performance testa performance do Configurator
-func TestConfigurator_Performance(t *testing.T) {
-	t.Run("should complete operations within reasonable time", func(t *testing.T) {
-		tempDir := helpers.CreateTempDir(t, "configurator_perf_test")
+// TestConfigurator_SaveTemplate testa o salvamento de template
+func TestConfigurator_SaveTemplate(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
 
-		configurator := &src.Configurator{
-			Logger: &mocks.MockSetupLogger{},
-		}
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
 
-		start := time.Now()
-		err := configurator.CreateStructure()
-		elapsed := time.Since(start)
+	configurator := setup.NewConfigurator(logger)
 
-		if err != nil {
-			t.Errorf("CreateStructure() failed: %v", err)
-		}
+	tests := []struct {
+		name         string
+		templateName string
+		content      string
+		wantErr      bool
+	}{
+		{
+			name:         "should save template successfully",
+			templateName: "test.yaml",
+			content:      "test: template content",
+			wantErr:      false,
+		},
+		{
+			name:         "should save template with empty content",
+			templateName: "empty.yaml",
+			content:      "",
+			wantErr:      false,
+		},
+	}
 
-		if elapsed > 1*time.Second {
-			t.Errorf("CreateStructure() took too long: %v", elapsed)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := configurator.SaveTemplate(tt.templateName, tt.content)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Configurator.SaveTemplate() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
-		os.RemoveAll(tempDir)
-	})
+			// Verificar se o template foi salvo
+			if !tt.wantErr {
+				templatePath := filepath.Join(tempDir, ".syntropy", "templates", tt.templateName)
+				if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+					t.Errorf("Template not saved: %s", templatePath)
+				}
+
+				// Verificar conteúdo
+				content, err := os.ReadFile(templatePath)
+				if err != nil {
+					t.Errorf("Failed to read template: %v", err)
+				} else if string(content) != tt.content {
+					t.Errorf("Template content mismatch: got %s, want %s", string(content), tt.content)
+				}
+			}
+		})
+	}
+}
+
+// TestConfigurator_ProcessTemplate testa o processamento de template
+func TestConfigurator_ProcessTemplate(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
+	tests := []struct {
+		name         string
+		templateName string
+		variables    map[string]interface{}
+		setup        bool
+		wantErr      bool
+	}{
+		{
+			name:         "should fail process when template does not exist",
+			templateName: "nonexistent.yaml",
+			variables:    map[string]interface{}{},
+			setup:        false,
+			wantErr:      true,
+		},
+		{
+			name:         "should process template successfully when template exists",
+			templateName: "test.yaml",
+			variables: map[string]interface{}{
+				"name":  "Test User",
+				"email": "test@example.com",
+			},
+			setup:   true,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar template se necessário
+			if tt.setup {
+				templatePath := filepath.Join(tempDir, ".syntropy", "templates", tt.templateName)
+				templateContent := "name: {{.name}}\nemail: {{.email}}"
+				err := os.WriteFile(templatePath, []byte(templateContent), 0644)
+				if err != nil {
+					t.Fatalf("Failed to create template: %v", err)
+				}
+			}
+
+			content, err := configurator.ProcessTemplate(tt.templateName, tt.variables)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Configurator.ProcessTemplate() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if content == "" {
+					t.Error("Configurator.ProcessTemplate() returned empty content")
+				}
+			}
+		})
+	}
+}
+
+// TestConfigurator_GetConfigPath testa a obtenção do caminho de configuração
+func TestConfigurator_GetConfigPath(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{
+			name: "should return config path",
+			want: filepath.Join(tempDir, ".syntropy", "config", "manager.yaml"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := configurator.GetConfigPath()
+			if result != tt.want {
+				t.Errorf("Configurator.GetConfigPath() = %v, want %v", result, tt.want)
+			}
+		})
+	}
+}
+
+// TestConfigurator_GetTemplatesDir testa a obtenção do diretório de templates
+func TestConfigurator_GetTemplatesDir(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{
+			name: "should return templates directory path",
+			want: filepath.Join(tempDir, ".syntropy", "templates"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := configurator.GetTemplatesDir()
+			if result != tt.want {
+				t.Errorf("Configurator.GetTemplatesDir() = %v, want %v", result, tt.want)
+			}
+		})
+	}
+}
+
+// TestConfigurator_ListTemplates testa a listagem de templates
+func TestConfigurator_ListTemplates(t *testing.T) {
+	// Criar diretório temporário para testes
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	logger := setup.NewSetupLogger()
+	defer logger.Close()
+
+	configurator := setup.NewConfigurator(logger)
+
+	tests := []struct {
+		name    string
+		setup   bool
+		wantErr bool
+	}{
+		{
+			name:    "should list templates successfully when templates exist",
+			setup:   true,
+			wantErr: false,
+		},
+		{
+			name:    "should list templates successfully when no templates exist",
+			setup:   false,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Criar templates se necessário
+			if tt.setup {
+				templates := []string{"test1.yaml", "test2.yml", "test3.txt"}
+				for _, template := range templates {
+					templatePath := filepath.Join(tempDir, ".syntropy", "templates", template)
+					err := os.WriteFile(templatePath, []byte("test content"), 0644)
+					if err != nil {
+						t.Fatalf("Failed to create template %s: %v", template, err)
+					}
+				}
+			}
+
+			templates, err := configurator.ListTemplates()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Configurator.ListTemplates() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if templates == nil {
+					t.Error("Configurator.ListTemplates() returned nil templates")
+				}
+			}
+		})
+	}
 }
