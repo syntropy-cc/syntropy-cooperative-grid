@@ -355,7 +355,7 @@ func SetupLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	}
 
 	// Converter opções legacy para novas opções
-	newOptions := &types.SetupOptions{
+	newOptions := &SetupOptions{
 		Force:        options.Force,
 		ValidateOnly: false,
 		Verbose:      true,
