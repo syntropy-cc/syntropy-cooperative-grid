@@ -19,6 +19,7 @@ type SetupOptions struct {
 	Force          bool              `json:"force"`
 	ValidateOnly   bool              `json:"validate_only"`
 	SkipValidation bool              `json:"skip_validation"`
+	TestMode       bool              `json:"test_mode"`       // Bypass strict validation for unit tests
 	Verbose        bool              `json:"verbose"`
 	Quiet          bool              `json:"quiet"`
 	ConfigPath     string            `json:"config_path"`

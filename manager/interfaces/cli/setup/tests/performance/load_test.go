@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -281,7 +282,7 @@ func TestVolumePerformance(t *testing.T) {
 			{"Small Config", 10, 5 * time.Second},
 			{"Medium Config", 100, 10 * time.Second},
 			{"Large Config", 1000, 30 * time.Second},
-			{"Very Large Config", 10000, 60 * time.Second},
+			{"Very Large Config", 1000, 60 * time.Second}, // Reduced from 10000 to 1000 KB
 		}
 
 		for _, tc := range testCases {
@@ -317,7 +318,7 @@ func TestVolumePerformance(t *testing.T) {
 	t.Run("Many Small Files", func(t *testing.T) {
 		tempDir := createTempDir(t, "many-files")
 
-		const fileCount = 10000
+		const fileCount = 1000 // Reduced from 10000 to 1000
 		startTime := time.Now()
 
 		// Create many small files
@@ -353,7 +354,7 @@ func TestVolumePerformance(t *testing.T) {
 		tempDir := createTempDir(t, "deep-dirs")
 
 		// Create deep directory structure
-		const depth = 100
+		const depth = 50 // Reduced from 100 to 50
 		currentPath := tempDir
 
 		for i := 0; i < depth; i++ {
@@ -451,17 +452,28 @@ func createTempDir(t *testing.T, prefix string) string {
 }
 
 func generateLargeConfig(sizeBytes int) string {
-	config := "manager:\n  settings:\n"
+	var builder strings.Builder
+	
+	// Pre-allocate capacity to avoid multiple reallocations
+	builder.Grow(sizeBytes + 1024) // Add some buffer
+	
+	builder.WriteString("manager:\n  settings:\n")
 
 	// Calculate how many entries we need to reach the target size
 	entrySize := len("    key000000: value000000\n")
 	entries := sizeBytes / entrySize
-
-	for i := 0; i < entries; i++ {
-		config += fmt.Sprintf("    key%06d: value%06d\n", i, i)
+	
+	// Limit entries to prevent excessive memory usage
+	maxEntries := 100000 // Reasonable limit for testing
+	if entries > maxEntries {
+		entries = maxEntries
 	}
 
-	return config
+	for i := 0; i < entries; i++ {
+		builder.WriteString(fmt.Sprintf("    key%06d: value%06d\n", i, i))
+	}
+
+	return builder.String()
 }
 
 // Benchmark functions

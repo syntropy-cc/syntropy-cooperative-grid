@@ -19,10 +19,10 @@ func TestSetupManager_Performance(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -31,7 +31,7 @@ func TestSetupManager_Performance(t *testing.T) {
 	}{
 		{
 			name: "should complete setup within acceptable time",
-			options: &types.setup.SetupOptions{
+			options: &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: false,
 			},
@@ -39,7 +39,7 @@ func TestSetupManager_Performance(t *testing.T) {
 		},
 		{
 			name: "should complete setup with force within acceptable time",
-			options: &types.setup.SetupOptions{
+			options: &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			},
@@ -47,7 +47,7 @@ func TestSetupManager_Performance(t *testing.T) {
 		},
 		{
 			name: "should complete setup skipping validation within acceptable time",
-			options: &types.setup.SetupOptions{
+			options: &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: true,
 			},
@@ -59,7 +59,7 @@ func TestSetupManager_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
 
-			err := manager.Setup(tt.options)
+			err := manager.SetupWithPublicOptions(tt.options)
 			if err != nil {
 				t.Errorf("SetupManager.Setup() error = %v", err)
 				return
@@ -83,10 +83,10 @@ func TestSetupManager_Validation_Performance(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -102,7 +102,7 @@ func TestSetupManager_Validation_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
 
-			err := manager.Validate()
+			_, err := manager.Validate()
 			if err != nil {
 				t.Errorf("SetupManager.Validate() error = %v", err)
 				return
@@ -126,10 +126,12 @@ func TestSetupManager_Status_Performance(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
-	manager := setup.NewSetupManager(logger)
+
 
 	tests := []struct {
 		name        string
@@ -170,10 +172,10 @@ func TestSetupManager_Reset_Performance(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -196,11 +198,11 @@ func TestSetupManager_Reset_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup se necessário
 			if tt.setup {
-				options := &types.setup.SetupOptions{
+				options := &setup.SetupOptions{
 					Force:          true,
 					SkipValidation: false,
 				}
-				err := manager.Setup(options)
+				err := manager.SetupWithPublicOptions(options)
 				if err != nil {
 					t.Fatalf("Failed to setup: %v", err)
 				}
@@ -208,7 +210,7 @@ func TestSetupManager_Reset_Performance(t *testing.T) {
 
 			start := time.Now()
 
-			err := manager.Reset()
+			err := manager.Reset(true)
 			if err != nil {
 				t.Errorf("SetupManager.Reset() error = %v", err)
 				return
@@ -232,10 +234,10 @@ func TestSetupManager_Repair_Performance(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -258,11 +260,11 @@ func TestSetupManager_Repair_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup se necessário
 			if tt.setup {
-				options := &types.setup.SetupOptions{
+				options := &setup.SetupOptions{
 					Force:          true,
 					SkipValidation: false,
 				}
-				err := manager.Setup(options)
+				err := manager.SetupWithPublicOptions(options)
 				if err != nil {
 					t.Fatalf("Failed to setup: %v", err)
 				}
@@ -311,7 +313,7 @@ func TestSetupManager_Legacy_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
 
-			err := setup.SetupLegacy()
+			_, err := setup.SetupLegacy(setup.LegacySetupOptions{})
 			if err != nil {
 				t.Errorf("SetupLegacy() error = %v", err)
 				return
@@ -359,7 +361,7 @@ func TestSetupManager_StatusLegacy_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup se necessário
 			if tt.setup {
-				err := setup.SetupLegacy()
+				_, err := setup.SetupLegacy(setup.LegacySetupOptions{})
 				if err != nil {
 					t.Fatalf("Failed to setup legacy: %v", err)
 				}
@@ -367,7 +369,7 @@ func TestSetupManager_StatusLegacy_Performance(t *testing.T) {
 
 			start := time.Now()
 
-			status, err := setup.StatusLegacy()
+			status, err := setup.StatusLegacy(setup.LegacySetupOptions{})
 			if err != nil {
 				t.Errorf("StatusLegacy() error = %v", err)
 				return
@@ -416,7 +418,7 @@ func TestSetupManager_ResetLegacy_Performance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup se necessário
 			if tt.setup {
-				err := setup.SetupLegacy()
+				_, err := setup.SetupLegacy(setup.LegacySetupOptions{})
 				if err != nil {
 					t.Fatalf("Failed to setup legacy: %v", err)
 				}
@@ -424,7 +426,7 @@ func TestSetupManager_ResetLegacy_Performance(t *testing.T) {
 
 			start := time.Now()
 
-			err := setup.ResetLegacy()
+			_, err := setup.ResetLegacy(setup.LegacySetupOptions{})
 			if err != nil {
 				t.Errorf("ResetLegacy() error = %v", err)
 				return
@@ -451,7 +453,10 @@ func TestSetupManager_Concurrent_Performance(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create setup manager: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -472,11 +477,11 @@ func TestSetupManager_Concurrent_Performance(t *testing.T) {
 
 			// Setup
 			go func() {
-				options := &types.setup.SetupOptions{
+				options := &setup.SetupOptions{
 					Force:          true,
 					SkipValidation: false,
 				}
-				_ = manager.Setup(options)
+				_ = manager.SetupWithPublicOptions(options)
 				done <- true
 			}()
 
@@ -488,7 +493,7 @@ func TestSetupManager_Concurrent_Performance(t *testing.T) {
 
 			// Validate
 			go func() {
-				_ = manager.Validate()
+				_, _ = manager.Validate()
 				done <- true
 			}()
 

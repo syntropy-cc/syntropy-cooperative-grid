@@ -37,7 +37,7 @@ func BenchmarkSetupManager_Setup(b *testing.B) {
 				"owner_email": "test@example.com",
 			},
 		}
-		_ = manager.Setup(options)
+		_ = manager.SetupWithPublicOptions(options)
 	}
 }
 

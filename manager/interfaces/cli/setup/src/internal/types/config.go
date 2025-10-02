@@ -3,9 +3,9 @@ package types
 
 // SetupConfig represents the configuration for the setup process
 type SetupConfig struct {
-	Manager     ManagerConfig // Manager configuration
-	OwnerKey    OwnerKey      // Owner key configuration
-	Environment Environment   // Environment configuration
+	OwnerKey    OwnerKey      `yaml:"owner"`     // Owner key configuration
+	Manager     ManagerConfig `yaml:"manager"`   // Manager configuration
+	Environment Environment   `yaml:"environment"` // Environment configuration
 }
 
 // ManagerConfig represents the configuration for the Syntropy Manager

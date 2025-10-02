@@ -60,7 +60,7 @@ func NewSetupManager() (*SetupManager, error) {
 }
 
 // Setup executa o setup completo conforme especificado no guia
-func (sm *SetupManager) Setup(options *SetupOptions) error {
+func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 	// Check for nil options
 	if options == nil {
 		return sm.handleError(fmt.Errorf("setup options cannot be nil"), "invalid_options")
@@ -71,7 +71,7 @@ func (sm *SetupManager) Setup(options *SetupOptions) error {
 	})
 
 	// 1. Validar ambiente
-	envInfo, err := sm.validator.ValidateEnvironment()
+	envInfo, err := sm.validator.ValidateEnvironmentWithOptions(options)
 	if err != nil {
 		return sm.handleError(err, "validation_failed")
 	}
@@ -111,10 +111,24 @@ func (sm *SetupManager) Setup(options *SetupOptions) error {
 	state := &types.SetupState{
 		Version:   "1.0.0",
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 		Status:    types.SetupStatusCompleted,
+		Environment: &types.EnvironmentInfo{
+			OS:           envInfo.OS,
+			OSVersion:    envInfo.OSVersion,
+			Architecture: envInfo.Architecture,
+			HomeDir:      envInfo.HomeDir,
+			CanProceed:   envInfo.CanProceed,
+		},
 		Keys: &types.KeyInfo{
 			OwnerKeyID: keyPair.ID,
 			Algorithm:  keyPair.Algorithm,
+			CreatedAt:  keyPair.CreatedAt,
+			ExpiresAt:  keyPair.ExpiresAt,
+		},
+		Metadata: map[string]string{
+			"setup_version": "1.0.0",
+			"setup_method":  "automated",
 		},
 	}
 
@@ -123,10 +137,30 @@ func (sm *SetupManager) Setup(options *SetupOptions) error {
 	}
 
 	sm.logger.LogStep("setup_completed", map[string]interface{}{
-		"key_id": keyPair.ID,
+		"state": state,
 	})
 
 	return nil
+}
+
+// SetupWithPublicOptions executa o setup usando as opções públicas
+func (sm *SetupManager) SetupWithPublicOptions(options *SetupOptions) error {
+	if options == nil {
+		return sm.handleError(fmt.Errorf("setup options cannot be nil"), "invalid_options")
+	}
+
+	// Convert public SetupOptions to internal types.SetupOptions
+	internalOptions := &types.SetupOptions{
+		Force:          options.Force,
+		ValidateOnly:   options.ValidateOnly,
+		TestMode:       options.TestMode,
+		Verbose:        options.Verbose,
+		Quiet:          options.Quiet,
+		ConfigPath:     options.ConfigPath,
+		CustomSettings: options.CustomSettings,
+	}
+
+	return sm.Setup(internalOptions)
 }
 
 // Validate valida o ambiente
@@ -360,7 +394,7 @@ func SetupLegacy(options LegacySetupOptions) (*LegacySetupResult, error) {
 	}
 
 	// Converter opções legacy para novas opções
-	newOptions := &SetupOptions{
+	newOptions := &types.SetupOptions{
 		Force:        options.Force,
 		ValidateOnly: false,
 		Verbose:      true,

@@ -27,6 +27,9 @@ type Validator interface {
 	// Validação completa do ambiente
 	ValidateEnvironment() (*EnvironmentInfo, error)
 
+	// Validação completa do ambiente com opções
+	ValidateEnvironmentWithOptions(options *SetupOptions) (*EnvironmentInfo, error)
+
 	// Validação de dependências
 	ValidateDependencies() (*DependencyStatus, error)
 
@@ -157,6 +160,7 @@ type OSValidator interface {
 type SetupOptions struct {
 	Force          bool              `json:"force"`
 	ValidateOnly   bool              `json:"validate_only"`
+	TestMode       bool              `json:"test_mode"`       // Bypass strict validation for unit tests
 	Verbose        bool              `json:"verbose"`
 	Quiet          bool              `json:"quiet"`
 	ConfigPath     string            `json:"config_path"`

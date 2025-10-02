@@ -19,10 +19,10 @@ func TestSetupManager_E2E(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -43,23 +43,23 @@ func TestSetupManager_E2E(t *testing.T) {
 				return
 			}
 
-			if status.Status != "not_started" {
-				t.Errorf("Initial status = %s, want not_started", status.Status)
+			if *status != "not_started" {
+				t.Errorf("Initial status = %s, want not_started", *status)
 			}
 
 			// 2. Executar validação
-			err = manager.Validate()
+			_, err = manager.Validate()
 			if err != nil {
 				t.Errorf("SetupManager.Validate() error = %v", err)
 				return
 			}
 
 			// 3. Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: false,
 			}
-			err = manager.Setup(options)
+			err = manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -73,8 +73,8 @@ func TestSetupManager_E2E(t *testing.T) {
 					return
 				}
 
-				if status.Status != "completed" {
-					t.Errorf("Setup status = %s, want completed", status.Status)
+				if *status != "completed" {
+					t.Errorf("Setup status = %s, want completed", *status)
 				}
 
 				// 5. Verificar se todos os arquivos necessários foram criados
@@ -112,7 +112,7 @@ func TestSetupManager_E2E(t *testing.T) {
 				}
 
 				// 8. Executar reset
-				err = manager.Reset()
+				err = manager.Reset(true)
 				if err != nil {
 					t.Errorf("SetupManager.Reset() error = %v", err)
 					return
@@ -125,8 +125,8 @@ func TestSetupManager_E2E(t *testing.T) {
 					return
 				}
 
-				if status.Status != "not_started" {
-					t.Errorf("Reset status = %s, want not_started", status.Status)
+				if *status != "not_started" {
+					t.Errorf("Reset status = %s, want not_started", *status)
 				}
 			}
 		})
@@ -141,10 +141,10 @@ func TestSetupManager_E2E_WithForce(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -159,11 +159,11 @@ func TestSetupManager_E2E_WithForce(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 1. Executar setup inicial
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if err != nil {
 				t.Errorf("SetupManager.Setup() error = %v", err)
 				return
@@ -176,16 +176,16 @@ func TestSetupManager_E2E_WithForce(t *testing.T) {
 				return
 			}
 
-			if status.Status != "completed" {
-				t.Errorf("Initial setup status = %s, want completed", status.Status)
+			if *status != "completed" {
+				t.Errorf("Initial setup status = %s, want completed", *status)
 			}
 
 			// 3. Executar setup com force
-			options = &types.setup.SetupOptions{
+			options = &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err = manager.Setup(options)
+			err = manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() with force error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -199,8 +199,8 @@ func TestSetupManager_E2E_WithForce(t *testing.T) {
 					return
 				}
 
-				if status.Status != "completed" {
-					t.Errorf("Force setup status = %s, want completed", status.Status)
+				if *status != "completed" {
+					t.Errorf("Force setup status = %s, want completed", *status)
 				}
 
 				// 5. Verificar se todos os arquivos ainda existem
@@ -229,7 +229,10 @@ func TestSetupManager_E2E_WithSkipValidation(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -244,11 +247,11 @@ func TestSetupManager_E2E_WithSkipValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 1. Executar setup pulando validação
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: true,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() skipping validation error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -262,8 +265,8 @@ func TestSetupManager_E2E_WithSkipValidation(t *testing.T) {
 					return
 				}
 
-				if status.Status != "completed" {
-					t.Errorf("Setup status = %s, want completed", status.Status)
+				if *status != "completed" {
+					t.Errorf("Setup status = %s, want completed", *status)
 				}
 
 				// 3. Verificar se todos os arquivos necessários foram criados
@@ -315,18 +318,18 @@ func TestSetupManager_E2E_Legacy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 1. Verificar status inicial legacy
-			status, err := setup.StatusLegacy()
+			status, err := setup.StatusLegacy(setup.LegacySetupOptions{})
 			if err != nil {
 				t.Errorf("StatusLegacy() error = %v", err)
 				return
 			}
 
-			if status.Status != "not_started" {
-				t.Errorf("Initial legacy status = %s, want not_started", status.Status)
+			if !status.Success {
+				t.Errorf("Initial legacy status success = %v, want false", status.Success)
 			}
 
 			// 2. Executar setup legacy
-			err = setup.SetupLegacy()
+			_, err = setup.SetupLegacy(setup.LegacySetupOptions{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupLegacy() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -334,14 +337,14 @@ func TestSetupManager_E2E_Legacy(t *testing.T) {
 
 			if !tt.wantErr {
 				// 3. Verificar status após setup legacy
-				status, err = setup.StatusLegacy()
+				status, err = setup.StatusLegacy(setup.LegacySetupOptions{})
 				if err != nil {
 					t.Errorf("StatusLegacy() error = %v", err)
 					return
 				}
 
-				if status.Status != "completed" {
-					t.Errorf("Legacy setup status = %s, want completed", status.Status)
+				if !status.Success {
+					t.Errorf("Legacy setup success = %v, want true", status.Success)
 				}
 
 				// 4. Verificar se todos os arquivos necessários foram criados
@@ -366,21 +369,21 @@ func TestSetupManager_E2E_Legacy(t *testing.T) {
 				}
 
 				// 5. Executar reset legacy
-				err = setup.ResetLegacy()
+				_, err = setup.ResetLegacy(setup.LegacySetupOptions{})
 				if err != nil {
 					t.Errorf("ResetLegacy() error = %v", err)
 					return
 				}
 
 				// 6. Verificar status após reset legacy
-				status, err = setup.StatusLegacy()
+				status, err = setup.StatusLegacy(setup.LegacySetupOptions{})
 				if err != nil {
 					t.Errorf("StatusLegacy() error = %v", err)
 					return
 				}
 
-				if status.Status != "not_started" {
-					t.Errorf("Legacy reset status = %s, want not_started", status.Status)
+				if !status.Success {
+					t.Errorf("Legacy reset success = %v, want false", status.Success)
 				}
 			}
 		})
@@ -398,7 +401,10 @@ func TestSetupManager_E2E_ErrorHandling(t *testing.T) {
 	logger := setup.NewSetupLogger()
 	defer logger.Close()
 
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("NewSetupManager() error = %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -413,11 +419,11 @@ func TestSetupManager_E2E_ErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 1. Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          false,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -431,8 +437,8 @@ func TestSetupManager_E2E_ErrorHandling(t *testing.T) {
 					return
 				}
 
-				if status.Status != "completed" {
-					t.Errorf("Setup status = %s, want completed", status.Status)
+				if *status != "completed" {
+					t.Errorf("Setup status = %s, want completed", *status)
 				}
 
 				// 3. Executar repair para verificar integridade
@@ -443,7 +449,7 @@ func TestSetupManager_E2E_ErrorHandling(t *testing.T) {
 				}
 
 				// 4. Executar reset
-				err = manager.Reset()
+				err = manager.Reset(true)
 				if err != nil {
 					t.Errorf("SetupManager.Reset() error = %v", err)
 					return
@@ -456,8 +462,8 @@ func TestSetupManager_E2E_ErrorHandling(t *testing.T) {
 					return
 				}
 
-				if status.Status != "not_started" {
-					t.Errorf("Reset status = %s, want not_started", status.Status)
+				if *status != "not_started" {
+					t.Errorf("Reset status = %s, want not_started", *status)
 				}
 			}
 		})

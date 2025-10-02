@@ -40,6 +40,10 @@ func (fs *FileService) ReadFile(path string) ([]byte, error) {
 
 // RemoveFile removes a file or directory
 func (fs *FileService) RemoveFile(path string) error {
+	// Check if file exists first
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return err // Return the "file does not exist" error
+	}
 	return os.RemoveAll(path)
 }
 

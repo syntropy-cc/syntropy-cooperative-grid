@@ -19,10 +19,10 @@ func TestSetupManager_Security_Permissions(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -37,11 +37,11 @@ func TestSetupManager_Security_Permissions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -107,10 +107,10 @@ func TestSetupManager_Security_KeyGeneration(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -125,11 +125,11 @@ func TestSetupManager_Security_KeyGeneration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -180,10 +180,10 @@ func TestSetupManager_Security_StateIntegrity(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -198,11 +198,11 @@ func TestSetupManager_Security_StateIntegrity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -243,10 +243,10 @@ func TestSetupManager_Security_ConfigIntegrity(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -261,11 +261,11 @@ func TestSetupManager_Security_ConfigIntegrity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -306,10 +306,10 @@ func TestSetupManager_Security_LogIntegrity(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -324,11 +324,11 @@ func TestSetupManager_Security_LogIntegrity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -369,10 +369,10 @@ func TestSetupManager_Security_BackupIntegrity(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -387,11 +387,11 @@ func TestSetupManager_Security_BackupIntegrity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar setup
-			options := &types.setup.SetupOptions{
+			options := &setup.SetupOptions{
 				Force:          true,
 				SkipValidation: false,
 			}
-			err := manager.Setup(options)
+			err := manager.SetupWithPublicOptions(options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -442,10 +442,10 @@ func TestSetupManager_Security_NetworkSecurity(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -460,7 +460,7 @@ func TestSetupManager_Security_NetworkSecurity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar validação de rede
-			err := manager.Validate()
+			_, err := manager.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -476,10 +476,10 @@ func TestSetupManager_Security_PermissionValidation(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -494,7 +494,7 @@ func TestSetupManager_Security_PermissionValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar validação de permissões
-			err := manager.Validate()
+			_, err := manager.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -510,10 +510,10 @@ func TestSetupManager_Security_DependencyValidation(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", originalHome)
 
-	logger := setup.NewSetupLogger()
-	defer logger.Close()
-
-	manager := setup.NewSetupManager(logger)
+	manager, err := setup.NewSetupManager()
+	if err != nil {
+		t.Fatalf("Failed to create SetupManager: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -528,7 +528,7 @@ func TestSetupManager_Security_DependencyValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Executar validação de dependências
-			err := manager.Validate()
+			_, err := manager.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}

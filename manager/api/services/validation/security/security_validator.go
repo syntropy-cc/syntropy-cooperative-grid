@@ -4,6 +4,7 @@ package security
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -108,7 +109,7 @@ func (sv *SecurityValidator) validateEncryption(result *types.ValidationResult) 
 	// Test encryption
 	testData := []byte("test encryption data")
 	encrypted, err := rsa.EncryptOAEP(
-		nil,
+		sha256.New(),
 		rand.Reader,
 		&key.PublicKey,
 		testData,
@@ -129,7 +130,7 @@ func (sv *SecurityValidator) validateEncryption(result *types.ValidationResult) 
 
 	// Test decryption
 	decrypted, err := rsa.DecryptOAEP(
-		nil,
+		sha256.New(),
 		rand.Reader,
 		key,
 		encrypted,

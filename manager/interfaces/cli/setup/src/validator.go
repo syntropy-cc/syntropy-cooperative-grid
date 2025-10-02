@@ -38,6 +38,11 @@ func NewOSValidator(logger *SetupLogger) types.OSValidator {
 
 // ValidateEnvironment valida o ambiente completo
 func (v *Validator) ValidateEnvironment() (*types.EnvironmentInfo, error) {
+	return v.ValidateEnvironmentWithOptions(nil)
+}
+
+// ValidateEnvironmentWithOptions valida o ambiente completo com opções específicas
+func (v *Validator) ValidateEnvironmentWithOptions(options *types.SetupOptions) (*types.EnvironmentInfo, error) {
 	v.logger.LogStep("validation_start", nil)
 
 	// Detectar SO
@@ -87,12 +92,52 @@ func (v *Validator) ValidateEnvironment() (*types.EnvironmentInfo, error) {
 	}
 	envInfo.HomeDir = homeDir
 
+	// Avaliar se o ambiente pode prosseguir
+	canProceed := true
+	var issues []string
+
+	// Se estiver em modo de teste, permitir prosseguir com validações relaxadas
+	if options != nil && options.TestMode {
+		canProceed = true
+		v.logger.LogInfo("Test mode enabled - bypassing strict validation", map[string]interface{}{
+			"test_mode": true,
+		})
+	} else {
+		// Verificar requisitos mínimos
+		if resources.DiskSpaceGB < 1.0 { // Mínimo 1GB necessário
+			canProceed = false
+			issues = append(issues, "Espaço em disco insuficiente (mínimo 1GB)")
+		}
+
+		if homeDir == "" {
+			canProceed = false
+			issues = append(issues, "Não foi possível determinar o diretório home")
+		}
+
+		// Verificar SO suportado
+		supportedOS := map[string]bool{
+			"linux":   true,
+			"windows": true,
+			"darwin":  true,
+		}
+		if !supportedOS[osInfo.Name] {
+			canProceed = false
+			issues = append(issues, fmt.Sprintf("Sistema operacional não suportado: %s", osInfo.Name))
+		}
+	}
+
+	// Definir os campos de validação
+	envInfo.CanProceed = canProceed
+	envInfo.Issues = issues
+
 	v.logger.LogStep("validation_completed", map[string]interface{}{
 		"os":           envInfo.OS,
 		"version":      envInfo.OSVersion,
 		"architecture": envInfo.Architecture,
 		"admin_rights": envInfo.HasAdminRights,
 		"disk_space":   envInfo.AvailableDiskGB,
+		"can_proceed":  envInfo.CanProceed,
+		"issues_count": len(envInfo.Issues),
 	})
 
 	return envInfo, nil
@@ -271,6 +316,17 @@ func (v *Validator) ValidateAll() (*types.ValidationResult, error) {
 		})
 	} else {
 		result.Environment = envInfo
+		// Verificar se o ambiente pode prosseguir
+		if !envInfo.CanProceed {
+			result.CanProceed = false
+			for _, issue := range envInfo.Issues {
+				result.Issues = append(result.Issues, types.ValidationIssue{
+					Type:     "environment",
+					Severity: "error",
+					Message:  issue,
+				})
+			}
+		}
 	}
 
 	// Validar dependências

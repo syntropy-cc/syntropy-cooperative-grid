@@ -52,8 +52,8 @@ func TestKeyManager_GenerateKeyPair(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := manager.Setup(tt.options)
-			if (err != nil) != tt.wantErr {
+			err := manager.SetupWithPublicOptions(tt.options)
+		if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
@@ -101,7 +101,7 @@ func TestKeyManager_StoreKeyPair(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := manager.Setup(tt.options)
+			err := manager.SetupWithPublicOptions(tt.options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SetupManager.Setup() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -139,7 +139,7 @@ func TestKeyManager_LoadKeyPair(t *testing.T) {
 		},
 	}
 
-	err = manager.Setup(options)
+	err = manager.SetupWithPublicOptions(options)
 	if err != nil {
 		t.Fatalf("Failed to setup keys: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestKeyManager_Validation(t *testing.T) {
 		},
 	}
 
-	err = manager.Setup(options)
+	err = manager.SetupWithPublicOptions(options)
 	if err != nil {
 		t.Fatalf("Failed to setup keys: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestKeyManager_Reset(t *testing.T) {
 		},
 	}
 
-	err = manager.Setup(options)
+	err = manager.SetupWithPublicOptions(options)
 	if err != nil {
 		t.Fatalf("Failed to setup keys: %v", err)
 	}

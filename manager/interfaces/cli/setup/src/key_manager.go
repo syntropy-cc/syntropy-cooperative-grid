@@ -151,7 +151,7 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 
 	// Salvar chave pública
 	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
-	if err := os.WriteFile(publicKeyPath, keyPair.PublicKey, 0644); err != nil {
+	if err := os.WriteFile(publicKeyPath, keyPair.PublicKey, 0600); err != nil {
 		// Limpar chave privada em caso de erro
 		os.Remove(privateKeyPath)
 		return types.ErrKeyStorageError(keyPair.ID, err)
@@ -167,7 +167,7 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 		return types.ErrKeyStorageError(keyPair.ID, err)
 	}
 
-	if err := os.WriteFile(metadataPath, metadata, 0644); err != nil {
+	if err := os.WriteFile(metadataPath, metadata, 0600); err != nil {
 		// Limpar arquivos em caso de erro
 		os.Remove(privateKeyPath)
 		os.Remove(publicKeyPath)
