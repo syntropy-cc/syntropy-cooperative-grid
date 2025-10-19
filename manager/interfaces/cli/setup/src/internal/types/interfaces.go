@@ -136,6 +136,36 @@ type SetupLogger interface {
 	Close() error
 }
 
+// TokenManager interface de gerenciamento de Grid Token
+type TokenManager interface {
+	// Geração de Grid Token
+	GenerateToken() (string, error)
+
+	// Salvamento seguro no Keyring
+	SaveToken(token string) error
+
+	// Carregamento do Keyring
+	LoadToken() (string, error)
+
+	// Remoção do Keyring
+	DeleteToken() error
+
+	// Verificação de existência
+	TokenExists() (bool, error)
+
+	// Rotação de token
+	RotateToken() (string, error)
+
+	// Exportação para backup
+	ExportToken(outputPath string) error
+
+	// Importação de backup
+	ImportToken(inputPath string) error
+
+	// Validação de token
+	ValidateToken(token string) error
+}
+
 // OSValidator interface de validação por SO
 type OSValidator interface {
 	// Detecção do sistema operacional
@@ -160,7 +190,7 @@ type OSValidator interface {
 type SetupOptions struct {
 	Force          bool              `json:"force"`
 	ValidateOnly   bool              `json:"validate_only"`
-	TestMode       bool              `json:"test_mode"`       // Bypass strict validation for unit tests
+	TestMode       bool              `json:"test_mode"` // Bypass strict validation for unit tests
 	Verbose        bool              `json:"verbose"`
 	Quiet          bool              `json:"quiet"`
 	ConfigPath     string            `json:"config_path"`
@@ -374,4 +404,21 @@ type BackupInfo struct {
 	Path      string    `json:"path"`
 	Size      int64     `json:"size"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// TokenInfo informações do Grid Token
+type TokenInfo struct {
+	Token     string            `json:"token"`
+	CreatedAt time.Time         `json:"created_at"`
+	ExpiresAt time.Time         `json:"expires_at"`
+	IsActive  bool              `json:"is_active"`
+	Metadata  map[string]string `json:"metadata"`
+}
+
+// TokenBackup informações de backup de token
+type TokenBackup struct {
+	Token     string    `json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+	Version   string    `json:"version"`
+	Checksum  string    `json:"checksum"`
 }

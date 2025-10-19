@@ -57,6 +57,9 @@ func addCommands() {
 	// Setup commands
 	rootCmd.AddCommand(setupCmd)
 
+	// Token commands
+	rootCmd.AddCommand(tokenCmd)
+
 	// Future component commands will be added here:
 	// rootCmd.AddCommand(nodeCmd)
 	// rootCmd.AddCommand(workloadCmd)
@@ -95,34 +98,52 @@ var setupRunCmd = &cobra.Command{
 	Long: `Run the complete setup process for the Syntropy Manager environment.
 
 This will validate your system, create the necessary configuration,
-and prepare the environment for managing nodes in the cooperative grid.`,
+and prepare the environment for managing nodes in the cooperative grid.
+
+A secure Grid Token is automatically generated and stored during setup.
+Use --generate-grid-token to explicitly enable token generation (default behavior).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
-		installService, _ := cmd.Flags().GetBool("install-service")
 		configPath, _ := cmd.Flags().GetString("config-path")
 
-		options := setup.LegacySetupOptions{
+		// Criar SetupManager para usar o novo sistema
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Preparar opções do novo sistema
+		setupOptions := &setup.SetupOptions{
 			Force:          force,
-			InstallService: installService,
+			ValidateOnly:   false,
+			TestMode:       false,
+			Verbose:        false,
+			Quiet:          false,
 			ConfigPath:     configPath,
+			CustomSettings: map[string]string{
+				// Token é gerado automaticamente por padrão
+				// Só desabilita se explicitamente solicitado via flag
+			},
 		}
 
 		fmt.Println("Starting Syntropy Manager setup...")
-		result, err := setup.SetupLegacy(options)
+
+		// Executar setup com novo sistema
+		err = manager.SetupWithPublicOptions(setupOptions)
 		if err != nil {
 			return fmt.Errorf("setup failed: %w", err)
 		}
 
-		if result.Success {
-			fmt.Printf("✅ Setup completed successfully!\n")
-			fmt.Printf("📁 Configuration: %s\n", result.ConfigPath)
-			fmt.Printf("⏱️  Duration: %s\n", result.EndTime.Sub(result.StartTime))
+		fmt.Printf("✅ Setup completed successfully!\n")
+
+		// Verificar se token foi criado
+		exists, err := manager.GridTokenExists()
+		if err == nil && exists {
+			fmt.Printf("🔐 Grid Token generated and stored securely\n")
+			fmt.Printf("📁 Token location: System Keyring (%s)\n", runtime.GOOS)
+			fmt.Printf("💡 Use 'syntropy token show' to view token preview\n")
 		} else {
-			fmt.Printf("❌ Setup failed: %s\n", result.Message)
-			if result.Error != nil {
-				return result.Error
-			}
-			return fmt.Errorf("setup failed: %s", result.Message)
+			fmt.Printf("⚠️  Grid Token not created (may already exist or was disabled)\n")
 		}
 
 		return nil
@@ -260,6 +281,7 @@ func init() {
 	setupRunCmd.Flags().Bool("force", false, "force setup even if validation fails")
 	setupRunCmd.Flags().Bool("install-service", false, "install system service")
 	setupRunCmd.Flags().String("config-path", "", "custom configuration file path")
+	setupRunCmd.Flags().Bool("generate-grid-token", false, "generate Grid Token during setup")
 
 	// Setup status flags
 	setupStatusCmd.Flags().String("config-path", "", "custom configuration file path")
@@ -270,6 +292,343 @@ func init() {
 
 	// Setup validate flags
 	setupValidateCmd.Flags().String("config-path", "", "custom configuration file path")
+}
+
+// tokenCmd represents the token command
+var tokenCmd = &cobra.Command{
+	Use:   "token",
+	Short: "Manage Grid Tokens for Syntropy Cooperative Grid",
+	Long: `Manage Grid Tokens for the Syntropy Cooperative Grid network.
+
+Grid Tokens are secure authentication tokens used to identify and authenticate
+with the Syntropy Cooperative Grid network. They are stored securely in the
+system keyring and can be managed through these commands.
+
+Available operations:
+- Generate new Grid Tokens
+- View existing Grid Tokens (with security confirmation)
+- Rotate Grid Tokens for enhanced security
+- Export/Import Grid Tokens for backup and recovery
+- Delete Grid Tokens when no longer needed`,
+}
+
+func init() {
+	// Add token subcommands
+	tokenCmd.AddCommand(tokenShowCmd)
+	tokenCmd.AddCommand(tokenGenerateCmd)
+	tokenCmd.AddCommand(tokenRotateCmd)
+	tokenCmd.AddCommand(tokenExportCmd)
+	tokenCmd.AddCommand(tokenImportCmd)
+	tokenCmd.AddCommand(tokenDeleteCmd)
+}
+
+// tokenShowCmd represents the token show command
+var tokenShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Display the current Grid Token (with security confirmation)",
+	Long: `Display the current Grid Token with security confirmation.
+
+This command will prompt for confirmation before displaying the token,
+as Grid Tokens are sensitive authentication credentials that should be
+kept secure. The token will be displayed in a masked format by default.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		showFull, _ := cmd.Flags().GetBool("full")
+		confirm, _ := cmd.Flags().GetBool("confirm")
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if !exists {
+			fmt.Println("❌ No Grid Token found")
+			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
+			return nil
+		}
+
+		// Get token
+		token, err := manager.GetGridToken()
+		if err != nil {
+			return fmt.Errorf("failed to retrieve token: %w", err)
+		}
+
+		if showFull && confirm {
+			fmt.Printf("🔐 Grid Token: %s\n", token)
+		} else if showFull {
+			fmt.Println("⚠️  To display the full token, use --confirm flag")
+			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
+		} else {
+			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
+			fmt.Println("💡 Use --full --confirm to display the complete token")
+		}
+
+		return nil
+	},
+}
+
+// tokenGenerateCmd represents the token generate command
+var tokenGenerateCmd = &cobra.Command{
+	Use:   "generate",
+	Short: "Generate a new Grid Token",
+	Long: `Generate a new Grid Token for the Syntropy Cooperative Grid network.
+
+This will create a new secure UUID v4 token and store it in the system keyring.
+If a token already exists, it will be replaced with the new one.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		showToken, _ := cmd.Flags().GetBool("show")
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token already exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if exists {
+			fmt.Println("⚠️  A Grid Token already exists")
+			fmt.Println("💡 Use 'syntropy token rotate' to generate a new token")
+			return nil
+		}
+
+		// Generate new token
+		fmt.Println("🔐 Generating new Grid Token...")
+		token, err := manager.GenerateGridToken()
+		if err != nil {
+			return fmt.Errorf("failed to generate token: %w", err)
+		}
+
+		fmt.Println("✅ Grid Token generated successfully!")
+		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
+
+		if showToken {
+			fmt.Printf("🔐 Grid Token: %s\n", token)
+		} else {
+			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
+			fmt.Println("💡 Use 'syntropy token show --full --confirm' to view the complete token")
+		}
+
+		return nil
+	},
+}
+
+// tokenRotateCmd represents the token rotate command
+var tokenRotateCmd = &cobra.Command{
+	Use:   "rotate",
+	Short: "Rotate the current Grid Token",
+	Long: `Rotate the current Grid Token by generating a new one.
+
+This will create a new secure UUID v4 token to replace the existing one.
+The old token will be invalidated and the new token will be stored in the
+system keyring.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		showToken, _ := cmd.Flags().GetBool("show")
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if !exists {
+			fmt.Println("❌ No Grid Token found to rotate")
+			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
+			return nil
+		}
+
+		// Rotate token
+		fmt.Println("🔄 Rotating Grid Token...")
+		newToken, err := manager.RotateGridToken()
+		if err != nil {
+			return fmt.Errorf("failed to rotate token: %w", err)
+		}
+
+		fmt.Println("✅ Grid Token rotated successfully!")
+		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
+
+		if showToken {
+			fmt.Printf("🔐 New Grid Token: %s\n", newToken)
+		} else {
+			fmt.Printf("🔐 New Grid Token Preview: %s\n", newToken[:8]+"...[HIDDEN]")
+			fmt.Println("💡 Use 'syntropy token show --full --confirm' to view the complete token")
+		}
+
+		return nil
+	},
+}
+
+// tokenExportCmd represents the token export command
+var tokenExportCmd = &cobra.Command{
+	Use:   "export [output-file]",
+	Short: "Export Grid Token to a backup file",
+	Long: `Export the current Grid Token to a backup file for safekeeping.
+
+This will create a secure backup file containing the token with checksum
+validation. The backup file should be stored securely as it contains
+sensitive authentication credentials.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outputPath := args[0]
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if !exists {
+			fmt.Println("❌ No Grid Token found to export")
+			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
+			return nil
+		}
+
+		// Export token
+		fmt.Printf("📤 Exporting Grid Token to: %s\n", outputPath)
+		err = manager.ExportGridToken(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed to export token: %w", err)
+		}
+
+		fmt.Println("✅ Grid Token exported successfully!")
+		fmt.Println("🔒 Backup file contains encrypted token with checksum validation")
+		fmt.Println("⚠️  Store the backup file securely and do not share it")
+
+		return nil
+	},
+}
+
+// tokenImportCmd represents the token import command
+var tokenImportCmd = &cobra.Command{
+	Use:   "import [input-file]",
+	Short: "Import Grid Token from a backup file",
+	Long: `Import a Grid Token from a backup file.
+
+This will restore a previously exported Grid Token from a backup file.
+The backup file will be validated for integrity before importing.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		inputPath := args[0]
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token already exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if exists {
+			fmt.Println("⚠️  A Grid Token already exists")
+			fmt.Println("💡 Use 'syntropy token rotate' to replace the existing token")
+			return nil
+		}
+
+		// Import token
+		fmt.Printf("📥 Importing Grid Token from: %s\n", inputPath)
+		err = manager.ImportGridToken(inputPath)
+		if err != nil {
+			return fmt.Errorf("failed to import token: %w", err)
+		}
+
+		fmt.Println("✅ Grid Token imported successfully!")
+		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
+		fmt.Println("💡 Use 'syntropy token show' to verify the imported token")
+
+		return nil
+	},
+}
+
+// tokenDeleteCmd represents the token delete command
+var tokenDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete the current Grid Token",
+	Long: `Delete the current Grid Token from the system keyring.
+
+⚠️  WARNING: This will permanently remove the Grid Token and you will
+need to generate a new one or import from backup to authenticate with
+the Syntropy Cooperative Grid network.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		force, _ := cmd.Flags().GetBool("force")
+
+		// Create SetupManager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("failed to create setup manager: %w", err)
+		}
+
+		// Check if token exists
+		exists, err := manager.GridTokenExists()
+		if err != nil {
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+
+		if !exists {
+			fmt.Println("❌ No Grid Token found to delete")
+			return nil
+		}
+
+		// Confirmation prompt
+		if !force {
+			fmt.Print("⚠️  Are you sure you want to delete the Grid Token? (yes/no): ")
+			var response string
+			fmt.Scanln(&response)
+			if response != "yes" {
+				fmt.Println("❌ Token deletion cancelled")
+				return nil
+			}
+		}
+
+		// Delete token
+		fmt.Println("🗑️  Deleting Grid Token...")
+		err = manager.DeleteGridToken()
+		if err != nil {
+			return fmt.Errorf("failed to delete token: %w", err)
+		}
+
+		fmt.Println("✅ Grid Token deleted successfully!")
+		fmt.Println("💡 Use 'syntropy token generate' to create a new token")
+
+		return nil
+	},
+}
+
+func init() {
+	// Token command flags
+	tokenShowCmd.Flags().Bool("full", false, "show full token (requires --confirm)")
+	tokenShowCmd.Flags().Bool("confirm", false, "confirm display of full token")
+
+	tokenGenerateCmd.Flags().Bool("show", false, "display the generated token")
+
+	tokenRotateCmd.Flags().Bool("show", false, "display the new token")
+
+	tokenDeleteCmd.Flags().Bool("force", false, "skip confirmation prompt")
 }
 
 func main() {

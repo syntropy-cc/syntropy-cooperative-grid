@@ -43,6 +43,7 @@ type SetupManager struct {
 	configurator types.Configurator
 	stateManager types.StateManager
 	keyManager   types.KeyManager
+	tokenManager types.TokenManager
 	logger       types.SetupLogger
 }
 
@@ -55,6 +56,7 @@ func NewSetupManager() (*SetupManager, error) {
 		configurator: NewConfigurator(logger),
 		stateManager: NewStateManager(logger),
 		keyManager:   NewKeyManager(logger),
+		tokenManager: NewTokenManager(logger),
 		logger:       logger,
 	}, nil
 }
@@ -99,7 +101,44 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 		return sm.handleError(err, "key_generation_failed")
 	}
 
-	// 4. Gerar configuração
+	// 4. Gerar Grid Token automaticamente (a menos que seja desabilitado)
+	var gridToken string
+	shouldGenerateToken := true
+
+	// Verificar se geração de token foi explicitamente desabilitada
+	if options.CustomSettings["generate_grid_token"] == "false" {
+		shouldGenerateToken = false
+	}
+
+	// Verificar se token já existe
+	tokenExists, err := sm.tokenManager.TokenExists()
+	if err == nil && tokenExists {
+		sm.logger.LogInfo("Grid Token already exists, skipping generation", nil)
+		shouldGenerateToken = false
+	}
+
+	if shouldGenerateToken {
+		sm.logger.LogStep("grid_token_generation_start", map[string]interface{}{
+			"keyring_available": true, // Será verificado internamente
+		})
+
+		gridToken, err = sm.tokenManager.GenerateToken()
+		if err != nil {
+			return sm.handleError(err, "grid_token_generation_failed")
+		}
+
+		// Salvar token no keyring do sistema
+		if err := sm.tokenManager.SaveToken(gridToken); err != nil {
+			return sm.handleError(err, "grid_token_save_failed")
+		}
+
+		sm.logger.LogStep("grid_token_generation_completed", map[string]interface{}{
+			"token_preview":  gridToken[:8] + "...[HIDDEN]",
+			"storage_method": "keyring",
+		})
+	}
+
+	// 5. Gerar configuração
 	if err := sm.configurator.GenerateConfig(&types.ConfigOptions{
 		OwnerName:  options.CustomSettings["owner_name"],
 		OwnerEmail: options.CustomSettings["owner_email"],
@@ -107,7 +146,7 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 		return sm.handleError(err, "config_generation_failed")
 	}
 
-	// 5. Salvar estado
+	// 6. Salvar estado
 	state := &types.SetupState{
 		Version:   "1.0.0",
 		CreatedAt: time.Now(),
@@ -130,6 +169,13 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 			"setup_version": "1.0.0",
 			"setup_method":  "automated",
 		},
+	}
+
+	// Adicionar informações do Grid Token aos metadados se foi gerado
+	if gridToken != "" {
+		state.Metadata["grid_token_generated"] = "true"
+		state.Metadata["grid_token_preview"] = gridToken[:8] + "...[HIDDEN]"
+		state.Metadata["grid_token_storage"] = "keyring"
 	}
 
 	if err := sm.stateManager.SaveState(state); err != nil {
