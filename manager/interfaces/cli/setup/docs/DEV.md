@@ -304,3 +304,5 @@ Mudanças que quebram compatibilidade são documentadas com 2 versões de antece
 Para fundamentos teóricos e insights pedagógicos, veja [LEARN.md](./LEARN.md).
 
 
+
+

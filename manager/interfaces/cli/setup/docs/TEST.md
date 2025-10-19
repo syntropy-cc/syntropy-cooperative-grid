@@ -634,3 +634,5 @@ func TestSetupManager_Setup(t *testing.T) {
 Para princípios de desenvolvimento orientado a testes e filosofia de testing, veja [LEARN.md](./LEARN.md).
 
 
+
+

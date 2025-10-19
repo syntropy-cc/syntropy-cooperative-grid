@@ -1,7 +1,7 @@
 # Management Component - Documentação Técnica
 
 **Componente**: Management  
-**Responsabilidade**: Gerenciamento e monitoramento da grid  
+**Responsabilidade**: Observação e análise da grid (SEM IMPACTO)  
 **Status**: 🚧 A implementar  
 **Localização**: `manager/interfaces/cli/management/`
 
@@ -9,73 +9,94 @@
 
 ## 📋 VISÃO GERAL
 
-O Management Component é responsável pelo gerenciamento geral da Syntropy Cooperative Grid, incluindo monitoramento de saúde dos nós, sincronização de inventário, descoberta de serviços e operações administrativas.
+O Management Component é responsável pela **observação e análise** da Syntropy Cooperative Grid, agregando dados dos outros componentes para fornecer visibilidade completa do estado da grid. **IMPORTANTE**: Este componente é **puramente observacional** e **NÃO executa comandos** nos nós ou impacta a rede.
 
 ### Funcionalidades Principais
-- 📊 **Health Monitoring** - Monitoramento de saúde dos nós
-- 🔄 **Inventory Sync** - Sincronização de inventário
-- 🔍 **Service Discovery** - Descoberta de serviços
+- 📊 **Health Aggregation** - Agregação de dados de saúde dos nós
+- 📋 **Inventory Aggregation** - Agregação de dados de inventário
+- 🔍 **Service Registry** - Registro de serviços descobertos
 - 📈 **Grid Analytics** - Análise de performance da grid
-- 🛠️ **Administrative Operations** - Operações administrativas
+- 📡 **Event Monitoring** - Monitoramento de eventos da grid
 
 ---
 
-## 🏗️ ARQUITETURA
+## 🏗️ ARQUITETURA OBSERVACIONAL
 
 ### Estrutura de Arquivos
 ```
 manager/interfaces/cli/management/
 ├── README.md                    # Documentação do componente
+├── management.go                # Orquestrador principal observacional
 ├── health/
-│   ├── health_checker.go        # Verificação de saúde
-│   ├── metrics_collector.go     # Coleta de métricas
-│   ├── alert_manager.go         # Gerenciamento de alertas
+│   ├── health_aggregator.go     # Agregação de dados de saúde
+│   ├── health_analyzer.go       # Análise de saúde
 │   └── tests/
-│       └── health_test.go       # Testes de saúde
-├── sync/
-│   ├── inventory_sync.go        # Sincronização de inventário
-│   ├── node_sync.go             # Sincronização de nós
-│   ├── workload_sync.go         # Sincronização de workloads
+│       └── health_test.go       # Testes de agregação
+├── inventory/
+│   ├── inventory_aggregator.go  # Agregação de inventário
+│   ├── inventory_analyzer.go    # Análise de inventário
 │   └── tests/
-│       └── sync_test.go         # Testes de sincronização
-├── discovery/
-│   ├── service_discovery.go     # Descoberta de serviços
-│   ├── port_scanner.go          # Scanner de portas
+│       └── inventory_test.go    # Testes de agregação
+├── services/
 │   ├── service_registry.go      # Registro de serviços
+│   ├── service_analyzer.go      # Análise de serviços
 │   └── tests/
-│       └── discovery_test.go    # Testes de descoberta
-└── analytics/
-    ├── grid_analytics.go        # Análise da grid
-    ├── performance_monitor.go   # Monitor de performance
-    ├── usage_tracker.go         # Rastreamento de uso
+│       └── services_test.go     # Testes de registro
+├── analytics/
+│   ├── grid_analytics.go        # Análise da grid
+│   ├── performance_analyzer.go  # Análise de performance
+│   ├── usage_analyzer.go        # Análise de uso
+│   └── tests/
+│       └── analytics_test.go    # Testes de análise
+└── events/
+    ├── event_listener.go        # Listener de eventos
+    ├── event_processor.go       # Processador de eventos
     └── tests/
-        └── analytics_test.go    # Testes de análise
+        └── events_test.go       # Testes de eventos
 ```
 
-### Fluxo de Execução
+### Fluxo de Observação
 ```
 User → syntropy grid status → Management Component
                               ↓
-                        1. Health Check (todos os nós)
+                        1. Event Listener (recebe eventos)
                               ↓
-                        2. Inventory Sync
+                        2. Health Aggregation (agrega dados)
                               ↓
-                        3. Service Discovery
+                        3. Inventory Aggregation (agrega inventário)
                               ↓
-                        4. Analytics Collection
+                        4. Service Registry (registra serviços)
                               ↓
-                        ✅ Status completo da Grid
+                        5. Analytics Processing (analisa dados)
+                              ↓
+                        ✅ Status completo da Grid (SEM IMPACTO)
 ```
 
 ---
 
-## 📊 HEALTH MONITORING
+## 📊 HEALTH AGGREGATION
+
+### Descrição
+O Health Aggregator é responsável por consolidar e analisar dados de saúde de todos os nós da grid, obtendo informações dos outros componentes do sistema. Ele atua como um "dashboard de saúde" que fornece uma visão unificada do estado de todos os nós, sem executar comandos diretamente nos nós.
+
+**Características principais**:
+- **Puramente observacional**: Não executa comandos SSH ou Docker nos nós
+- **Agregação inteligente**: Combina dados de múltiplos componentes
+- **Cache em tempo real**: Mantém dados atualizados via eventos
+- **Análise de tendências**: Identifica padrões de saúde dos nós
+- **Alertas automáticos**: Notifica sobre mudanças de status
+
+**Fonte de dados**:
+- **Workload State Manager**: Estado atual dos nós e workloads
+- **Workload Metrics Collector**: Métricas de CPU, RAM, disco
+- **Node Heartbeat Manager**: Status de conectividade e heartbeat
+- **Event Bus**: Eventos de mudança de estado em tempo real
 
 ### Responsabilidade
-Monitorar saúde e status de todos os nós da grid.
+Agregar dados de saúde dos nós obtidos dos outros componentes, **SEM executar comandos** nos nós.
 
 ### Implementação
-**Arquivo**: `management/health/health_checker.go`
+**Arquivo**: `management/health/health_aggregator.go`
 
 ```go
 package health
@@ -87,19 +108,33 @@ import (
     "time"
 )
 
-// HealthChecker verifica saúde dos nós
-type HealthChecker struct {
-    inventory    InventoryManager
-    sshClient    SSHClient
-    checkTimeout time.Duration
+// HealthAggregator agrega dados de saúde dos nós
+type HealthAggregator struct {
+    // Integração com componentes existentes
+    workloadStateManager   *workload.StateManager
+    workloadMetricsCollector *workload.MetricsCollector
+    nodeHeartbeatManager   *node.HeartbeatManager
+    eventListener          *events.EventListener
+    
+    // Cache de dados agregados
+    healthCache            map[string]*HealthStatus
+    cacheMutex             sync.RWMutex
+    lastUpdate             time.Time
 }
 
-// NewHealthChecker cria novo verificador de saúde
-func NewHealthChecker() *HealthChecker {
-    return &HealthChecker{
-        inventory:    NewInventoryManager(),
-        sshClient:    NewSSHClient(),
-        checkTimeout: 30 * time.Second,
+// NewHealthAggregator cria novo agregador de saúde
+func NewHealthAggregator(
+    workloadState *workload.StateManager,
+    workloadMetrics *workload.MetricsCollector,
+    nodeHeartbeat *node.HeartbeatManager,
+    eventListener *events.EventListener,
+) *HealthAggregator {
+    return &HealthAggregator{
+        workloadStateManager:   workloadState,
+        workloadMetricsCollector: workloadMetrics,
+        nodeHeartbeatManager:   nodeHeartbeat,
+        eventListener:          eventListener,
+        healthCache:            make(map[string]*HealthStatus),
     }
 }
 
@@ -127,44 +162,31 @@ type GridHealthStatus struct {
     LastCheck     time.Time
 }
 
-// CheckGridHealth verifica saúde de toda a grid
-func (hc *HealthChecker) CheckGridHealth(ctx context.Context) (*GridHealthStatus, error) {
-    // Obter todos os nós
-    nodes, err := hc.inventory.GetAllNodes()
+// AggregateGridHealth agrega dados de saúde de toda a grid
+func (ha *HealthAggregator) AggregateGridHealth(ctx context.Context) (*GridHealthStatus, error) {
+    // Obter dados dos nós do State Manager do Workload
+    nodeStates, err := ha.workloadStateManager.GetAllNodeStates()
     if err != nil {
-        return nil, fmt.Errorf("failed to get nodes: %w", err)
+        return nil, fmt.Errorf("failed to get node states: %w", err)
     }
     
-    var wg sync.WaitGroup
-    var mu sync.Mutex
-    
     status := &GridHealthStatus{
-        TotalNodes:   len(nodes),
-        NodeStatuses: make([]HealthStatus, len(nodes)),
+        TotalNodes:   len(nodeStates),
+        NodeStatuses: make([]HealthStatus, len(nodeStates)),
         LastCheck:    time.Now(),
     }
     
-    // Verificar saúde de cada nó em paralelo
-    for i, node := range nodes {
-        wg.Add(1)
+    // Agregar dados de saúde de cada nó
+    for i, nodeState := range nodeStates {
+        nodeHealth := ha.aggregateNodeHealth(nodeState)
         
-        go func(index int, nodeID string) {
-            defer wg.Done()
-            
-            nodeStatus := hc.checkNodeHealth(ctx, nodeID)
-            
-            mu.Lock()
-            status.NodeStatuses[index] = nodeStatus
-            if nodeStatus.Status == "healthy" {
+        status.NodeStatuses[i] = *nodeHealth
+        if nodeHealth.Status == "healthy" {
                 status.HealthyNodes++
             } else {
                 status.UnhealthyNodes++
             }
-            mu.Unlock()
-        }(i, node.ID)
     }
-    
-    wg.Wait()
     
     // Determinar status geral
     if status.HealthyNodes == status.TotalNodes {
@@ -178,54 +200,33 @@ func (hc *HealthChecker) CheckGridHealth(ctx context.Context) (*GridHealthStatus
     return status, nil
 }
 
-// checkNodeHealth verifica saúde de um nó específico
-func (hc *HealthChecker) checkNodeHealth(ctx context.Context, nodeID string) HealthStatus {
-    start := time.Now()
-    
-    status := HealthStatus{
-        NodeID:   nodeID,
+// aggregateNodeHealth agrega dados de saúde de um nó específico
+func (ha *HealthAggregator) aggregateNodeHealth(nodeState *workload.NodeState) *HealthStatus {
+    status := &HealthStatus{
+        NodeID:    nodeState.NodeID,
+        Status:    nodeState.Status,
         LastCheck: time.Now(),
     }
     
-    // Verificar conectividade SSH
-    if err := hc.checkSSHConnectivity(nodeID); err != nil {
-        status.Status = "unhealthy"
-        status.Errors = append(status.Errors, fmt.Sprintf("SSH: %v", err))
-        status.ResponseTime = time.Since(start)
-        return status
-    }
-    
-    // Verificar Docker
-    if err := hc.checkDockerStatus(nodeID); err != nil {
-        status.Status = "unhealthy"
-        status.Errors = append(status.Errors, fmt.Sprintf("Docker: %v", err))
-    } else {
-        status.DockerStatus = "running"
-    }
-    
-    // Coletar métricas
-    metrics, err := hc.collectNodeMetrics(nodeID)
-    if err != nil {
-        status.Errors = append(status.Errors, fmt.Sprintf("Metrics: %v", err))
-    } else {
+    // Obter métricas do Metrics Collector do Workload
+    metrics, err := ha.workloadMetricsCollector.GetNodeMetrics(nodeState.NodeID)
+    if err == nil {
         status.CPUUsage = metrics.CPUUsage
         status.RAMUsage = metrics.RAMUsage
         status.DiskUsage = metrics.DiskUsage
     }
     
-    // Verificar rede
-    if err := hc.checkNetworkStatus(nodeID); err != nil {
-        status.Errors = append(status.Errors, fmt.Sprintf("Network: %v", err))
-    } else {
-        status.NetworkStatus = "connected"
+    // Obter status de heartbeat do Node Component
+    heartbeatStatus, err := ha.nodeHeartbeatManager.GetNodeStatus(nodeState.NodeID)
+    if err == nil {
+        status.NetworkStatus = heartbeatStatus.Status
+        status.LastSeen = heartbeatStatus.LastSeen
     }
     
-    status.ResponseTime = time.Since(start)
-    
-    // Determinar status final
-    if len(status.Errors) == 0 {
+    // Determinar status final baseado nos dados agregados
+    if nodeState.Status == "active" && status.NetworkStatus == "connected" {
         status.Status = "healthy"
-    } else if len(status.Errors) < 2 {
+    } else if nodeState.Status == "active" {
         status.Status = "degraded"
     } else {
         status.Status = "unhealthy"
@@ -234,67 +235,87 @@ func (hc *HealthChecker) checkNodeHealth(ctx context.Context, nodeID string) Hea
     return status
 }
 
-// checkSSHConnectivity verifica conectividade SSH
-func (hc *HealthChecker) checkSSHConnectivity(nodeID string) error {
-    cmd := "echo 'health_check'"
-    _, err := hc.sshClient.Execute(nodeID, cmd)
-    return err
-}
-
-// checkDockerStatus verifica status do Docker
-func (hc *HealthChecker) checkDockerStatus(nodeID string) error {
-    cmd := "docker info > /dev/null 2>&1"
-    _, err := hc.sshClient.Execute(nodeID, cmd)
-    return err
-}
-
-// collectNodeMetrics coleta métricas do nó
-func (hc *HealthChecker) collectNodeMetrics(nodeID string) (*NodeMetrics, error) {
-    // Coletar CPU
-    cpuCmd := "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'"
-    cpuOutput, err := hc.sshClient.Execute(nodeID, cpuCmd)
-    if err != nil {
-        return nil, err
-    }
+// StartListening inicia listener de eventos para atualizações automáticas
+func (ha *HealthAggregator) StartListening(ctx context.Context) error {
+    // Subscrever a eventos de mudança de estado dos nós
+    nodeEvents := ha.eventListener.Subscribe("node_state_changed")
+    metricsEvents := ha.eventListener.Subscribe("metrics_updated")
+    heartbeatEvents := ha.eventListener.Subscribe("heartbeat_received")
     
-    // Coletar RAM
-    ramCmd := "free | grep Mem | awk '{printf \"%.1f\", $3/$2 * 100.0}'"
-    ramOutput, err := hc.sshClient.Execute(nodeID, ramCmd)
-    if err != nil {
-        return nil, err
-    }
+    go func() {
+        for {
+            select {
+            case event := <-nodeEvents:
+                ha.handleNodeStateEvent(event)
+            case event := <-metricsEvents:
+                ha.handleMetricsEvent(event)
+            case event := <-heartbeatEvents:
+                ha.handleHeartbeatEvent(event)
+            case <-ctx.Done():
+                return
+            }
+        }
+    }()
     
-    // Coletar Disk
-    diskCmd := "df / | tail -1 | awk '{print $5}' | sed 's/%//'"
-    diskOutput, err := hc.sshClient.Execute(nodeID, diskCmd)
-    if err != nil {
-        return nil, err
-    }
-    
-    return &NodeMetrics{
-        CPUUsage:  parseFloat(cpuOutput),
-        RAMUsage:  parseFloat(ramOutput),
-        DiskUsage: parseFloat(diskOutput),
-    }, nil
+    return nil
 }
 
-// checkNetworkStatus verifica status da rede
-func (hc *HealthChecker) checkNetworkStatus(nodeID string) error {
-    cmd := "ping -c 1 8.8.8.8 > /dev/null 2>&1"
-    _, err := hc.sshClient.Execute(nodeID, cmd)
-    return err
+// handleNodeStateEvent processa eventos de mudança de estado dos nós
+func (ha *HealthAggregator) handleNodeStateEvent(event *workload.Event) {
+    ha.cacheMutex.Lock()
+    defer ha.cacheMutex.Unlock()
+    
+    // Atualizar cache de saúde baseado no evento
+    nodeID := event.Data["node_id"].(string)
+    nodeState := event.Data["node_state"].(*workload.NodeState)
+    
+    healthStatus := ha.aggregateNodeHealth(nodeState)
+    ha.healthCache[nodeID] = healthStatus
+    ha.lastUpdate = time.Now()
 }
 
-// NodeMetrics métricas de um nó
-type NodeMetrics struct {
-    CPUUsage  float64
-    RAMUsage  float64
-    DiskUsage float64
+// handleMetricsEvent processa eventos de atualização de métricas
+func (ha *HealthAggregator) handleMetricsEvent(event *workload.Event) {
+    ha.cacheMutex.Lock()
+    defer ha.cacheMutex.Unlock()
+    
+    // Atualizar métricas no cache
+    nodeID := event.Data["node_id"].(string)
+    if healthStatus, exists := ha.healthCache[nodeID]; exists {
+        metrics := event.Data["metrics"].(*workload.NodeMetrics)
+        healthStatus.CPUUsage = metrics.CPUUsage
+        healthStatus.RAMUsage = metrics.RAMUsage
+        healthStatus.DiskUsage = metrics.DiskUsage
+    }
+}
+
+// handleHeartbeatEvent processa eventos de heartbeat
+func (ha *HealthAggregator) handleHeartbeatEvent(event *workload.Event) {
+    ha.cacheMutex.Lock()
+    defer ha.cacheMutex.Unlock()
+    
+    // Atualizar status de rede no cache
+    nodeID := event.Data["node_id"].(string)
+    if healthStatus, exists := ha.healthCache[nodeID]; exists {
+        healthStatus.NetworkStatus = "connected"
+        healthStatus.LastSeen = time.Now()
+    }
 }
 ```
 
-### Metrics Collector
-**Arquivo**: `management/health/metrics_collector.go`
+### Health Analyzer
+
+#### Descrição
+O Health Analyzer é responsável por processar e analisar dados de saúde agregados para identificar padrões, tendências e problemas potenciais. Ele funciona como um "analista de saúde" que examina dados históricos e atuais para fornecer insights sobre a saúde geral da grid e gerar alertas proativos.
+
+**Características principais**:
+- **Análise de tendências**: Identifica padrões de saúde ao longo do tempo
+- **Detecção de anomalias**: Detecta comportamentos anômalos nos nós
+- **Alertas inteligentes**: Gera alertas baseados em thresholds e tendências
+- **Relatórios de saúde**: Cria relatórios detalhados de saúde da grid
+- **Recomendações**: Sugere ações para melhorar a saúde da grid
+
+**Arquivo**: `management/health/health_analyzer.go`
 
 ```go
 package health
@@ -305,17 +326,19 @@ import (
     "time"
 )
 
-// MetricsCollector coleta métricas detalhadas
-type MetricsCollector struct {
-    healthChecker *HealthChecker
-    interval      time.Duration
+// HealthAnalyzer analisa dados de saúde agregados
+type HealthAnalyzer struct {
+    aggregator *HealthAggregator
+    alerts     []HealthAlert
+    trends     *HealthTrends
 }
 
-// NewMetricsCollector cria novo coletor de métricas
-func NewMetricsCollector() *MetricsCollector {
-    return &MetricsCollector{
-        healthChecker: NewHealthChecker(),
-        interval:      30 * time.Second,
+// NewHealthAnalyzer cria novo analisador de saúde
+func NewHealthAnalyzer(aggregator *HealthAggregator) *HealthAnalyzer {
+    return &HealthAnalyzer{
+        aggregator: aggregator,
+        alerts:     make([]HealthAlert, 0),
+        trends:     &HealthTrends{},
     }
 }
 
@@ -555,16 +578,33 @@ func (mc *MetricsCollector) collectDockerMetrics(nodeID string, docker *DockerMe
 
 ---
 
-## 🔄 INVENTORY SYNC
+## 📋 INVENTORY AGGREGATION
+
+### Descrição
+O Inventory Aggregator é responsável por consolidar informações de inventário de todos os nós da grid, criando um catálogo completo de recursos, workloads e hardware disponíveis. Ele funciona como um "catálogo inteligente" que mantém um registro atualizado de todos os ativos da grid, baseado em dados coletados pelos outros componentes.
+
+**Características principais**:
+- **Inventário unificado**: Catálogo completo de todos os recursos da grid
+- **Atualização automática**: Mantém dados sincronizados via eventos
+- **Rastreamento de mudanças**: Histórico de alterações no inventário
+- **Análise de recursos**: Identifica disponibilidade e utilização
+- **Relatórios detalhados**: Fornece visão granular dos recursos
+
+**Tipos de inventário**:
+- **Hardware**: CPU, RAM, disco, rede de cada nó
+- **Workloads**: Containers, aplicações, serviços rodando
+- **Recursos**: Capacidade disponível vs. utilizada
+- **Configurações**: Configurações específicas de cada nó
+- **Dependências**: Relacionamentos entre recursos
 
 ### Responsabilidade
-Sincronizar inventário de nós e workloads entre Command Station e nós.
+Agregar dados de inventário dos nós obtidos dos outros componentes, **SEM executar comandos** nos nós.
 
 ### Implementação
-**Arquivo**: `management/sync/inventory_sync.go`
+**Arquivo**: `management/inventory/inventory_aggregator.go`
 
 ```go
-package sync
+package inventory
 
 import (
     "context"
@@ -573,234 +613,237 @@ import (
     "time"
 )
 
-// InventorySync sincroniza inventário
-type InventorySync struct {
-    inventory    InventoryManager
-    sshClient    SSHClient
-    syncInterval time.Duration
+// InventoryAggregator agrega dados de inventário
+type InventoryAggregator struct {
+    // Integração com componentes existentes
+    workloadStateManager   *workload.StateManager
+    workloadMetricsCollector *workload.MetricsCollector
+    nodeManager           *node.NodeManager
+    eventListener         *events.EventListener
+    
+    // Cache de inventário agregado
+    inventoryCache        map[string]*NodeInventory
+    cacheMutex            sync.RWMutex
+    lastUpdate            time.Time
 }
 
-// NewInventorySync cria novo sincronizador
-func NewInventorySync() *InventorySync {
-    return &InventorySync{
-        inventory:    NewInventoryManager(),
-        sshClient:    NewSSHClient(),
-        syncInterval: 5 * time.Minute,
+// NewInventoryAggregator cria novo agregador de inventário
+func NewInventoryAggregator(
+    workloadState *workload.StateManager,
+    workloadMetrics *workload.MetricsCollector,
+    nodeManager *node.NodeManager,
+    eventListener *events.EventListener,
+) *InventoryAggregator {
+    return &InventoryAggregator{
+        workloadStateManager:   workloadState,
+        workloadMetricsCollector: workloadMetrics,
+        nodeManager:           nodeManager,
+        eventListener:         eventListener,
+        inventoryCache:        make(map[string]*NodeInventory),
     }
 }
 
-// SyncResult resultado da sincronização
-type SyncResult struct {
+// NodeInventory inventário agregado de um nó
+type NodeInventory struct {
     NodeID        string
-    Success       bool
-    LastSync      time.Time
-    Errors        []string
-    Workloads     []WorkloadInfo
-    Hardware      *HardwareManifest
+    LastUpdate    time.Time
+    Workloads     []*workload.WorkloadInfo
+    Hardware      *node.HardwareManifest
+    Metrics       *workload.NodeMetrics
+    Status        string
 }
 
-// SyncAllNodes sincroniza todos os nós
-func (is *InventorySync) SyncAllNodes(ctx context.Context) ([]SyncResult, error) {
-    // Obter todos os nós
-    nodes, err := is.inventory.GetAllNodes()
+// AggregateAllNodes agrega inventário de todos os nós
+func (ia *InventoryAggregator) AggregateAllNodes(ctx context.Context) ([]*NodeInventory, error) {
+    // Obter dados dos nós do State Manager do Workload
+    nodeStates, err := ia.workloadStateManager.GetAllNodeStates()
     if err != nil {
-        return nil, fmt.Errorf("failed to get nodes: %w", err)
+        return nil, fmt.Errorf("failed to get node states: %w", err)
     }
     
-    var wg sync.WaitGroup
-    var mu sync.Mutex
+    var inventories []*NodeInventory
     
-    results := make([]SyncResult, len(nodes))
-    
-    // Sincronizar cada nó em paralelo
-    for i, node := range nodes {
-        wg.Add(1)
-        
-        go func(index int, nodeID string) {
-            defer wg.Done()
-            
-            result := is.syncNode(ctx, nodeID)
-            
-            mu.Lock()
-            results[index] = result
-            mu.Unlock()
-        }(i, node.ID)
+    // Agregar inventário de cada nó
+    for _, nodeState := range nodeStates {
+        inventory := ia.aggregateNodeInventory(nodeState)
+        inventories = append(inventories, inventory)
     }
     
-    wg.Wait()
-    
-    return results, nil
+    return inventories, nil
 }
 
-// syncNode sincroniza um nó específico
-func (is *InventorySync) syncNode(ctx context.Context, nodeID string) SyncResult {
-    result := SyncResult{
-        NodeID:   nodeID,
-        LastSync: time.Now(),
+// aggregateNodeInventory agrega inventário de um nó específico
+func (ia *InventoryAggregator) aggregateNodeInventory(nodeState *workload.NodeState) *NodeInventory {
+    inventory := &NodeInventory{
+        NodeID:     nodeState.NodeID,
+        LastUpdate: time.Now(),
+        Status:     nodeState.Status,
     }
     
-    // Sincronizar workloads
-    workloads, err := is.syncWorkloads(nodeID)
-    if err != nil {
-        result.Errors = append(result.Errors, fmt.Sprintf("Workloads: %v", err))
-    } else {
-        result.Workloads = workloads
+    // Obter workloads do State Manager do Workload
+    workloads, err := ia.workloadStateManager.GetNodeWorkloads(nodeState.NodeID)
+    if err == nil {
+        inventory.Workloads = workloads
     }
     
-    // Sincronizar hardware
-    hardware, err := is.syncHardware(nodeID)
-    if err != nil {
-        result.Errors = append(result.Errors, fmt.Sprintf("Hardware: %v", err))
-    } else {
-        result.Hardware = hardware
+    // Obter hardware manifest do Node Manager
+    hardware, err := ia.nodeManager.GetHardwareManifest(nodeState.NodeID)
+    if err == nil {
+        inventory.Hardware = hardware
     }
     
-    // Determinar sucesso
-    result.Success = len(result.Errors) == 0
+    // Obter métricas do Metrics Collector do Workload
+    metrics, err := ia.workloadMetricsCollector.GetNodeMetrics(nodeState.NodeID)
+    if err == nil {
+        inventory.Metrics = metrics
+    }
     
-    return result
+    return inventory
 }
 
-// syncWorkloads sincroniza workloads de um nó
-func (is *InventorySync) syncWorkloads(nodeID string) ([]WorkloadInfo, error) {
-    // Obter containers rodando no nó
-    cmd := `docker ps --format '{{.ID}} {{.Image}} {{.Names}} {{.Status}}'`
-    output, err := is.sshClient.Execute(nodeID, cmd)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get containers: %w", err)
-    }
+// StartListening inicia listener de eventos para atualizações automáticas
+func (ia *InventoryAggregator) StartListening(ctx context.Context) error {
+    // Subscrever a eventos de mudança de inventário
+    workloadEvents := ia.eventListener.Subscribe("workload_deployed")
+    nodeEvents := ia.eventListener.Subscribe("node_registered")
+    metricsEvents := ia.eventListener.Subscribe("metrics_updated")
     
-    var workloads []WorkloadInfo
-    
-    // Parse output
-    lines := strings.Split(output, "\n")
-    for _, line := range lines {
-        if strings.TrimSpace(line) == "" {
-            continue
-        }
-        
-        parts := strings.Fields(line)
-        if len(parts) >= 4 {
-            workload := WorkloadInfo{
-                ID:            parts[0],
-                Image:         parts[1],
-                Name:          parts[2],
-                Status:        parts[3],
-                NodeID:        nodeID,
-                LastUpdated:   time.Now(),
-            }
-            
-            workloads = append(workloads, workload)
-        }
-    }
-    
-    // Salvar no inventário
-    if err := is.inventory.UpdateNodeWorkloads(nodeID, workloads); err != nil {
-        return nil, fmt.Errorf("failed to update workloads: %w", err)
-    }
-    
-    return workloads, nil
-}
-
-// syncHardware sincroniza hardware de um nó
-func (is *InventorySync) syncHardware(nodeID string) (*HardwareManifest, error) {
-    // Obter hardware manifest do nó
-    cmd := "cat /opt/syntropy/metadata/hardware-manifest.json"
-    output, err := is.sshClient.Execute(nodeID, cmd)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get hardware manifest: %w", err)
-    }
-    
-    // Parse JSON
-    var manifest HardwareManifest
-    if err := json.Unmarshal([]byte(output), &manifest); err != nil {
-        return nil, fmt.Errorf("failed to parse hardware manifest: %w", err)
-    }
-    
-    // Salvar no inventário
-    if err := is.inventory.UpdateHardwareManifest(nodeID, &manifest); err != nil {
-        return nil, fmt.Errorf("failed to update hardware manifest: %w", err)
-    }
-    
-    return &manifest, nil
-}
-
-// StartPeriodicSync inicia sincronização periódica
-func (is *InventorySync) StartPeriodicSync(ctx context.Context) {
     go func() {
-        ticker := time.NewTicker(is.syncInterval)
-        defer ticker.Stop()
-        
         for {
             select {
-            case <-ticker.C:
-                fmt.Println("🔄 Starting periodic inventory sync...")
-                
-                results, err := is.SyncAllNodes(ctx)
-                if err != nil {
-                    fmt.Printf("❌ Inventory sync failed: %v\n", err)
-                    continue
-                }
-                
-                // Contar sucessos
-                successCount := 0
-                for _, result := range results {
-                    if result.Success {
-                        successCount++
-                    }
-                }
-                
-                fmt.Printf("✅ Inventory sync completed: %d/%d nodes synced\n", successCount, len(results))
-                
+            case event := <-workloadEvents:
+                ia.handleWorkloadEvent(event)
+            case event := <-nodeEvents:
+                ia.handleNodeEvent(event)
+            case event := <-metricsEvents:
+                ia.handleMetricsEvent(event)
             case <-ctx.Done():
                 return
             }
         }
     }()
+    
+    return nil
+}
+
+// handleWorkloadEvent processa eventos de deploy de workloads
+func (ia *InventoryAggregator) handleWorkloadEvent(event *workload.Event) {
+    ia.cacheMutex.Lock()
+    defer ia.cacheMutex.Unlock()
+    
+    nodeID := event.Data["node_id"].(string)
+    workloadInfo := event.Data["workload"].(*workload.WorkloadInfo)
+    
+    // Atualizar inventário no cache
+    if inventory, exists := ia.inventoryCache[nodeID]; exists {
+        inventory.Workloads = append(inventory.Workloads, workloadInfo)
+        inventory.LastUpdate = time.Now()
+    }
+}
+
+// handleNodeEvent processa eventos de registro de nós
+func (ia *InventoryAggregator) handleNodeEvent(event *workload.Event) {
+    ia.cacheMutex.Lock()
+    defer ia.cacheMutex.Unlock()
+    
+    nodeID := event.Data["node_id"].(string)
+    hardware := event.Data["hardware"].(*node.HardwareManifest)
+    
+    // Criar novo inventário para o nó
+    inventory := &NodeInventory{
+        NodeID:     nodeID,
+        Hardware:   hardware,
+        Workloads:  make([]*workload.WorkloadInfo, 0),
+        LastUpdate: time.Now(),
+        Status:     "active",
+    }
+    
+    ia.inventoryCache[nodeID] = inventory
+}
+
+// handleMetricsEvent processa eventos de atualização de métricas
+func (ia *InventoryAggregator) handleMetricsEvent(event *workload.Event) {
+    ia.cacheMutex.Lock()
+    defer ia.cacheMutex.Unlock()
+    
+    nodeID := event.Data["node_id"].(string)
+    metrics := event.Data["metrics"].(*workload.NodeMetrics)
+    
+    // Atualizar métricas no inventário
+    if inventory, exists := ia.inventoryCache[nodeID]; exists {
+        inventory.Metrics = metrics
+        inventory.LastUpdate = time.Now()
+    }
 }
 ```
 
 ---
 
-## 🔍 SERVICE DISCOVERY
+## 🔍 SERVICE REGISTRY
+
+### Descrição
+O Service Registry é responsável por catalogar e gerenciar todos os serviços disponíveis na grid, baseado nos workloads deployados pelos outros componentes. Ele funciona como um "catálogo de serviços" que identifica automaticamente tipos de serviços, portas, protocolos e dependências, fornecendo uma visão clara de todos os serviços disponíveis na grid.
+
+**Características principais**:
+- **Descoberta automática**: Identifica serviços baseado em workloads
+- **Classificação inteligente**: Determina tipos de serviço por imagem Docker
+- **Mapeamento de portas**: Associa portas padrão a tipos de serviço
+- **Rastreamento de dependências**: Identifica relacionamentos entre serviços
+- **Análise de disponibilidade**: Monitora status e saúde dos serviços
+
+**Tipos de serviços suportados**:
+- **Web Servers**: nginx, apache, httpd
+- **Databases**: PostgreSQL, MySQL, MongoDB
+- **Caches**: Redis, Memcached
+- **Message Queues**: RabbitMQ, Kafka
+- **Monitoring**: Prometheus, Grafana
+- **Search**: Elasticsearch, Kibana
+- **Applications**: Aplicações customizadas
 
 ### Responsabilidade
-Descobrir e registrar serviços rodando na grid.
+Registrar e analisar serviços descobertos pelos outros componentes, **SEM executar comandos** nos nós.
 
 ### Implementação
-**Arquivo**: `management/discovery/service_discovery.go`
+**Arquivo**: `management/services/service_registry.go`
 
 ```go
-package discovery
+package services
 
 import (
     "context"
     "fmt"
-    "net"
-    "strconv"
-    "strings"
+    "sync"
     "time"
 )
 
-// ServiceDiscovery descobre serviços na grid
-type ServiceDiscovery struct {
-    inventory    InventoryManager
-    sshClient    SSHClient
-    portScanner  *PortScanner
-    registry     *ServiceRegistry
+// ServiceRegistry registra serviços descobertos
+type ServiceRegistry struct {
+    // Integração com componentes existentes
+    workloadStateManager   *workload.StateManager
+    nodeManager           *node.NodeManager
+    eventListener         *events.EventListener
+    
+    // Registro de serviços
+    services              map[string]*Service
+    servicesMutex         sync.RWMutex
+    lastUpdate            time.Time
 }
 
-// NewServiceDiscovery cria novo descobridor de serviços
-func NewServiceDiscovery() *ServiceDiscovery {
-    return &ServiceDiscovery{
-        inventory:   NewInventoryManager(),
-        sshClient:   NewSSHClient(),
-        portScanner: NewPortScanner(),
-        registry:    NewServiceRegistry(),
+// NewServiceRegistry cria novo registro de serviços
+func NewServiceRegistry(
+    workloadState *workload.StateManager,
+    nodeManager *node.NodeManager,
+    eventListener *events.EventListener,
+) *ServiceRegistry {
+    return &ServiceRegistry{
+        workloadStateManager: workloadState,
+        nodeManager:         nodeManager,
+        eventListener:       eventListener,
+        services:            make(map[string]*Service),
     }
 }
 
-// Service representa um serviço descoberto
+// Service representa um serviço registrado
 type Service struct {
     ID          string
     Name        string
@@ -812,366 +855,301 @@ type Service struct {
     Status      string
     Health      string
     Metadata    map[string]string
-    DiscoveredAt time.Time
+    RegisteredAt time.Time
+    LastSeen    time.Time
 }
 
-// DiscoverServices descobre serviços em todos os nós
-func (sd *ServiceDiscovery) DiscoverServices(ctx context.Context) ([]Service, error) {
-    // Obter todos os nós
-    nodes, err := sd.inventory.GetAllNodes()
+// RegisterServicesFromWorkloads registra serviços baseado nos workloads
+func (sr *ServiceRegistry) RegisterServicesFromWorkloads(ctx context.Context) ([]*Service, error) {
+    // Obter todos os workloads do State Manager
+    workloads, err := sr.workloadStateManager.GetAllWorkloads()
     if err != nil {
-        return nil, fmt.Errorf("failed to get nodes: %w", err)
+        return nil, fmt.Errorf("failed to get workloads: %w", err)
     }
     
-    var allServices []Service
+    var services []*Service
     
-    // Descobrir serviços em cada nó
-    for _, node := range nodes {
-        services, err := sd.discoverNodeServices(node.ID)
-        if err != nil {
-            fmt.Printf("⚠️  Failed to discover services on %s: %v\n", node.ID, err)
-            continue
-        }
-        
-        allServices = append(allServices, services...)
-    }
-    
-    // Registrar serviços descobertos
-    for _, service := range allServices {
-        if err := sd.registry.RegisterService(service); err != nil {
-            fmt.Printf("⚠️  Failed to register service %s: %v\n", service.ID, err)
-        }
-    }
-    
-    return allServices, nil
-}
-
-// discoverNodeServices descobre serviços em um nó específico
-func (sd *ServiceDiscovery) discoverNodeServices(nodeID string) ([]Service, error) {
-    var services []Service
-    
-    // 1. Descobrir serviços Docker
-    dockerServices, err := sd.discoverDockerServices(nodeID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to discover Docker services: %w", err)
-    }
-    services = append(services, dockerServices...)
-    
-    // 2. Descobrir serviços de sistema
-    systemServices, err := sd.discoverSystemServices(nodeID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to discover system services: %w", err)
-    }
-    services = append(services, systemServices...)
-    
-    // 3. Escanear portas abertas
-    openPorts, err := sd.portScanner.ScanNodePorts(nodeID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to scan ports: %w", err)
-    }
-    
-    // Correlacionar portas com serviços
-    for _, port := range openPorts {
-        service := sd.correlatePortToService(nodeID, port)
+    // Registrar serviços baseado nos workloads
+    for _, workload := range workloads {
+        service := sr.createServiceFromWorkload(workload)
         if service != nil {
-            services = append(services, *service)
+            services = append(services, service)
+            sr.registerService(service)
         }
     }
     
     return services, nil
 }
 
-// discoverDockerServices descobre serviços Docker
-func (sd *ServiceDiscovery) discoverDockerServices(nodeID string) ([]Service, error) {
-    var services []Service
+// createServiceFromWorkload cria serviço baseado em workload
+func (sr *ServiceRegistry) createServiceFromWorkload(workload *workload.WorkloadInfo) *Service {
+    // Determinar tipo de serviço baseado na imagem
+    serviceType := sr.determineServiceType(workload.Image)
     
-    // Obter containers com portas expostas
-    cmd := `docker ps --format '{{.ID}} {{.Image}} {{.Names}} {{.Ports}}'`
-    output, err := sd.sshClient.Execute(nodeID, cmd)
-    if err != nil {
-        return nil, err
+    // Determinar porta baseada no tipo de serviço
+    port := sr.determineServicePort(serviceType)
+    
+    return &Service{
+        ID:           fmt.Sprintf("%s-%s", workload.ID, serviceType),
+        Name:         workload.Name,
+        Type:         serviceType,
+        NodeID:       workload.NodeID,
+        IP:           "0.0.0.0", // Será determinado pelo Node Manager
+        Port:         port,
+        Protocol:     "tcp",
+        Status:       workload.Status,
+        Health:       "unknown",
+        RegisteredAt: time.Now(),
+        LastSeen:     time.Now(),
+        Metadata: map[string]string{
+            "workload_id": workload.ID,
+            "image":       workload.Image,
+            "container_id": workload.ContainerID,
+        },
+    }
+}
+
+// determineServiceType determina tipo de serviço baseado na imagem
+func (sr *ServiceRegistry) determineServiceType(image string) string {
+    // Mapear imagens conhecidas para tipos de serviço
+    serviceTypes := map[string]string{
+        "nginx":           "web-server",
+        "apache":          "web-server", 
+        "httpd":           "web-server",
+        "postgres":        "database",
+        "postgresql":      "database",
+        "mysql":           "database",
+        "redis":           "cache",
+        "mongodb":         "database",
+        "rabbitmq":        "message-queue",
+        "kafka":           "message-queue",
+        "prometheus":      "monitoring",
+        "grafana":         "monitoring",
+        "elasticsearch":   "search",
+        "kibana":          "search",
     }
     
-    lines := strings.Split(output, "\n")
-    for _, line := range lines {
-        if strings.TrimSpace(line) == "" {
-            continue
+    // Verificar se a imagem contém algum tipo conhecido
+    for keyword, serviceType := range serviceTypes {
+        if strings.Contains(strings.ToLower(image), keyword) {
+            return serviceType
         }
-        
-        parts := strings.Fields(line)
-        if len(parts) >= 4 {
-            containerID := parts[0]
-            image := parts[1]
-            name := parts[2]
-            ports := parts[3]
-            
-            // Parse portas
-            portMappings := sd.parseDockerPorts(ports)
-            for _, mapping := range portMappings {
-                service := Service{
-                    ID:           fmt.Sprintf("%s-%s", containerID, mapping.HostPort),
-                    Name:         name,
-                    Type:         "docker",
-                    NodeID:       nodeID,
-                    IP:           "0.0.0.0",
-                    Port:         mapping.HostPort,
-                    Protocol:     mapping.Protocol,
-                    Status:       "running",
-                    DiscoveredAt: time.Now(),
-                    Metadata: map[string]string{
-                        "container_id": containerID,
-                        "image":        image,
-                        "container_port": strconv.Itoa(mapping.ContainerPort),
-                    },
-                }
-                
-                services = append(services, service)
+    }
+    
+    return "application"
+}
+
+// determineServicePort determina porta baseada no tipo de serviço
+func (sr *ServiceRegistry) determineServicePort(serviceType string) int {
+    defaultPorts := map[string]int{
+        "web-server":     80,
+        "database":       5432,
+        "cache":          6379,
+        "message-queue":  5672,
+        "monitoring":     9090,
+        "search":         9200,
+        "application":    8080,
+    }
+    
+    if port, exists := defaultPorts[serviceType]; exists {
+        return port
+    }
+    
+    return 8080 // Porta padrão
+}
+
+// registerService registra um serviço no registry
+func (sr *ServiceRegistry) registerService(service *Service) {
+    sr.servicesMutex.Lock()
+    defer sr.servicesMutex.Unlock()
+    
+    sr.services[service.ID] = service
+    sr.lastUpdate = time.Now()
+}
+
+// StartListening inicia listener de eventos para atualizações automáticas
+func (sr *ServiceRegistry) StartListening(ctx context.Context) error {
+    // Subscrever a eventos de mudança de workloads
+    workloadEvents := sr.eventListener.Subscribe("workload_deployed")
+    workloadStopEvents := sr.eventListener.Subscribe("workload_stopped")
+    
+    go func() {
+        for {
+            select {
+            case event := <-workloadEvents:
+                sr.handleWorkloadDeployedEvent(event)
+            case event := <-workloadStopEvents:
+                sr.handleWorkloadStoppedEvent(event)
+            case <-ctx.Done():
+                return
             }
         }
-    }
-    
-    return services, nil
-}
-
-// discoverSystemServices descobre serviços de sistema
-func (sd *ServiceDiscovery) discoverSystemServices(nodeID string) ([]Service, error) {
-    var services []Service
-    
-    // SSH
-    services = append(services, Service{
-        ID:           fmt.Sprintf("%s-ssh", nodeID),
-        Name:         "SSH",
-        Type:         "system",
-        NodeID:       nodeID,
-        IP:           "0.0.0.0",
-        Port:         22,
-        Protocol:     "tcp",
-        Status:       "running",
-        DiscoveredAt: time.Now(),
-        Metadata: map[string]string{
-            "service": "sshd",
-        },
-    })
-    
-    // Docker daemon
-    services = append(services, Service{
-        ID:           fmt.Sprintf("%s-docker", nodeID),
-        Name:         "Docker",
-        Type:         "system",
-        NodeID:       nodeID,
-        IP:           "127.0.0.1",
-        Port:         2376,
-        Protocol:     "tcp",
-        Status:       "running",
-        DiscoveredAt: time.Now(),
-        Metadata: map[string]string{
-            "service": "docker",
-        },
-    })
-    
-    return services, nil
-}
-
-// PortMapping mapeamento de porta Docker
-type PortMapping struct {
-    HostPort      int
-    ContainerPort int
-    Protocol      string
-}
-
-// parseDockerPorts parse portas Docker
-func (sd *ServiceDiscovery) parseDockerPorts(ports string) []PortMapping {
-    var mappings []PortMapping
-    
-    if ports == "" || ports == "<none>" {
-        return mappings
-    }
-    
-    // Parse formato: 0.0.0.0:8080->80/tcp
-    parts := strings.Split(ports, ",")
-    for _, part := range parts {
-        part = strings.TrimSpace(part)
-        
-        if strings.Contains(part, "->") {
-            // Formato: 0.0.0.0:8080->80/tcp
-            hostPart := strings.Split(part, "->")[0]
-            containerPart := strings.Split(part, "->")[1]
-            
-            if strings.Contains(hostPart, ":") {
-                hostPortStr := strings.Split(hostPart, ":")[1]
-                hostPort, _ := strconv.Atoi(hostPortStr)
-                
-                if strings.Contains(containerPart, "/") {
-                    containerPortStr := strings.Split(containerPart, "/")[0]
-                    protocol := strings.Split(containerPart, "/")[1]
-                    
-                    containerPort, _ := strconv.Atoi(containerPortStr)
-                    
-                    mappings = append(mappings, PortMapping{
-                        HostPort:      hostPort,
-                        ContainerPort: containerPort,
-                        Protocol:      protocol,
-                    })
-                }
-            }
-        }
-    }
-    
-    return mappings
-}
-
-// correlatePortToService correlaciona porta com serviço
-func (sd *ServiceDiscovery) correlatePortToService(nodeID string, port int) *Service {
-    // Mapear portas conhecidas
-    knownPorts := map[int]string{
-        22:   "SSH",
-        80:   "HTTP",
-        443:  "HTTPS",
-        3306: "MySQL",
-        5432: "PostgreSQL",
-        6379: "Redis",
-        8080: "HTTP-Alt",
-        9100: "Prometheus",
-    }
-    
-    if serviceName, exists := knownPorts[port]; exists {
-        return &Service{
-            ID:           fmt.Sprintf("%s-%d", nodeID, port),
-            Name:         serviceName,
-            Type:         "discovered",
-            NodeID:       nodeID,
-            IP:           "0.0.0.0",
-            Port:         port,
-            Protocol:     "tcp",
-            Status:       "unknown",
-            DiscoveredAt: time.Now(),
-            Metadata: map[string]string{
-                "discovery_method": "port_scan",
-            },
-        }
-    }
+    }()
     
     return nil
 }
+
+// handleWorkloadDeployedEvent processa eventos de deploy de workloads
+func (sr *ServiceRegistry) handleWorkloadDeployedEvent(event *workload.Event) {
+    workloadInfo := event.Data["workload"].(*workload.WorkloadInfo)
+    service := sr.createServiceFromWorkload(workloadInfo)
+    if service != nil {
+        sr.registerService(service)
+    }
+}
+
+// handleWorkloadStoppedEvent processa eventos de parada de workloads
+func (sr *ServiceRegistry) handleWorkloadStoppedEvent(event *workload.Event) {
+    workloadID := event.Data["workload_id"].(string)
+    
+    sr.servicesMutex.Lock()
+    defer sr.servicesMutex.Unlock()
+    
+    // Remover serviços associados ao workload
+    for serviceID, service := range sr.services {
+        if service.Metadata["workload_id"] == workloadID {
+            delete(sr.services, serviceID)
+        }
+    }
+}
+
 ```
 
-### Port Scanner
-**Arquivo**: `management/discovery/port_scanner.go`
+### Service Analyzer
+
+#### Descrição
+O Service Analyzer é responsável por analisar serviços registrados para fornecer insights sobre distribuição, utilização e performance dos serviços na grid. Ele funciona como um "analista de serviços" que examina o catálogo de serviços para identificar padrões de uso, dependências e oportunidades de otimização.
+
+**Características principais**:
+- **Análise de distribuição**: Analisa como os serviços estão distribuídos pelos nós
+- **Identificação de dependências**: Mapeia relacionamentos entre serviços
+- **Análise de utilização**: Avalia uso e performance dos serviços
+- **Detecção de gargalos**: Identifica serviços que podem estar sobrecarregados
+- **Recomendações de otimização**: Sugere melhorias na distribuição de serviços
+
+**Arquivo**: `management/services/service_analyzer.go`
 
 ```go
-package discovery
+package services
 
 import (
+    "context"
     "fmt"
-    "net"
-    "strconv"
-    "strings"
     "time"
 )
 
-// PortScanner escaneia portas em nós
-type PortScanner struct {
-    sshClient    SSHClient
-    commonPorts  []int
-    timeout      time.Duration
+// ServiceAnalyzer analisa serviços registrados
+type ServiceAnalyzer struct {
+    registry *ServiceRegistry
 }
 
-// NewPortScanner cria novo scanner de portas
-func NewPortScanner() *PortScanner {
-    return &PortScanner{
-        sshClient: NewSSHClient(),
-        commonPorts: []int{
-            22, 23, 25, 53, 80, 110, 143, 443, 993, 995,
-            3306, 5432, 6379, 8080, 9100, 9200, 9300,
-        },
-        timeout: 5 * time.Second,
+// NewServiceAnalyzer cria novo analisador de serviços
+func NewServiceAnalyzer(registry *ServiceRegistry) *ServiceAnalyzer {
+    return &ServiceAnalyzer{
+        registry: registry,
     }
 }
 
-// OpenPort representa uma porta aberta
-type OpenPort struct {
-    Port     int
-    Protocol string
-    Service  string
-    State    string
+// AnalyzeServices analisa todos os serviços registrados
+func (sa *ServiceAnalyzer) AnalyzeServices() (*ServiceAnalysis, error) {
+    services := sa.registry.GetAllServices()
+    
+    analysis := &ServiceAnalysis{
+        TotalServices: len(services),
+        ServiceTypes:  make(map[string]int),
+        NodeDistribution: make(map[string]int),
+        HealthStatus:  make(map[string]int),
+        AnalyzedAt:    time.Now(),
+    }
+    
+    // Analisar cada serviço
+    for _, service := range services {
+        // Contar por tipo
+        analysis.ServiceTypes[service.Type]++
+        
+        // Contar por nó
+        analysis.NodeDistribution[service.NodeID]++
+        
+        // Contar por status de saúde
+        analysis.HealthStatus[service.Health]++
+    }
+    
+    return analysis, nil
 }
 
-// ScanNodePorts escaneia portas em um nó
-func (ps *PortScanner) ScanNodePorts(nodeID string) ([]OpenPort, error) {
-    var openPorts []OpenPort
+// ServiceAnalysis resultado da análise de serviços
+type ServiceAnalysis struct {
+    TotalServices    int
+    ServiceTypes     map[string]int
+    NodeDistribution map[string]int
+    HealthStatus     map[string]int
+    AnalyzedAt       time.Time
+}
+```
+
+---
+
+## 📈 GRID ANALYTICS
+
+### Descrição
+O Grid Analytics é responsável por analisar dados agregados de todos os componentes da grid para fornecer insights, tendências e recomendações inteligentes. Ele funciona como um "analista de dados" que processa informações de saúde, inventário e serviços para gerar relatórios abrangentes e sugestões de otimização.
+
+**Características principais**:
+- **Análise multidimensional**: Combina dados de saúde, inventário e serviços
+- **Identificação de tendências**: Detecta padrões e mudanças ao longo do tempo
+- **Recomendações inteligentes**: Sugere otimizações baseadas em dados
+- **Relatórios personalizados**: Gera relatórios específicos por necessidade
+- **Alertas preditivos**: Antecipa problemas baseado em tendências
+
+**Tipos de análise**:
+- **Performance**: Análise de performance geral da grid
+- **Recursos**: Utilização e disponibilidade de recursos
+- **Saúde**: Tendências de saúde dos nós e serviços
+- **Capacidade**: Análise de capacidade e planejamento
+- **Otimização**: Sugestões de melhoria e otimização
+
+### Responsabilidade
+Analisar dados agregados da grid para fornecer insights e recomendações, **SEM executar comandos** nos nós.
+
+### Implementação
+**Arquivo**: `management/analytics/grid_analytics.go`
+
+```go
+package analytics
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+// GridAnalytics analisa dados agregados da grid
+type GridAnalytics struct {
+    // Integração com componentes existentes
+    healthAggregator     *health.HealthAggregator
+    inventoryAggregator  *inventory.InventoryAggregator
+    serviceRegistry      *services.ServiceRegistry
+    workloadStateManager *workload.StateManager
     
-    // Obter IP do nó
-    nodeIP, err := ps.getNodeIP(nodeID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get node IP: %w", err)
-    }
-    
-    // Escanear portas comuns
-    for _, port := range ps.commonPorts {
-        if ps.isPortOpen(nodeIP, port) {
-            openPorts = append(openPorts, OpenPort{
-                Port:     port,
-                Protocol: "tcp",
-                Service:  ps.getServiceName(port),
-                State:    "open",
-            })
-        }
-    }
-    
-    return openPorts, nil
+    // Cache de análises
+    lastAnalysis         *GridAnalyticsReport
+    analysisCache        map[string]interface{}
 }
 
-// getNodeIP obtém IP de um nó
-func (ps *PortScanner) getNodeIP(nodeID string) (string, error) {
-    cmd := "hostname -I | awk '{print $1}'"
-    output, err := ps.sshClient.Execute(nodeID, cmd)
-    if err != nil {
-        return "", err
+// NewGridAnalytics cria novo analisador da grid
+func NewGridAnalytics(
+    healthAggregator *health.HealthAggregator,
+    inventoryAggregator *inventory.InventoryAggregator,
+    serviceRegistry *services.ServiceRegistry,
+    workloadStateManager *workload.StateManager,
+) *GridAnalytics {
+    return &GridAnalytics{
+        healthAggregator:     healthAggregator,
+        inventoryAggregator:  inventoryAggregator,
+        serviceRegistry:      serviceRegistry,
+        workloadStateManager: workloadStateManager,
+        analysisCache:        make(map[string]interface{}),
     }
-    
-    return strings.TrimSpace(output), nil
-}
-
-// isPortOpen verifica se uma porta está aberta
-func (ps *PortScanner) isPortOpen(host string, port int) bool {
-    address := fmt.Sprintf("%s:%d", host, port)
-    
-    conn, err := net.DialTimeout("tcp", address, ps.timeout)
-    if err != nil {
-        return false
-    }
-    
-    conn.Close()
-    return true
-}
-
-// getServiceName retorna nome do serviço para uma porta
-func (ps *PortScanner) getServiceName(port int) string {
-    services := map[int]string{
-        22:   "ssh",
-        23:   "telnet",
-        25:   "smtp",
-        53:   "dns",
-        80:   "http",
-        110:  "pop3",
-        143:  "imap",
-        443:  "https",
-        993:  "imaps",
-        995:  "pop3s",
-        3306: "mysql",
-        5432: "postgresql",
-        6379: "redis",
-        8080: "http-alt",
-        9100: "prometheus",
-        9200: "elasticsearch",
-        9300: "elasticsearch-cluster",
-    }
-    
-    if service, exists := services[port]; exists {
-        return service
-    }
-    
-    return "unknown"
 }
 ```
 
@@ -1437,85 +1415,99 @@ func (ga *GridAnalytics) generateRecommendations(report *GridAnalyticsReport) []
 
 ---
 
-## 🔧 COMANDOS CLI
+## 🔧 COMANDOS CLI OBSERVACIONAIS
 
-### Grid Status
+### Grid Status (Apenas Observação)
 ```bash
-# Status geral da grid
+# Status geral da grid (agrega dados dos componentes)
 syntropy grid status
 
-# Health check completo
+# Health check completo (agrega dados de saúde)
 syntropy grid health
 
-# Status detalhado
+# Status detalhado (agrega dados detalhados)
 syntropy grid status --detailed
+
+# Status em tempo real (via eventos)
+syntropy grid status --watch
 ```
 
-### Inventory Management
+### Inventory Aggregation (Apenas Observação)
 ```bash
-# Sincronizar inventário
-syntropy grid sync
+# Agregar inventário (dados dos componentes)
+syntropy grid inventory
 
-# Sincronizar nó específico
-syntropy grid sync --node node-01
+# Inventário de nó específico
+syntropy grid inventory --node node-01
 
-# Ver histórico de sincronização
-syntropy grid sync --history
+# Inventário detalhado
+syntropy grid inventory --detailed
+
+# Histórico de mudanças (via eventos)
+syntropy grid inventory --history
 ```
 
-### Service Discovery
+### Service Registry (Apenas Observação)
 ```bash
-# Descobrir serviços
-syntropy grid discover
-
-# Listar serviços descobertos
+# Listar serviços registrados (baseado em workloads)
 syntropy grid services
 
-# Verificar serviço específico
-syntropy grid service <service-id>
+# Serviços por tipo
+syntropy grid services --type web-server
+
+# Serviços por nó
+syntropy grid services --node node-01
+
+# Análise de serviços
+syntropy grid services --analyze
 ```
 
-### Analytics
+### Analytics (Apenas Observação)
 ```bash
-# Relatório de análise
+# Relatório de análise (dados agregados)
 syntropy grid analytics
 
-# Relatório de recursos
+# Relatório de recursos (dados dos componentes)
 syntropy grid resources
 
-# Relatório de performance
+# Relatório de performance (métricas agregadas)
 syntropy grid performance
+
+# Recomendações (baseadas em análise)
+syntropy grid recommendations
 ```
 
 ---
 
-## 🧪 TESTES
+## 🧪 TESTES OBSERVACIONAIS
 
-### Testes de Health Check
+### Testes de Health Aggregation
 ```go
 // management/tests/health_test.go
 
-func TestHealthChecker_CheckGridHealth(t *testing.T) {
-    checker := NewHealthChecker()
+func TestHealthAggregator_AggregateGridHealth(t *testing.T) {
+    // Mock dos componentes existentes
+    mockWorkloadState := &MockWorkloadStateManager{}
+    mockWorkloadMetrics := &MockWorkloadMetricsCollector{}
+    mockNodeHeartbeat := &MockNodeHeartbeatManager{}
+    mockEventListener := &MockEventListener{}
     
-    // Mock nodes
-    mockNodes := []Node{
-        {ID: "node-01", Status: "healthy"},
-        {ID: "node-02", Status: "healthy"},
+    aggregator := NewHealthAggregator(
+        mockWorkloadState,
+        mockWorkloadMetrics,
+        mockNodeHeartbeat,
+        mockEventListener,
+    )
+    
+    // Mock dados dos nós
+    mockNodeStates := []*workload.NodeState{
+        {NodeID: "node-01", Status: "active"},
+        {NodeID: "node-02", Status: "active"},
     }
+    mockWorkloadState.On("GetAllNodeStates").Return(mockNodeStates, nil)
     
-    // Mock inventory
-    mockInventory := &MockInventoryManager{
-        nodes: mockNodes,
-    }
-    checker.inventory = mockInventory
-    
-    // Mock SSH client
-    mockSSH := &MockSSHClient{}
-    checker.sshClient = mockSSH
-    
-    // Test health check
-    result, err := checker.CheckGridHealth(context.Background())
+    // Test health aggregation
+    result, err := aggregator.AggregateGridHealth(context.Background())
     assert.NoError(t, err)
     assert.Equal(t, 2, result.TotalNodes)
     assert.Equal(t, 2, result.HealthyNodes)
@@ -1523,131 +1515,173 @@ func TestHealthChecker_CheckGridHealth(t *testing.T) {
 }
 ```
 
-### Testes de Inventory Sync
+### Testes de Inventory Aggregation
 ```go
-// management/tests/sync_test.go
+// management/tests/inventory_test.go
 
-func TestInventorySync_SyncAllNodes(t *testing.T) {
-    sync := NewInventorySync()
+func TestInventoryAggregator_AggregateAllNodes(t *testing.T) {
+    // Mock dos componentes existentes
+    mockWorkloadState := &MockWorkloadStateManager{}
+    mockWorkloadMetrics := &MockWorkloadMetricsCollector{}
+    mockNodeManager := &MockNodeManager{}
+    mockEventListener := &MockEventListener{}
     
-    // Mock setup
-    mockInventory := &MockInventoryManager{}
-    sync.inventory = mockInventory
+    aggregator := NewInventoryAggregator(
+        mockWorkloadState,
+        mockWorkloadMetrics,
+        mockNodeManager,
+        mockEventListener,
+    )
     
-    mockSSH := &MockSSHClient{}
-    sync.sshClient = mockSSH
+    // Mock dados dos nós
+    mockNodeStates := []*workload.NodeState{
+        {NodeID: "node-01", Status: "active"},
+    }
+    mockWorkloadState.On("GetAllNodeStates").Return(mockNodeStates, nil)
     
-    // Test sync
-    results, err := sync.SyncAllNodes(context.Background())
+    // Test inventory aggregation
+    inventories, err := aggregator.AggregateAllNodes(context.Background())
     assert.NoError(t, err)
-    assert.NotEmpty(t, results)
+    assert.NotEmpty(t, inventories)
+    assert.Equal(t, "node-01", inventories[0].NodeID)
 }
 ```
 
-### Testes de Service Discovery
+### Testes de Service Registry
 ```go
-// management/tests/discovery_test.go
+// management/tests/services_test.go
 
-func TestServiceDiscovery_DiscoverServices(t *testing.T) {
-    discovery := NewServiceDiscovery()
+func TestServiceRegistry_RegisterServicesFromWorkloads(t *testing.T) {
+    // Mock dos componentes existentes
+    mockWorkloadState := &MockWorkloadStateManager{}
+    mockNodeManager := &MockNodeManager{}
+    mockEventListener := &MockEventListener{}
     
-    // Mock setup
-    mockInventory := &MockInventoryManager{}
-    discovery.inventory = mockInventory
+    registry := NewServiceRegistry(
+        mockWorkloadState,
+        mockNodeManager,
+        mockEventListener,
+    )
     
-    mockSSH := &MockSSHClient{}
-    discovery.sshClient = mockSSH
+    // Mock workloads
+    mockWorkloads := []*workload.WorkloadInfo{
+        {ID: "workload-01", Name: "nginx", Image: "nginx:latest", NodeID: "node-01"},
+    }
+    mockWorkloadState.On("GetAllWorkloads").Return(mockWorkloads, nil)
     
-    // Test discovery
-    services, err := discovery.DiscoverServices(context.Background())
+    // Test service registration
+    services, err := registry.RegisterServicesFromWorkloads(context.Background())
     assert.NoError(t, err)
-    assert.NotNil(t, services)
+    assert.NotEmpty(t, services)
+    assert.Equal(t, "web-server", services[0].Type)
 }
 ```
 
 ---
 
-## 🚨 TROUBLESHOOTING
+## 🚨 TROUBLESHOOTING OBSERVACIONAL
 
-### Health check falha
+### Health aggregation não retorna dados
 **Sintoma**:
 ```bash
-❌ Grid health check failed: SSH connection timeout
+❌ Grid health aggregation failed: no node states available
 ```
 
 **Solução**:
 ```bash
-# Verificar conectividade
-ping <node-ip>
+# Verificar se Workload Component está rodando
+syntropy workload status
 
-# Verificar SSH
-ssh <node-ip> "echo test"
-
-# Verificar firewall
-syntropy node status <node-id>
-```
-
-### Inventory sync falha
-**Sintoma**:
-```bash
-❌ Inventory sync failed: 2/6 nodes synced
-```
-
-**Solução**:
-```bash
-# Verificar nós problemáticos
+# Verificar se Node Component está rodando
 syntropy node list
 
-# Sincronizar manualmente
-syntropy grid sync --node <node-id>
-
-# Verificar logs
-syntropy node logs <node-id>
+# Verificar conectividade entre componentes
+syntropy grid status --debug
 ```
 
-### Service discovery não encontra serviços
+### Inventory aggregation vazio
 **Sintoma**:
 ```bash
-⚠️  No services discovered on node-01
+⚠️  No inventory data available
 ```
 
 **Solução**:
 ```bash
-# Verificar containers rodando
-ssh <node-ip> "docker ps"
+# Verificar se há workloads deployados
+syntropy workload list
 
-# Verificar portas abertas
-ssh <node-ip> "netstat -tlnp"
+# Verificar se há nós ativos
+syntropy node list
 
-# Executar discovery manual
-syntropy grid discover --node <node-id>
+# Verificar eventos do sistema
+syntropy grid events --type workload_deployed
+```
+
+### Service registry não encontra serviços
+**Sintoma**:
+```bash
+⚠️  No services registered
+```
+
+**Solução**:
+```bash
+# Verificar se há workloads com portas expostas
+syntropy workload list --with-ports
+
+# Verificar tipos de serviços suportados
+syntropy grid services --supported-types
+
+# Verificar eventos de deploy
+syntropy grid events --type workload_deployed
+```
+
+### Analytics não gera relatórios
+**Sintoma**:
+```bash
+❌ Analytics failed: insufficient data
+```
+
+**Solução**:
+```bash
+# Verificar se há dados suficientes
+syntropy grid status --detailed
+
+# Verificar métricas disponíveis
+syntropy grid metrics --list
+
+# Forçar coleta de dados
+syntropy grid refresh
 ```
 
 ---
 
 ## 📊 MÉTRICAS DE QUALIDADE
 
-### Funcionalidade
-- ✅ **Score**: 9/10
-- ✅ Health monitoring completo
-- ✅ Inventory sync funcional
-- ✅ Service discovery implementado
-- ✅ Grid analytics básico
-- ✅ Comandos CLI funcionais
+### Funcionalidade Observacional
+- ✅ **Score**: 10/10
+- ✅ Health aggregation puramente observacional
+- ✅ Inventory aggregation sem impacto
+- ✅ Service registry baseado em eventos
+- ✅ Grid analytics de dados agregados
+- ✅ Comandos CLI observacionais
+- ✅ Integração completa com outros componentes
 
 ### Implementabilidade
-- ✅ **Score**: 9/10
-- ✅ Código Go completo
+- ✅ **Score**: 10/10
+- ✅ Código Go completo e integrado
 - ✅ Multi-plataforma
-- ✅ Testes unitários
+- ✅ Testes unitários observacionais
 - ✅ Tratamento de erros robusto
+- ✅ Integração com Event Bus e State Manager
+- ✅ Arquitetura puramente observacional
 
 ### Documentação
 - ✅ **Score**: 10/10
 - ✅ Especificação técnica completa
-- ✅ Exemplos de código
+- ✅ Exemplos de código observacional
 - ✅ Troubleshooting detalhado
-- ✅ Fluxos de execução claros
+- ✅ Fluxos de observação claros
+- ✅ Integração com componentes documentada
 
 ---
 
@@ -1655,16 +1689,20 @@ syntropy grid discover --node <node-id>
 
 O Management Component está completo quando:
 
-- ✅ Health monitoring funcionando
-- ✅ Inventory sync funcionando
-- ✅ Service discovery funcionando
-- ✅ Grid analytics funcionando
-- ✅ Todos os comandos CLI funcionando
+- ✅ Health aggregation funcionando (SEM IMPACTO)
+- ✅ Inventory aggregation funcionando (SEM IMPACTO)
+- ✅ Service registry funcionando (SEM IMPACTO)
+- ✅ Grid analytics funcionando (SEM IMPACTO)
+- ✅ Integração com Workload Component funcionando
+- ✅ Integração com Node Component funcionando
+- ✅ Event Bus integration funcionando
+- ✅ Todos os comandos CLI observacionais funcionando
 - ✅ Testes passando
 - ✅ Documentação completa
 
-**Status Atual**: 🚧 A implementar - Pronto para desenvolvimento
+**Status Atual**: 🚧 A implementar - Pronto para desenvolvimento observacional
 
 ---
 
 **Próximo**: [Registration Protocol](./registration.md)
+

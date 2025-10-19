@@ -23,13 +23,21 @@ O Syntropy Cooperative Grid MVP é um sistema de mini-cloud pessoal que permite 
 ┌─────────────────────────────────────────────────────────────┐
 │                    COMMAND STATION                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │   Setup     │  │    Node     │  │  Workload   │         │
-│  │ Component   │  │ Component   │  │ Component   │         │
+│  │    Setup    │  │    Node     │  │  Workload   │         │
+│  │ Component   │  │ Management  │  │ Component   │         │
+│  │             │  │ Component   │  │ (Unificado) │         │
 │  └─────────────┘  └─────────────┘  └─────────────┘         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │ Management  │  │ Registration│  │ Orchestration│         │
-│  │ Component   │  │ Protocol    │  │ Engine      │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│  ┌─────────────┐                                           │
+│  │ Management  │                                           │
+│  │ Component   │                                           │
+│  └─────────────┘                                           │
+│                                                             │
+│  Workload Component inclui:                                 │
+│  • Admission Control • Scheduler • Queue System            │
+│  • Deploy Execution • Lifecycle • Monitoring               │
+│  • Docker Compose • App Deploy • Server Deploy             │
+│  • Auto-Orchestration • Workflow • Event Bus               │
+│  • State Management • Metrics Collection                   │
 └─────────────────────────────────────────────────────────────┘
                               │
                               │ SSH + Registration Protocol
@@ -54,29 +62,24 @@ O Syntropy Cooperative Grid MVP é um sistema de mini-cloud pessoal que permite 
 ## 🏗️ COMPONENTES DO MVP
 
 ### 1. Setup Component
-**Responsabilidade**: Configuração inicial e gerenciamento de Grid Token  
-**Status**: ✅ 80% implementado  
+**Responsabilidade**: Configuração inicial do Command Station  
+**Status**: 🚧 Em desenvolvimento (80% implementado)  
 **Documentação**: [Setup Component](./components/setup.md)
 
-**Funcionalidades**:
-- Geração segura de Grid Token (via Keyring do sistema)
-- Configuração inicial do Command Station
-- Gerenciamento de chaves SSH
-- Validação de pré-requisitos
-
-### 2. Node Creation Component
-**Responsabilidade**: Provisionamento automático de nós físicos  
+### 2. Node Management Component
+**Responsabilidade**: Provisionamento automático e registro de nós físicos  
 **Status**: 🚧 A implementar  
-**Documentação**: [Node Creation Component](./components/node-creation.md)
+**Documentação**: [Node Management Component](./components/node.md)
 
 **Funcionalidades**:
 - Detecção automática de dispositivos USB
-- Download e injeção de cloud-init
-- Criação de USBs bootáveis
-- Provisionamento de hardware virgem
+- Geração automática de configurações (NodeID, Grid Token, SSH keys)
+- Criação de USBs bootáveis com cloud-init customizado
+- Registro automático e handshake seguro
+- Gerenciamento de múltiplos nós simultâneos
 
-### 3. Workload Component
-**Responsabilidade**: Orquestração inteligente de workloads  
+### 3. Workload Component (Unificado)
+**Responsabilidade**: Orquestração inteligente completa de workloads  
 **Status**: 🚧 A implementar  
 **Documentação**: [Workload Component](./components/workload.md)
 
@@ -87,6 +90,10 @@ O Syntropy Cooperative Grid MVP é um sistema de mini-cloud pessoal que permite 
 - Deploy Execution (execução via SSH)
 - Lifecycle Management (start/stop/scale)
 - Monitoring (logs e métricas)
+- Docker Compose Support (deploy multi-container)
+- Application Deploy (deploy de aplicações completas)
+- Server Deploy (deploy de servidores especializados)
+- Auto-Orchestration (orquestração automática integrada)
 
 ### 4. Management Component
 **Responsabilidade**: Gerenciamento e monitoramento da grid  
@@ -94,10 +101,11 @@ O Syntropy Cooperative Grid MVP é um sistema de mini-cloud pessoal que permite 
 **Documentação**: [Management Component](./components/management.md)
 
 **Funcionalidades**:
-- Listagem de nós
-- Status e health checks
-- Sincronização de inventário
-- Descoberta de serviços
+- Health Monitoring (monitoramento de saúde dos nós)
+- Inventory Sync (sincronização de inventário)
+- Service Discovery (descoberta de serviços)
+- Grid Analytics (análise de performance da grid)
+- Administrative Operations (operação administrativas)
 
 ---
 
@@ -121,31 +129,35 @@ syntropy token rotate    # Gerar novo token
 
 ## 🚀 FLUXO DE IMPLEMENTAÇÃO
 
-### Fase 1: Setup e Segurança (Semana 1)
-1. Implementar TokenManager com Keyring
-2. Completar Setup Component
-3. Testes em múltiplas plataformas
+### Fase 0: Setup Component (Semana 0)
+1. Finalizar Setup Component (20% restante)
+2. Implementar TokenManager
+3. Testar configuração inicial
 
-### Fase 2: Node Creation (Semanas 2-3)
+### Fase 1: Node Management (Semanas 1-2)
 1. Implementar USB detection (Windows/Linux)
 2. Implementar cloud-init injection
 3. Implementar USB writing
 4. Testar provisionamento de primeiro nó
 
-### Fase 3: Registration Protocol (Semana 4)
+### Fase 2: Registration Protocol (Semana 3)
 1. Implementar Listener (Command Station)
 2. Implementar Node announcement
 3. Implementar Inventory management
 4. Testar registro completo
 
-### Fase 4: Workload Orchestration (Semana 5)
+### Fase 3: Workload Orchestration Unificado (Semanas 4-5)
 1. Implementar Admission Control
 2. Implementar Scheduler (3 estratégias)
 3. Implementar Queue System
 4. Implementar Deploy Execution
-5. Testes end-to-end
+5. Implementar Docker Compose Support
+6. Implementar Application Deploy
+7. Implementar Server Deploy
+8. Implementar Auto-Orchestration
+9. Testes end-to-end
 
-### Fase 5: Management e Polish (Semana 6)
+### Fase 4: Management e Polish (Semana 6)
 1. Implementar Management Component
 2. Provisionar 6 nós completos
 3. Testes de carga
@@ -179,27 +191,52 @@ syntropy token rotate    # Gerar novo token
 
 ## 🎯 COMANDOS CLI PRINCIPAIS
 
-### Setup
+### Setup Component
 ```bash
 syntropy setup run                    # Configuração inicial
-syntropy token show                   # Ver Grid Token
+syntropy setup status                 # Status do setup
+syntropy setup validate               # Validar ambiente
+syntropy setup reset --confirm        # Reset do setup
+syntropy token show                   # Ver token (com confirmação)
+syntropy token export                 # Backup seguro
 syntropy token rotate                 # Gerar novo token
 ```
 
 ### Node Management
 ```bash
-syntropy node create                  # Criar USB para nó
-syntropy node listen                  # Iniciar listener
-syntropy node list                    # Listar nós registrados
+syntropy node create                  # Criar nó com registro automático
+syntropy node list                    # Listar nós (ativos e pendentes)
 syntropy node status <node-id>        # Status de nó específico
+syntropy node logs <node-id>          # Logs de nó específico
 ```
 
-### Workload Management
+### Workload Management (Unificado)
 ```bash
+# Deploy de containers
 syntropy workload deploy nginx --replicas 3 --cpu 1 --memory 512M
-syntropy workload list                # Listar workloads
-syntropy workload status <workload-id> # Status de workload
+
+# Deploy de docker-compose
+syntropy workload deploy-compose ./docker-compose.yaml
+
+# Deploy de aplicações completas
+syntropy workload deploy-app ./app-config.yaml
+
+# Deploy de servidores
+syntropy workload deploy-server nginx --port 80 --ssl --domain example.com
+
+# Gerenciamento unificado
+syntropy workload list                # Listar todos os workloads
+syntropy workload list --type container|compose|app|server
+syntropy workload status <workload-id> # Status de qualquer workload
 syntropy workload scale <workload-id> --replicas 5
+syntropy workload logs <workload-id> --service <service-name>
+
+# Orquestração integrada
+syntropy workload orchestration status
+syntropy workload workflow list
+syntropy workload state show
+
+# Capacidade da grid
 syntropy grid capacity                # Capacidade da grid
 ```
 
@@ -216,12 +253,10 @@ syntropy grid sync                    # Sincronizar inventário
 
 Para implementação completa, consulte a documentação específica de cada componente:
 
-1. **[Setup Component](./components/setup.md)** - Configuração e segurança
-2. **[Node Creation Component](./components/node-creation.md)** - Provisionamento de nós
-3. **[Workload Component](./components/workload.md)** - Orquestração de workloads
+1. **[Setup Component](./components/setup.md)** - Configuração inicial do Command Station
+2. **[Node Management Component](./components/node.md)** - Provisionamento e registro de nós
+3. **[Workload Component](./components/workload.md)** - Orquestração completa de workloads
 4. **[Management Component](./components/management.md)** - Gerenciamento da grid
-5. **[Registration Protocol](./components/registration.md)** - Protocolo de registro
-6. **[Orchestration Engine](./components/orchestration.md)** - Motor de orquestração
 
 ---
 
@@ -229,12 +264,16 @@ Para implementação completa, consulte a documentação específica de cada com
 
 O MVP está completo quando:
 
-- ✅ 6 nós físicos provisionados e registrados
+- ✅ Setup Component funcionando (configuração inicial)
 - ✅ Grid Token seguro via Keyring
-- ✅ Deploy de workloads funcionando
-- ✅ Orquestração automática (Admission + Scheduler)
-- ✅ Queue system para grid cheia
-- ✅ Comandos CLI funcionais
+- ✅ 6 nós físicos provisionados e registrados
+- ✅ Deploy de workloads funcionando (containers, compose, apps, servers)
+- ✅ Orquestração automática integrada (Admission + Scheduler + Queue)
+- ✅ Docker Compose support funcionando
+- ✅ Application deploy funcionando
+- ✅ Server deploy funcionando
+- ✅ Management Component funcionando
+- ✅ Comandos CLI unificados funcionais
 - ✅ Documentação completa
 
 **Score de Qualidade**: 9.1/10 - Excelente para implementação por LLMs
