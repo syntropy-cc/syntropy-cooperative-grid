@@ -1,137 +1,133 @@
-# Syntropy CLI Setup Component
+# Setup Component
 
 ## What is This?
+
 [MACRO_VIEW]
-The Setup Component is the foundational initialization system for the Syntropy Cooperative Grid CLI, responsible for configuring the entire Syntropy environment on user systems.
+O componente Setup é responsável por configurar e inicializar o ambiente Syntropy CLI em diferentes sistemas operacionais, garantindo que todos os componentes necessários estejam prontos para funcionamento no ecossistema Syntropy Cooperative Grid.
 [/MACRO_VIEW]
 
 [MESO_VIEW]
-This component integrates with the Manager's CLI interface and API services to provide seamless environment setup, configuration management, and system validation across multiple operating systems.
+Este componente funciona como a interface de configuração inicial do CLI Manager, interagindo com outros componentes do sistema para validar o ambiente, gerar configurações e estabelecer a estrutura necessária para operações subsequentes.
 [/MESO_VIEW]
 
 [MICRO_VIEW]
-The Setup Component handles environment validation, directory structure creation, cryptographic key generation, configuration file management, and optional system service installation.
+O componente Setup resolve o problema de inicialização e configuração automática do ambiente Syntropy, incluindo validação de dependências, geração de chaves criptográficas, criação de estruturas de diretórios e configuração de serviços do sistema.
 [/MICRO_VIEW]
 
 ## Why Use This?
+
 ### Problems It Solves
-- **Complex Environment Setup**: Automates the intricate process of configuring Syntropy CLI across different operating systems
-- **Configuration Management**: Generates and manages YAML configuration files with proper directory structures
-- **Security Initialization**: Creates Ed25519 cryptographic key pairs for secure network participation
-- **System Integration**: Optionally installs system services for background operation
-- **Environment Validation**: Ensures system compatibility and resource availability before setup
+- **Configuração Manual Complexa**: Elimina a necessidade de configuração manual detalhada do ambiente Syntropy
+- **Incompatibilidade de Sistemas**: Resolve problemas de compatibilidade entre diferentes sistemas operacionais
+- **Gerenciamento de Chaves**: Automatiza a geração e gerenciamento de chaves criptográficas necessárias
+- **Validação de Ambiente**: Verifica automaticamente se o sistema atende aos requisitos mínimos
 
 ### Key Benefits
-- **Cross-Platform Support**: Works seamlessly on Windows, Linux, and macOS
-- **API-First Architecture**: Integrates with centralized API services with local fallback
-- **Secure by Default**: Generates cryptographic keys and follows security best practices
-- **Idempotent Operations**: Safe to run multiple times without side effects
-- **Comprehensive Validation**: Checks system requirements, permissions, and dependencies
+- **Configuração Automática**: Setup completo em uma única operação
+- **Multiplataforma**: Suporte nativo para Windows, Linux e macOS
+- **Backup Automático**: Cria backups automáticos de configurações existentes
+- **Validação Inteligente**: Verifica ambiente, dependências e permissões
+- **Logging Estruturado**: Registra todas as operações para auditoria e debugging
 
 ## Quick Start
+
 ### Prerequisites
-- Go 1.19 or higher
-- Administrative privileges (recommended for service installation)
-- Internet connectivity for API integration
-- Minimum 1GB available disk space
+- Go 1.21 ou superior
+- Permissões de administrador (para instalação de serviços)
+- 100MB de espaço em disco livre
+- Conexão com internet (para validações)
 
 ### Installation
+
 ```bash
-# Clone the repository
+# Clonar o repositório
 git clone https://github.com/syntropy-cc/syntropy-cooperative-grid.git
 cd syntropy-cooperative-grid/manager/interfaces/cli/setup
 
-# Build the setup component
-go build -o syntropy-setup .
+# Compilar o componente
+go build -o setup src/setup.go
 ```
 
 ### Basic Usage
+
 ```go
-package main
+// Exemplo básico de uso
+import "setup-component"
 
-import (
-    "fmt"
-    "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup"
-    "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/internal/types"
-)
-
-func main() {
-    // Configure setup options
-    options := types.SetupOptions{
-        Force:          false,
-        InstallService: true,
-        ConfigPath:     "", // Use default path
-        HomeDir:        "", // Use default home directory
-    }
-    
-    // Execute setup
-    result, err := setup.Setup(options)
-    if err != nil {
-        fmt.Printf("Setup failed: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("Setup completed successfully!\n")
-    fmt.Printf("Configuration file: %s\n", result.ConfigPath)
-    fmt.Printf("Duration: %s\n", result.EndTime.Sub(result.StartTime))
+// Criar opções de setup
+options := &types.SetupOptions{
+    Force:        false,
+    Verbose:      true,
+    CustomSettings: map[string]string{
+        "owner_name":  "João Silva",
+        "owner_email": "joao@syntropy.network",
+    },
 }
+
+// Executar setup
+manager, err := setup.NewSetupManager()
+if err != nil {
+    log.Fatal(err)
+}
+
+err = manager.Setup(options)
+if err != nil {
+    log.Fatal("Setup falhou:", err)
+}
+
+fmt.Println("Setup concluído com sucesso!")
 ```
 
-**Input**: SetupOptions with configuration preferences
-**Output**: SetupResult with success status, configuration path, and timing information
+**Input**: Configurações básicas do usuário
+**Output**: Ambiente Syntropy completamente configurado e pronto para uso
 
 ## Features
+
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Cross-Platform Setup | Windows, Linux, macOS support | Stable |
-| API Integration | Centralized setup via API services | Stable |
-| Environment Validation | System compatibility checks | Stable |
-| Key Generation | Ed25519 cryptographic key pairs | Stable |
-| Service Installation | Optional system service setup | Stable |
-| Configuration Management | YAML config file generation | Stable |
-| Status Checking | Installation status verification | Stable |
-| Reset Functionality | Clean uninstallation | Stable |
+| Validação de Ambiente | Verifica SO, permissões e dependências | Stable |
+| Geração de Chaves | Cria pares de chaves Ed25519 automaticamente | Stable |
+| Configuração Automática | Gera arquivos de configuração necessários | Stable |
+| Backup Inteligente | Preserva configurações existentes | Stable |
+| Logging Estruturado | Registra todas as operações detalhadamente | Stable |
+| Reset Seguro | Remove configurações com confirmação | Stable |
+| Validação de Integridade | Verifica integridade de arquivos e chaves | Beta |
+| Instalação de Serviços | Configura serviços do sistema (Windows/Linux) | Beta |
 
 ## Component Structure
+
 ```
 setup/
-├── docs/                    # Documentation
-│   ├── README.md           # This file
-│   ├── DEV.md             # Developer documentation
-│   ├── API.md             # API reference
-│   └── TEST.md            # Testing guide
-├── config/                 # Configuration templates
-│   ├── defaults/          # Default configurations
-│   ├── schemas/           # Configuration schemas
-│   └── templates/         # YAML templates
-├── internal/              # Internal packages
-│   ├── services/          # Service implementations
-│   ├── types/             # Type definitions
-│   └── utils/             # Utility functions
-├── tests/                 # Test files
-│   ├── fixtures/          # Test data
-│   ├── integration/       # Integration tests
-│   └── unit/              # Unit tests
-├── setup.go               # Main setup logic
-├── setup_linux.go         # Linux-specific implementation
-├── setup_windows.go       # Windows-specific implementation
-├── api_integration.go     # API service integration
-├── validation_linux.go    # Linux environment validation
-├── validation_windows.go  # Windows environment validation
-├── configuration_linux.go # Linux configuration
-└── configuration_windows.go # Windows configuration
+├── docs/           # Documentação completa
+├── src/            # Código fonte principal
+│   ├── setup.go    # Interface principal
+│   ├── logger.go   # Sistema de logging
+│   ├── validator.go # Validação de ambiente
+│   ├── configurator.go # Geração de configurações
+│   ├── key_manager.go # Gerenciamento de chaves
+│   └── state_manager.go # Gerenciamento de estado
+├── internal/       # Tipos e utilitários internos
+├── tests/          # Testes automatizados
+├── examples/       # Exemplos de uso
+└── config/         # Arquivos de configuração
 ```
 
 ## Next Steps
-- [Explore the API](./API.md) - Detailed usage instructions and function reference
-- [Developer Guide](./DEV.md) - Understanding the internals and architecture
-- [Testing Guide](./TEST.md) - Running and writing tests
-- [Examples](../examples/) - More usage scenarios and integration patterns
+
+- [Explore the API](./API.md) - Instruções detalhadas de uso
+- [Developer Guide](./DEV.md) - Entendendo a arquitetura interna
+- [Testing Guide](./TEST.md) - Executando e escrevendo testes
+- [Learning Path](./LEARN.md) - Mergulho profundo em conceitos e teoria
+- [Examples](../examples/) - Mais cenários de uso
 
 ## Support
+
 - Issue Tracker: [GitHub Issues](https://github.com/syntropy-cc/syntropy-cooperative-grid/issues)
-- Discussion Forum: [GitHub Discussions](https://github.com/syntropy-cc/syntropy-cooperative-grid/discussions)
-- Contact: [Syntropy Community](https://syntropy.com/community)
+- Discussion Forum: [Syntropy Community](https://community.syntropy.network)
+- Contact: [Documentação Oficial](https://docs.syntropy.network)
 
 ## License
-Apache 2.0 - See LICENSE file for details
+
+MIT License - Veja o arquivo LICENSE para detalhes
+
+

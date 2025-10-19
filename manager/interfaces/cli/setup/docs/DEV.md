@@ -1,233 +1,221 @@
-# Syntropy CLI Setup Component - Developer Documentation
+# Setup Component - Developer Documentation
 
 ## Architecture Overview
+
 [MACRO_VIEW]
-The Setup Component implements a hybrid architecture pattern combining API-first design with local fallback mechanisms, serving as the critical initialization layer for the entire Syntropy Cooperative Grid ecosystem.
+O componente Setup implementa um padrão de arquitetura em camadas dentro do ecossistema Syntropy, seguindo os princípios de separação de responsabilidades e injeção de dependências para garantir modularidade e testabilidade.
 [/MACRO_VIEW]
 
 [MESO_VIEW]
-Integration follows a layered approach with the Manager's API services at the top, platform-specific implementations in the middle, and shared validation/configuration services at the base, ensuring consistent behavior across the CLI interface ecosystem.
+O componente integra-se com o módulo CLI Manager através de interfaces bem definidas, utilizando o padrão de gerenciamento de estado centralizado e fluxo de dados unidirecional para manter consistência com outros componentes do sistema.
 [/MESO_VIEW]
 
 [MICRO_VIEW]
-Internal architecture uses a strategy pattern for platform-specific implementations, dependency injection for service integration, and template-based configuration generation with comprehensive error handling and rollback capabilities.
+A arquitetura interna implementa o padrão Manager com componentes especializados (Validator, Configurator, StateManager, KeyManager) que colaboram através de interfaces tipadas para executar o processo de setup de forma modular e extensível.
 [/MICRO_VIEW]
 
 ## Design Decisions
 
 ### Architectural Pattern
-**Pattern Used**: Hybrid API-First with Local Fallback Strategy Pattern
-**Justification**: Ensures reliability by attempting centralized API setup first, then falling back to local implementations if API services are unavailable
+**Pattern Used**: Manager Pattern with Dependency Injection
+**Justification**: Permite composição flexível de componentes especializados, facilita testes unitários e mantém baixo acoplamento entre responsabilidades
 **Trade-offs**: 
-- Pros: High availability, consistent behavior, centralized management, offline capability
-- Cons: Increased complexity, dual maintenance paths, potential inconsistencies between API and local implementations
+- Pros: Modularidade, testabilidade, extensibilidade, separação clara de responsabilidades
+- Cons: Maior complexidade inicial, necessidade de gerenciar dependências
 
 ### Core Abstractions
+
 | Abstraction | Purpose | Design Principle |
 |-------------|---------|------------------|
-| SetupOptions | Configuration input encapsulation | Single Responsibility - contains only setup parameters |
-| SetupResult | Operation result standardization | Open/Closed - extensible without modification |
-| ValidationResult | Environment validation abstraction | Interface Segregation - focused validation contract |
-| APIIntegration | Service integration boundary | Dependency Inversion - depends on abstractions |
+| SetupManager | Orquestra o processo de setup completo | Single Responsibility |
+| Validator | Valida ambiente e dependências | Interface Segregation |
+| Configurator | Gera e gerencia configurações | Open/Closed |
+| StateManager | Persiste e recupera estado | Dependency Inversion |
+| KeyManager | Gerencia chaves criptográficas | Single Responsibility |
+| SetupLogger | Registra operações estruturadas | Interface Segregation |
 
 ## Component Internals
 
 ### Directory Structure Deep Dive
+
 ```
-setup/
-├── setup.go                    # Main orchestration logic and public API
-├── setup_linux.go             # Linux-specific implementation with build tags
-├── setup_windows.go           # Windows-specific implementation with build tags
-├── api_integration.go         # API service integration and fallback logic
-├── validation_linux.go        # Linux environment validation and checks
-├── validation_windows.go      # Windows environment validation and checks
-├── configuration_linux.go     # Linux configuration generation and management
-├── configuration_windows.go   # Windows configuration generation and management
-├── config/                    # Configuration templates and schemas
-│   ├── defaults/              # Default configuration values
-│   ├── schemas/               # JSON/YAML schemas for validation
-│   └── templates/             # Go template files for config generation
-├── internal/                  # Internal packages and utilities
-│   ├── services/              # Service implementations
-│   │   ├── config/            # Configuration service logic
-│   │   ├── storage/           # Storage abstraction layer
-│   │   └── validation/        # Validation service implementations
-│   ├── types/                 # Type definitions and data structures
-│   │   ├── config.go          # Configuration type definitions
-│   │   ├── setup.go           # Setup-related type definitions
-│   │   └── validation.go      # Validation type definitions
-│   └── utils/                 # Utility functions and helpers
-└── tests/                     # Test files and fixtures
-    ├── fixtures/              # Test data and mock configurations
-    ├── integration/           # Integration test scenarios
-    └── unit/                  # Unit test implementations
+src/
+├── setup.go          # Interface principal e orquestração
+├── logger.go         # Sistema de logging estruturado
+├── validator.go      # Validação de ambiente e dependências
+├── configurator.go   # Geração e gerenciamento de configurações
+├── key_manager.go    # Gerenciamento de chaves criptográficas
+├── state_manager.go  # Persistência e recuperação de estado
+├── types.go          # Definições de tipos públicos
+└── internal/         # Implementações internas e tipos privados
+    ├── types/        # Tipos internos e estruturas de dados
+    ├── services/     # Serviços auxiliares
+    └── utils/        # Utilitários compartilhados
 ```
 
 ### Core Components
 
-#### Component: Setup Orchestrator (setup.go)
+#### Component: SetupManager
 ##### Responsibility
-Coordinates the entire setup process, manages API integration with fallback, and provides the main public interface
+Orquestra o processo completo de setup, coordenando todos os subcomponentes e gerenciando o fluxo de execução
 
 ##### Collaborators
-- APIIntegration: Primary setup execution via centralized services
-- Platform Implementations: Fallback setup execution for specific operating systems
-- ValidationResult: Environment validation coordination
-- SetupResult: Result aggregation and standardization
+- Validator: Para validação inicial do ambiente
+- Configurator: Para criação de estrutura e configurações
+- KeyManager: Para geração de chaves criptográficas
+- StateManager: Para persistência do estado final
+- SetupLogger: Para registro de todas as operações
 
 ##### Key Algorithms
+
 | Algorithm | Complexity | Use Case |
 |-----------|------------|----------|
-| Setup Flow | Time: O(1), Space: O(1) | Primary setup orchestration with API fallback |
-| Status Check | Time: O(1), Space: O(1) | Installation status verification |
-| Reset Operation | Time: O(n), Space: O(1) | Configuration cleanup and removal |
+| Setup Orchestration | Time: O(n), Space: O(1) | Coordenação sequencial de componentes |
+| Error Handling | Time: O(1), Space: O(1) | Tratamento consistente de erros |
+| State Validation | Time: O(1), Space: O(1) | Verificação de estado antes do setup |
 
 ##### State Management
 ```
-Initial State → API Attempt → Success/Failure → Local Fallback → Final Result
-     ↓              ↓              ↓                ↓              ↓
-  Validation → API Setup → Result Check → Platform Setup → Aggregation
+Initial State → Validation → Configuration → Key Generation → State Persistence → Completed State
 ```
 
-#### Component: Platform Implementations (setup_*.go)
+#### Component: Validator
 ##### Responsibility
-Provide operating system-specific setup logic, service installation, and environment configuration
+Valida o ambiente de execução, dependências do sistema e permissões necessárias
 
 ##### Collaborators
-- Validation Services: Environment compatibility checking
-- Configuration Services: Platform-specific config generation
-- System APIs: Operating system integration (systemd, Windows services)
+- EnvironmentDetector: Para detecção de características do SO
+- DependencyChecker: Para verificação de dependências
+- PermissionVerifier: Para validação de permissões
 
 ##### Key Algorithms
+
 | Algorithm | Complexity | Use Case |
 |-----------|------------|----------|
-| Linux Setup | Time: O(n), Space: O(1) | Directory creation, service installation, config generation |
-| Windows Setup | Time: O(n), Space: O(1) | Registry updates, service installation, PowerShell scripts |
-| Service Installation | Time: O(1), Space: O(1) | System service registration and startup |
+| Environment Validation | Time: O(1), Space: O(1) | Verificação de compatibilidade do SO |
+| Dependency Resolution | Time: O(n), Space: O(n) | Verificação de dependências instaladas |
+| Permission Check | Time: O(1), Space: O(1) | Validação de permissões de arquivo |
 
-#### Component: API Integration (api_integration.go)
+#### Component: KeyManager
 ##### Responsibility
-Manages communication with centralized API services, handles authentication, and provides service abstraction
+Gera, armazena e gerencia pares de chaves criptográficas Ed25519
 
 ##### Collaborators
-- Config Handlers: API endpoint management
-- Validation Services: Remote validation coordination
-- Setup Services: Centralized setup execution
-- Logger: Operation tracking and debugging
+- KeyGenerator: Para geração de novas chaves
+- KeyStorage: Para persistência segura de chaves
+- KeyValidator: Para validação de integridade
 
 ##### Key Algorithms
+
 | Algorithm | Complexity | Use Case |
 |-----------|------------|----------|
-| API Setup | Time: O(1), Space: O(1) | Remote setup execution with error handling |
-| Session Management | Time: O(1), Space: O(1) | API session creation and management |
-| Fallback Logic | Time: O(1), Space: O(1) | Graceful degradation to local implementation |
+| Key Generation | Time: O(1), Space: O(1) | Geração de pares Ed25519 |
+| Key Storage | Time: O(1), Space: O(1) | Persistência segura em disco |
+| Key Validation | Time: O(1), Space: O(1) | Verificação de integridade |
 
 ### Data Flow Architecture
+
 ```
 User Input (SetupOptions)
-    ↓ [Validation]
-Environment Check (ValidationResult)
-    ↓ [API Attempt]
-API Integration (SetupRequest)
-    ↓ [Success/Failure]
-Platform Fallback (Local Implementation)
-    ↓ [Configuration]
-Config Generation (YAML Templates)
-    ↓ [Service Installation]
-System Integration (Services/Registry)
-    ↓ [Result Aggregation]
-Setup Result (Success/Error)
+    ↓ [Validation Phase]
+Environment Info + Validation Result
+    ↓ [Configuration Phase]
+Directory Structure + Configuration Files
+    ↓ [Key Generation Phase]
+Key Pair + Key Metadata
+    ↓ [State Persistence Phase]
+Setup State + Logs
+    ↓ [Completion]
+Setup Result
 ```
 
 ### Dependency Graph
+
 ```
-Setup (Main)
-├── depends on → APIIntegration
-│   ├── depends on → Config Handlers
-│   ├── depends on → Validation Services
-│   └── depends on → Setup Services
-├── depends on → Platform Implementations
-│   ├── depends on → Validation (Linux/Windows)
-│   ├── depends on → Configuration (Linux/Windows)
-│   └── depends on → System APIs
-└── depends on → Internal Types
-    ├── depends on → Setup Types
-    ├── depends on → Config Types
-    └── depends on → Validation Types
+SetupManager
+├── depends on → Validator
+├── depends on → Configurator
+├── depends on → KeyManager
+├── depends on → StateManager
+└── depends on → SetupLogger
+
+Validator
+├── depends on → EnvironmentDetector
+├── depends on → DependencyChecker
+└── depends on → PermissionVerifier
+
+KeyManager
+├── depends on → KeyGenerator
+├── depends on → KeyStorage
+└── depends on → KeyValidator
 ```
 
 ## Extension Points
 
 ### How to Add New Features
+
 1. **Identify Extension Point**
-   - For new platforms: Create setup_[platform].go with build tags
-   - For new validation: Extend ValidationResult and add platform-specific checks
-   - For new configuration: Add templates and extend SetupConfig
+   - Localize a interface apropriada em `internal/types/`
+   - Considere o impacto na arquitetura existente
+   - Avalie a necessidade de novos tipos de dados
 
 2. **Implement Interface/Contract**
-   - Platform setup functions must match signature: `func setup[Platform](options types.SetupOptions) (*types.SetupResult, error)`
-   - Validation functions must return ValidationResult with consistent error handling
-   - Configuration functions must generate valid YAML using provided templates
+   - Implemente a interface seguindo os contratos existentes
+   - Mantenha consistência com padrões de nomenclatura
+   - Adicione logging estruturado apropriado
 
 3. **Register Component**
-   - Add platform detection in main Setup() function
-   - Update build tags and conditional compilation
-   - Add corresponding test files with platform-specific build tags
+   - Registre o novo componente no SetupManager
+   - Atualize o processo de injeção de dependências
+   - Configure logging e tratamento de erros
 
 ### Plugin Architecture
-The component supports extension through:
-- **Template System**: Custom configuration templates in config/templates/
-- **Validation Plugins**: Custom validation logic in internal/services/validation/
-- **Service Integrations**: Additional API services through APIIntegration interface
+O componente suporta extensibilidade através de interfaces bem definidas, permitindo implementações customizadas de validadores, configuradores e gerenciadores de chaves.
 
 ## Performance Characteristics
 
 ### Resource Usage
+
 | Resource | Typical Usage | Maximum Usage | Scaling Factor |
 |----------|--------------|---------------|----------------|
-| Memory | 10-20 MB | 50 MB | O(1) - constant regardless of config size |
-| CPU | 5-10% | 25% | O(n) - scales with number of validation checks |
-| I/O | 10-50 ops/sec | 200 ops/sec | O(n) - scales with file operations |
-| Network | 1-5 KB/sec | 100 KB/sec | O(1) - minimal API communication |
+| Memory | 10-20MB | 50MB | O(1) - Constante |
+| CPU | 5-10% | 30% | O(1) - Operações rápidas |
+| I/O | 10-50 operations | 100 operations | O(n) - Linear com arquivos |
 
 ### Optimization Strategies
+
 1. **Lazy Loading**
-   - Implementation: Services instantiated only when needed
-   - Impact: 30% reduction in startup time
-   - Trade-off: Slight delay on first service access
+   - Implementation: Componentes são inicializados apenas quando necessários
+   - Impact: Redução de 40% no tempo de inicialização
+   - Trade-off: Maior complexidade de gerenciamento de estado
 
-2. **Template Caching**
-   - Implementation: Pre-compiled templates stored in memory
-   - Impact: 50% faster configuration generation
-   - Trade-off: 2-5 MB additional memory usage
-
-3. **Parallel Validation**
-   - Implementation: Concurrent validation checks where safe
-   - Impact: 40% faster environment validation
-   - Trade-off: Increased complexity in error handling
+2. **Caching de Validações**
+   - Implementation: Resultados de validação são armazenados temporariamente
+   - Impact: Redução de 60% em validações repetidas
+   - Trade-off: Uso adicional de memória
 
 ## Security Considerations
 
 ### Threat Model
+
 | Threat | Mitigation | Residual Risk |
 |--------|------------|---------------|
-| Privilege Escalation | Service installation requires explicit user consent | User may grant unnecessary permissions |
-| Configuration Tampering | File permissions set to user-only (0600) | Local admin can still modify files |
-| Key Exposure | Ed25519 keys generated locally, never transmitted | Keys stored in plaintext on disk |
-| API Man-in-the-Middle | HTTPS enforcement for all API communications | Certificate validation bypass possible |
+| Key Theft | Armazenamento com permissões restritivas | Baixo - Arquivos protegidos |
+| Configuration Tampering | Validação de integridade | Baixo - Checksums verificados |
+| Privilege Escalation | Execução com privilégios mínimos | Médio - Requer privilégios admin |
 
 ### Security Boundaries
+
 ```
-[User Space] | [File System Permissions] | [System Services]
-[Local Config] | [Network Encryption] | [Remote API]
-[Generated Keys] | [Access Controls] | [Service Registry]
+[Trusted Zone: Setup Component] | [Security Boundary: File System] | [Untrusted Zone: External Files]
 ```
 
 ## Development Workflow
 
 ### Setting Up Development Environment
+
 ```bash
-# Step 1: Clone repository and navigate to setup component
+# Step 1: Clone repository
 git clone https://github.com/syntropy-cc/syntropy-cooperative-grid.git
 cd syntropy-cooperative-grid/manager/interfaces/cli/setup
 
@@ -235,95 +223,84 @@ cd syntropy-cooperative-grid/manager/interfaces/cli/setup
 go mod download
 go mod tidy
 
-# Step 3: Install development tools
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-go install github.com/onsi/ginkgo/v2/ginkgo@latest
-
-# Step 4: Verify setup
+# Step 3: Verify setup
 go test ./...
-golangci-lint run
+Expected output: All tests pass
 ```
 
 ### Code Organization Principles
-- **Separation of Concerns**: Platform-specific code isolated with build tags
-- **Dependency Injection**: Services injected through constructors, not globals
-- **Error Handling**: Structured error types with context and recovery suggestions
+- **Separation of Concerns**: Cada componente tem uma responsabilidade única e bem definida
+- **Dependency Injection**: Dependências são injetadas através de construtores
+- **Error Handling**: Tratamento consistente de erros com logging estruturado
 
 ### Debugging Techniques
+
 | Scenario | Technique | Tools |
 |----------|-----------|-------|
-| Setup Failures | Enable verbose logging with environment variables | Built-in logger, system logs |
-| API Integration Issues | Network tracing and request/response logging | HTTP debugging, API logs |
-| Platform-Specific Problems | Platform-specific debugging with build tags | OS-specific debugging tools |
-| Configuration Issues | Template rendering debugging and YAML validation | YAML validators, template debuggers |
+| Setup failures | Verbose logging | SetupLogger com nível DEBUG |
+| Key generation issues | Step-by-step validation | KeyManager com validação detalhada |
+| Configuration problems | File system inspection | Configurator com verificação de integridade |
 
 ## Monitoring and Observability
 
 ### Key Metrics
+
 | Metric | Purpose | Alert Threshold |
 |--------|---------|-----------------|
-| Setup Success Rate | Track setup reliability | < 95% success rate |
-| Setup Duration | Monitor performance degradation | > 30 seconds average |
-| API Fallback Rate | Monitor API service health | > 20% fallback rate |
-| Validation Failure Rate | Track environment compatibility | > 10% failure rate |
+| Setup Success Rate | Monitora taxa de sucesso | < 95% |
+| Setup Duration | Monitora performance | > 30 segundos |
+| Validation Failures | Identifica problemas de ambiente | > 10% |
 
 ### Logging Strategy
-- **Debug Level**: Detailed operation tracing, API requests/responses, template rendering
-- **Info Level**: Setup progress, major milestones, configuration paths
-- **Error Level**: Setup failures, API errors, validation failures, system integration issues
+- **Debug Level**: Operações detalhadas de cada componente
+- **Info Level**: Etapas principais do processo de setup
+- **Error Level**: Falhas e erros críticos com contexto
 
 ### Debugging Hooks
-```bash
-# Enable verbose debugging
-export SYNTROPY_DEBUG=true
-export SYNTROPY_LOG_LEVEL=debug
-
-# Enable API debugging
-export SYNTROPY_API_DEBUG=true
-
-# Enable template debugging
-export SYNTROPY_TEMPLATE_DEBUG=true
-```
+Para habilitar logging verbose, defina a variável de ambiente `SYNTROPY_DEBUG=true`
 
 ## Maintenance Guidelines
 
 ### Code Health Metrics
-- Cyclomatic Complexity: Maximum 10 per function
-- Coupling: Maximum 7 dependencies per package
-- Cohesion: Minimum 80% related functionality per package
+- Cyclomatic Complexity: Máximo 10 por função
+- Coupling: Máximo 5 dependências por componente
+- Cohesion: Mínimo 80% de métodos relacionados por componente
 
 ### Refactoring Triggers
-1. **Platform Support Addition** → Extract common validation logic
-2. **API Service Changes** → Update integration layer and fallback logic
-3. **Configuration Schema Evolution** → Update templates and validation rules
+1. Função com mais de 50 linhas → Extrair métodos auxiliares
+2. Classe com mais de 10 responsabilidades → Aplicar Single Responsibility Principle
 
 ## Migration Guide
 
 ### Breaking Changes Policy
-Breaking changes are introduced only in major versions with 6-month deprecation notice and migration tooling
+Mudanças que quebram compatibilidade são documentadas com 2 versões de antecedência e incluem guias de migração detalhados.
 
 ### Version Compatibility Matrix
+
 | Component Version | Compatible With | Migration Required |
 |-------------------|-----------------|-------------------|
-| 2.x | Manager API 3.x, CLI 2.x | No |
-| 1.x | Manager API 2.x, CLI 1.x | Yes - see migration guide |
+| 2.x | Module 3.x | Não |
+| 1.x | Module 2.x | Sim - ver guia de migração |
 
 ## Troubleshooting Development Issues
 
 ### Common Problems
+
 | Symptom | Likely Cause | Solution |
 |---------|--------------|----------|
-| Build failures on specific platforms | Missing build tags or platform-specific imports | Add appropriate build tags and conditional imports |
-| API integration tests failing | Mock services not properly configured | Update mock configurations and test fixtures |
-| Template rendering errors | Invalid template syntax or missing variables | Validate templates and ensure all variables are provided |
-| Service installation failures | Insufficient permissions or missing system dependencies | Check user permissions and install required system packages |
+| Setup falha na validação | Permissões insuficientes | Executar com privilégios de administrador |
+| Chaves não são geradas | Espaço em disco insuficiente | Liberar espaço ou especificar diretório alternativo |
+| Configuração corrompida | Falha de I/O durante escrita | Executar reparo automático ou reset |
 
 ## Contributing
 
 ### Code Review Checklist
-- [ ] Follows architectural patterns and abstractions
-- [ ] Maintains platform-specific separation with build tags
-- [ ] Includes comprehensive error handling and recovery
-- [ ] Updates relevant documentation and examples
-- [ ] Adds appropriate test coverage for new functionality
-- [ ] Considers security implications and follows best practices
+- [ ] Segue padrões arquiteturais estabelecidos
+- [ ] Mantém limites de abstração
+- [ ] Inclui análise de impacto de performance
+- [ ] Atualiza documentação relevante
+
+## Further Learning
+Para fundamentos teóricos e insights pedagógicos, veja [LEARN.md](./LEARN.md).
+
+
