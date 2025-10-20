@@ -46,10 +46,11 @@ func (acg *AutoConfigGenerator) GenerateNodeConfig() (*types.NodeConfig, error) 
 		return nil, fmt.Errorf("failed to generate node ID: %w", err)
 	}
 
-	// Generate SSH keys
-	sshKeys, err := acg.GenerateSSHKeys()
+	// Get SSH public key from Setup Component (owner.key)
+	sshKeyProvider := NewSSHKeyProvider(acg.logger)
+	sshPublicKey, err := sshKeyProvider.GetSSHPublicKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate SSH keys: %w", err)
+		return nil, fmt.Errorf("failed to get SSH public key from Setup Component: %w", err)
 	}
 
 	// Generate node certificate
@@ -74,8 +75,8 @@ func (acg *AutoConfigGenerator) GenerateNodeConfig() (*types.NodeConfig, error) 
 	config := &types.NodeConfig{
 		NodeID:           nodeID,
 		GridToken:        gridToken,
-		SSHPublicKey:     sshKeys.(*helpers.SSHKeys).PublicKey,
-		SSHPrivateKey:    sshKeys.(*helpers.SSHKeys).PrivateKey,
+		SSHPublicKey:     sshPublicKey,
+		SSHPrivateKey:    "", // No longer used - private key stays in Setup Component
 		NodeCertificate:  nodeCert,
 		CommandStationIP: commandStationIP,
 		CreatedAt:        time.Now(),
@@ -170,9 +171,9 @@ func (acg *AutoConfigGenerator) ValidateConfig(config *types.NodeConfig) error {
 		return fmt.Errorf("invalid grid token: %w", err)
 	}
 
-	// Validate SSH keys
-	if config.SSHPublicKey == "" || config.SSHPrivateKey == "" {
-		return fmt.Errorf("SSH keys cannot be empty")
+	// Validate SSH public key
+	if config.SSHPublicKey == "" {
+		return fmt.Errorf("SSH public key cannot be empty")
 	}
 
 	// Validate node certificate
@@ -265,11 +266,8 @@ func (acg *AutoConfigGenerator) saveNodeConfig(config *types.NodeConfig) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Save SSH key file separately
-	sshKeyFile := filepath.Join(nodeDir, constants.NodeSSHKeyFile)
-	if err := helpers.WriteFileWithPermissions(sshKeyFile, []byte(config.SSHPrivateKey), constants.FileModeConfigFile); err != nil {
-		return fmt.Errorf("failed to write SSH key file: %w", err)
-	}
+	// SSH private key is no longer stored per node - it stays in Setup Component
+	// Only the public key is used for node configuration
 
 	// Save certificate file separately
 	certFile := filepath.Join(nodeDir, constants.NodeCertFile)
@@ -305,13 +303,11 @@ func (acg *AutoConfigGenerator) LoadNodeConfig(nodeID string) (*types.NodeConfig
 		ExpiresAt: time.Now().Add(constants.DefaultTokenExpiry),
 	}
 
-	// Load SSH key and certificate from separate files
-	sshKeyFile := filepath.Join(acg.nodeConfigDir, nodeID, constants.NodeSSHKeyFile)
-	if helpers.FileExists(sshKeyFile) {
-		sshKeyData, err := helpers.ReadFileSafely(sshKeyFile)
-		if err == nil {
-			config.SSHPrivateKey = string(sshKeyData)
-		}
+	// SSH private key is no longer stored per node - it stays in Setup Component
+	// Load SSH public key from Setup Component instead
+	sshKeyProvider := NewSSHKeyProvider(acg.logger)
+	if sshPublicKey, err := sshKeyProvider.GetSSHPublicKey(); err == nil {
+		config.SSHPublicKey = sshPublicKey
 	}
 
 	certFile := filepath.Join(acg.nodeConfigDir, nodeID, constants.NodeCertFile)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"setup-component/src/internal/types"
@@ -481,6 +482,9 @@ func (km *KeyManager) generateEd25519KeyPair() (*types.KeyPair, error) {
 		return nil, fmt.Errorf("falha ao gerar chave privada: %w", err)
 	}
 
+	// Converter chave pública para formato SSH
+	sshPublicKey := km.convertToSSHFormat(publicKey)
+
 	// Criar fingerprint
 	fingerprint := km.generateFingerprint(publicKey)
 
@@ -491,7 +495,7 @@ func (km *KeyManager) generateEd25519KeyPair() (*types.KeyPair, error) {
 		ID:          keyID,
 		Algorithm:   "ed25519",
 		PrivateKey:  privateKey,
-		PublicKey:   publicKey,
+		PublicKey:   []byte(sshPublicKey), // Salvar no formato SSH
 		CreatedAt:   time.Now(),
 		ExpiresAt:   time.Now().AddDate(1, 0, 0), // 1 ano
 		Fingerprint: fingerprint,
@@ -563,4 +567,58 @@ func (km *KeyManager) backupKey(keyID, backupKeyID string) error {
 	}
 
 	return nil
+}
+
+// GetSSHPublicKey returns the SSH public key in authorized_keys format
+func (km *KeyManager) GetSSHPublicKey() (string, error) {
+	km.logger.LogStep("ssh_public_key_retrieval_start", nil)
+
+	// Load the owner key pair
+	keyPair, err := km.LoadKeyPair("owner", "default_passphrase")
+	if err != nil {
+		return "", fmt.Errorf("failed to load owner key pair: %w", err)
+	}
+
+	// Convert []byte to string and ensure it's properly formatted for authorized_keys
+	sshPublicKey := string(keyPair.PublicKey)
+
+	// Remove any trailing newlines and ensure proper format
+	sshPublicKey = strings.TrimSpace(sshPublicKey)
+
+	// Add comment if not present
+	if !strings.Contains(sshPublicKey, " ") {
+		sshPublicKey = sshPublicKey + " syntropy-owner-key"
+	}
+
+	km.logger.LogStep("ssh_public_key_retrieval_completed", map[string]interface{}{
+		"key_preview": sshPublicKey[:20] + "...",
+	})
+
+	return sshPublicKey, nil
+}
+
+// GetSSHPrivateKeyPath returns the path to the SSH private key
+func (km *KeyManager) GetSSHPrivateKeyPath() (string, error) {
+	km.logger.LogStep("ssh_private_key_path_retrieval_start", nil)
+
+	// Check if owner key exists
+	ownerKeyPath := filepath.Join(km.keysDir, "owner.key")
+	if _, err := os.Stat(ownerKeyPath); err != nil {
+		return "", fmt.Errorf("owner key not found: %w", err)
+	}
+
+	km.logger.LogStep("ssh_private_key_path_retrieval_completed", map[string]interface{}{
+		"key_path": ownerKeyPath,
+	})
+
+	return ownerKeyPath, nil
+}
+
+// convertToSSHFormat converts Ed25519 public key to SSH format
+func (km *KeyManager) convertToSSHFormat(publicKey []byte) string {
+	// Encode the public key in base64
+	encodedKey := base64.StdEncoding.EncodeToString(publicKey)
+
+	// Format as SSH public key: ssh-ed25519 <base64-encoded-key> <comment>
+	return fmt.Sprintf("ssh-ed25519 %s syntropy-owner-key", encodedKey)
 }

@@ -24,7 +24,6 @@ import (
 	"time"
 
 	setup "setup-component/src"
-	"setup-component/src/internal/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -119,21 +118,20 @@ func TestTokenManager_ValidateToken(t *testing.T) {
 	// Testar token inválido (comprimento errado)
 	invalidToken := "12345678-1234-4567-8901"
 	err = tm.ValidateToken(invalidToken)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid token length")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "invalid token length")
+	}
 
 	// Testar token inválido (formato errado)
 	invalidToken2 := "12345678-1234-4567-8901-12345678901g"
 	err = tm.ValidateToken(invalidToken2)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid UUID v4 format")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "invalid UUID v4 format")
+	}
 }
 
 // TestTokenManager_SaveAndLoadToken testa salvamento e carregamento de tokens
 func TestTokenManager_SaveAndLoadToken(t *testing.T) {
-	// Criar diretório temporário para testes
-	tempDir := t.TempDir()
-
 	logger := NewMockLogger()
 	tm := setup.NewTokenManager(logger)
 
@@ -229,11 +227,11 @@ func TestTokenManager_ExportImportToken(t *testing.T) {
 	backupData, err := os.ReadFile(exportPath)
 	require.NoError(t, err)
 
-	var backup types.TokenBackup
+	var backup map[string]interface{}
 	err = json.Unmarshal(backupData, &backup)
 	require.NoError(t, err)
-	assert.Equal(t, token, backup.Token)
-	assert.NotEmpty(t, backup.Checksum)
+	assert.Equal(t, token, backup["token"])
+	assert.NotEmpty(t, backup["checksum"])
 
 	// Deletar token atual
 	err = tm.DeleteToken()
@@ -409,16 +407,20 @@ func TestTokenManager_BackupIntegrity(t *testing.T) {
 	backupData, err := os.ReadFile(exportPath)
 	require.NoError(t, err)
 
-	var backup types.TokenBackup
+	var backup map[string]interface{}
 	err = json.Unmarshal(backupData, &backup)
 	require.NoError(t, err)
 
 	// Verificar campos obrigatórios
-	assert.Equal(t, token, backup.Token)
-	assert.NotZero(t, backup.CreatedAt)
-	assert.Equal(t, "1.0.0", backup.Version)
-	assert.NotEmpty(t, backup.Checksum)
+	assert.Equal(t, token, backup["token"])
+	assert.NotNil(t, backup["created_at"])
+	assert.Equal(t, "1.0.0", backup["version"])
+	assert.NotEmpty(t, backup["checksum"])
 
 	// Verificar que CreatedAt é recente
-	assert.WithinDuration(t, time.Now(), backup.CreatedAt, time.Minute)
+	createdAtStr, ok := backup["created_at"].(string)
+	require.True(t, ok)
+	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now(), createdAt, time.Minute)
 }

@@ -66,8 +66,15 @@ func (nm *NodeManager) Initialize() error {
 
 	nm.logger.Info("Initializing NodeManager...")
 
-	// Initialize token integration
-	nm.tokenIntegration = NewTokenIntegration()
+	// Initialize token integration with Setup Component
+	setupAdapter := NewSetupAdapter(nm.logger)
+	nm.tokenIntegration = setupAdapter.CreateTokenIntegration()
+
+	// Initialize the token integration with Setup Component
+	if err := setupAdapter.InitializeTokenIntegration(nm.tokenIntegration); err != nil {
+		nm.logger.Error("Failed to initialize token integration with Setup Component", "error", err)
+		return fmt.Errorf("failed to initialize token integration: %w", err)
+	}
 
 	// Initialize component services
 	nm.configGenerator = NewAutoConfigGenerator(nm.tokenIntegration, nm.logger)
@@ -583,7 +590,7 @@ func NewLogger() types.Logger {
 
 // NewTokenIntegration creates a new token integration
 func NewTokenIntegration() types.TokenIntegration {
-	return &tokenIntegration{}
+	return NewTokenIntegrationInstance()
 }
 
 // NewCreateSubcomponent is now implemented in create.go

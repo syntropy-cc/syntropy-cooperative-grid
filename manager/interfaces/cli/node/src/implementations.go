@@ -245,33 +245,7 @@ func (nsm *nodeStateManager) LoadState() error {
 	return nil
 }
 
-// TokenIntegration implementation
-type tokenIntegration struct{}
-
-func (ti *tokenIntegration) GetGridToken() (string, error) {
-	// TODO: Integrate with Setup component
-	return "mock-grid-token", nil
-}
-
-func (ti *tokenIntegration) ValidateToken(token string) error {
-	// TODO: Implement token validation
-	return nil
-}
-
-func (ti *tokenIntegration) RefreshToken() (string, error) {
-	// TODO: Implement token refresh
-	return "mock-grid-token", nil
-}
-
-func (ti *tokenIntegration) GetTokenExpiry() (time.Time, error) {
-	// TODO: Implement token expiry
-	return time.Now().Add(24 * time.Hour), nil
-}
-
-func (ti *tokenIntegration) IsTokenValid(token string) bool {
-	// TODO: Implement token validation
-	return true
-}
+// TokenIntegration implementation removed - now using real integration via setup_adapter.go
 
 // CreateSubcomponent methods are now implemented in create.go
 
