@@ -1,14 +1,11 @@
 #cloud-config
-# Ubuntu Server 24.04 LTS - Syntropy Cooperative Grid Node
-# Este arquivo configura automaticamente um nó da rede Syntropy
-# Gerado automaticamente pelo PC de trabalho (Quartel General)
 
-# Configurações básicas do sistema
-locale: pt_BR.UTF-8
-timezone: America/Sao_Paulo
-hostname: ${NODE_NAME}
+# 1. SYSTEM SETUP
+locale: en_US.UTF-8
+timezone: UTC
+hostname: {{ .NodeID }}
 
-# Usuário padrão (será substituído pela configuração Syntropy)
+# 2. USER CONFIGURATION
 users:
   - name: syntropy
     groups: [adm, sudo, docker]
@@ -16,199 +13,160 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: true
     ssh_authorized_keys:
-      - ${SSH_PUBLIC_KEY}
+      - {{ .SSHPublicKey }}
 
-# Configuração de rede
-network:
-  version: 2
-  ethernets:
-    ${INTERFACE}:
-      dhcp4: true
-      dhcp6: false
-
-# Configuração SSH
+# 3. SSH HARDENING
 ssh_pwauth: false
 disable_root: true
-ssh_authorized_keys:
-  - ${SSH_PUBLIC_KEY}
 
-# Pacotes a serem instalados
+# 4. PACKAGES
 packages:
   - curl
   - wget
-  - git
-  - htop
-  - vim
+  - jq
+  - ca-certificates
   - net-tools
-  - dnsutils
-  - fail2ban
-  - ufw
+  - netcat-openbsd
   - docker.io
   - docker-compose-plugin
-  - containerd
-  - kubectl
-  - wireguard
-  - jq
-  - openssl
-  - ca-certificates
-  - gnupg
-  - lsb-release
-  - apt-transport-https
-  - prometheus-node-exporter
-  - ntp
-  - rsync
-  - unzip
-  - tree
-  - tmux
+  - openssh-server
 
-# Configuração do Docker
+# 5. RUNCMD (sequencial, crítico!)
 runcmd:
-  # Configurar Docker
+  # Docker setup
   - systemctl enable docker
   - systemctl start docker
   - usermod -aG docker syntropy
   
-  # Configurar firewall
-  - ufw --force enable
-  - ufw default deny incoming
-  - ufw default allow outgoing
-  - ufw allow ssh
-  - ufw allow 6443/tcp
-  - ufw allow 2379:2380/tcp
-  - ufw allow 10250/tcp
-  - ufw allow 10251/tcp
-  - ufw allow 10252/tcp
-  - ufw allow 30000:32767/tcp
-  - ufw allow 51820/udp
-  - ufw allow 8080/tcp
-  - ufw allow 9090/tcp
-  - ufw allow 9100/tcp
-  
-  # Configurar fail2ban
-  - systemctl enable fail2ban
-  - systemctl start fail2ban
-  
-  # Criar diretórios Syntropy
-  - mkdir -p /opt/syntropy/{bin,config,logs,certs,data,scripts,backups,audit}
+  # Directories
+  - mkdir -p /opt/syntropy/{bin,config,logs,data,workloads}
   - chown -R syntropy:syntropy /opt/syntropy
+  - chmod 755 /opt/syntropy/{bin,logs,data,workloads}
+  - chmod 700 /opt/syntropy/config
   
-  # Download e instalação do Syntropy Agent
-  - curl -L https://github.com/syntropy-cooperative-grid/agent/releases/latest/download/syntropy-agent-linux-amd64 -o /opt/syntropy/bin/syntropy-agent
-  - chmod +x /opt/syntropy/bin/syntropy-agent
+  # SSH directory
+  - mkdir -p /home/syntropy/.ssh
+  - chmod 700 /home/syntropy/.ssh
+  - chown syntropy:syntropy /home/syntropy/.ssh
   
-  # Configurar certificados
-  - cp ${NODE_CERT_PATH} /opt/syntropy/certs/node.crt
-  - cp ${NODE_KEY_PATH} /opt/syntropy/certs/node.key
-  - cp ${CA_CERT_PATH} /opt/syntropy/certs/ca.crt
-  - chmod 600 /opt/syntropy/certs/*
-  - chown syntropy:syntropy /opt/syntropy/certs/*
+  # Config files (CRITICAL - credentials!)
+  - echo '{{ .NodeID }}' > /opt/syntropy/config/node_id
+  - echo '{{ .GridToken }}' > /opt/syntropy/config/grid_token
+  - echo '{{ .CommandStationIP }}' > /opt/syntropy/config/command_station_ip
+  - echo '{{ .NodeCertificate }}' > /opt/syntropy/config/node_certificate.pem
   
-  # Configurar Syntropy Agent
-  - cat > /opt/syntropy/config/agent.yaml << EOF
-node:
-  name: "${NODE_NAME}"
-  type: "${NODE_TYPE}"
-  description: "${NODE_DESCRIPTION}"
-  coordinates: "${COORDINATES}"
-  owner_key: "${OWNER_KEY}"
-
-network:
-  discovery_endpoints:
-    - "https://${DISCOVERY_SERVER}:8443"
-  mesh_port: 51820
-  api_port: 8080
-
-security:
-  tls:
-    enabled: true
-    cert_file: "/opt/syntropy/certs/node.crt"
-    key_file: "/opt/syntropy/certs/node.key"
-    ca_file: "/opt/syntropy/certs/ca.crt"
+  # Secure permissions
+  - chmod 600 /opt/syntropy/config/grid_token
+  - chmod 600 /opt/syntropy/config/node_certificate.pem
+  - chown -R syntropy:syntropy /opt/syntropy/config
   
-  firewall:
-    enabled: true
-    default_policy: "deny"
-    allow_ssh: true
-    allow_management: true
+  # SSH key
+  - echo '{{ .SSHPublicKey }}' > /home/syntropy/.ssh/authorized_keys
+  - chmod 600 /home/syntropy/.ssh/authorized_keys
+  - chown syntropy:syntropy /home/syntropy/.ssh/authorized_keys
 
-logging:
-  level: "info"
-  file: "/opt/syntropy/logs/agent.log"
-  max_size: "100MB"
-  max_files: 5
-
-metrics:
-  enabled: true
-  port: 9090
-  path: "/metrics"
-EOF
+# 6. WRITE_FILES (scripts bash)
+write_files:
+  - path: /opt/syntropy/bin/register.sh
+    permissions: '0755'
+    owner: syntropy:syntropy
+    content: |
+      #!/bin/bash
+      set -e
+      NODE_ID=$(cat /opt/syntropy/config/node_id)
+      GRID_TOKEN=$(cat /opt/syntropy/config/grid_token)
+      COMMAND_STATION_IP=$(cat /opt/syntropy/config/command_station_ip)
+      NODE_CERT=$(cat /opt/syntropy/config/node_certificate.pem | tr -d '\n')
+      
+      CPU_CORES=$(nproc)
+      MEMORY_GB=$(free -g | awk '/^Mem:/{print $2}')
+      DISK_GB=$(df -BG / | awk 'NR==2{print $2}' | tr -d 'G')
+      HOSTNAME=$(hostname)
+      IP_ADDRESS=$(hostname -I | awk '{print $1}')
+      OS_VERSION="Ubuntu 24.04"
+      KERNEL_VERSION=$(uname -r)
+      TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      
+      JSON=$(cat <<EOF
+      {"type":"node_announcement","node_id":"$NODE_ID","grid_token":"$GRID_TOKEN","node_certificate":"$NODE_CERT","hardware":{"cpu_cores":$CPU_CORES,"memory_gb":$MEMORY_GB,"disk_gb":$DISK_GB,"hostname":"$HOSTNAME","ip_address":"$IP_ADDRESS","os_version":"$OS_VERSION","kernel_version":"$KERNEL_VERSION"},"timestamp":"$TIMESTAMP"}
+      EOF
+      )
+      
+      echo "$JSON" | nc -w 30 $COMMAND_STATION_IP 51000
   
-  # Configurar systemd service
-  - cat > /etc/systemd/system/syntropy-agent.service << EOF
-[Unit]
-Description=Syntropy Cooperative Grid Agent
-After=network.target docker.service
-Wants=docker.service
-
-[Service]
-Type=simple
-User=syntropy
-Group=syntropy
-WorkingDirectory=/opt/syntropy
-ExecStart=/opt/syntropy/bin/syntropy-agent --config=/opt/syntropy/config/agent.yaml
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
+  - path: /opt/syntropy/bin/heartbeat.sh
+    permissions: '0755'
+    owner: syntropy:syntropy
+    content: |
+      #!/bin/bash
+      NODE_ID=$(cat /opt/syntropy/config/node_id)
+      COMMAND_STATION_IP=$(cat /opt/syntropy/config/command_station_ip)
+      
+      while true; do
+        CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | tr -d '%' | cut -d'.' -f1)
+        MEMORY_USAGE=$(free | awk '/Mem/{printf "%d", ($3/$2)*100}')
+        DISK_USAGE=$(df / | awk 'NR==2{print $5}' | tr -d '%')
+        UPTIME=$(cat /proc/uptime | awk '{print $1}')
+        WORKLOAD_COUNT=$(docker ps -q 2>/dev/null | wc -l)
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        
+        JSON=$(cat <<EOF
+      {"type":"heartbeat","node_id":"$NODE_ID","timestamp":"$TIMESTAMP","metrics":{"cpu_usage":$CPU_USAGE,"memory_usage":$MEMORY_USAGE,"disk_usage":$DISK_USAGE,"uptime":$UPTIME,"workload_count":$WORKLOAD_COUNT}}
+      EOF
+      )
+        
+        echo "$JSON" | nc -w 10 $COMMAND_STATION_IP 51000
+        sleep 30
+      done
   
-  # Iniciar Syntropy Agent
+  - path: /etc/systemd/system/syntropy-register.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Syntropy Node Registration
+      After=network-online.target docker.service
+      Wants=network-online.target
+      
+      [Service]
+      Type=oneshot
+      User=syntropy
+      Group=syntropy
+      ExecStart=/opt/syntropy/bin/register.sh
+      RemainAfterExit=yes
+      StandardOutput=journal
+      StandardError=journal
+      
+      [Install]
+      WantedBy=multi-user.target
+  
+  - path: /etc/systemd/system/syntropy-heartbeat.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Syntropy Node Heartbeat
+      After=syntropy-register.service
+      Requires=syntropy-register.service
+      
+      [Service]
+      Type=simple
+      User=syntropy
+      Group=syntropy
+      ExecStart=/opt/syntropy/bin/heartbeat.sh
+      Restart=always
+      RestartSec=10
+      StandardOutput=journal
+      StandardError=journal
+      
+      [Install]
+      WantedBy=multi-user.target
+
+# 7. FINAL COMMANDS
+runcmd:
   - systemctl daemon-reload
-  - systemctl enable syntropy-agent
-  - systemctl start syntropy-agent
-  
-  # Configurar logrotate
-  - cat > /etc/logrotate.d/syntropy << EOF
-/opt/syntropy/logs/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 644 syntropy syntropy
-    postrotate
-        systemctl reload syntropy-agent
-    endscript
-}
-EOF
+  - systemctl enable syntropy-register.service
+  - systemctl enable syntropy-heartbeat.service
+  - systemctl start syntropy-register.service
+  - systemctl start syntropy-heartbeat.service
 
-# Configurações finais
-final_message: |
-  ✅ Nó Syntropy configurado com sucesso!
-  
-  📊 Informações do Nó:
-  - Nome: ${NODE_NAME}
-  - Tipo: ${NODE_TYPE}
-  - Descrição: ${NODE_DESCRIPTION}
-  - Coordenadas: ${COORDINATES}
-  
-  🔐 Segurança:
-  - SSH configurado com chave pública
-  - Firewall ativo
-  - Fail2ban configurado
-  - Certificados TLS instalados
-  
-  🌐 Rede:
-  - Descoberta: ${DISCOVERY_SERVER}
-  - Mesh: porta 51820
-  - API: porta 8080
-  
-  📝 Logs:
-  - Agent: /opt/syntropy/logs/agent.log
-  - System: journalctl -u syntropy-agent
-  
-  🚀 Status: systemctl status syntropy-agent
+# 8. FINAL MESSAGE
+final_message: "Syntropy node {{ .NodeID }} configured successfully. System ready for workloads."
