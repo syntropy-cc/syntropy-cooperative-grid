@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
 
 // USBWriter defines the interface for writing ISOs to USB devices

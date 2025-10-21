@@ -1,4 +1,4 @@
-module github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node
+module github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node
 
 go 1.21
 

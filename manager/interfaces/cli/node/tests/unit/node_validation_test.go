@@ -25,3 +25,4 @@ func TestNodeManager_UpdateConfiguration_NotRunning(t *testing.T) {
 		t.Fatalf("expected error when updating config while not running")
 	}
 }
+

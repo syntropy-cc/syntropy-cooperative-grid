@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
 
 // USBWriterLinux implements USB writing for Linux systems

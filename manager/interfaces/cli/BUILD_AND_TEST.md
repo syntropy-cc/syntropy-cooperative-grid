@@ -8,7 +8,8 @@ The **Syntropy CLI Manager** is the main command-line interface for managing the
 
 The CLI is located in `manager/interfaces/cli/` and includes:
 - **Main entry point**: `main.go` (Cobra-based CLI)
-- **Setup component**: `setup/` (first component, with more to come)
+- **Setup component**: `setup/` (environment configuration)
+- **Node component**: `node/` (node management and provisioning)
 - **Build scripts**: Automated build and test scripts
 - **Cross-platform support**: Linux, Windows, and macOS
 
@@ -36,7 +37,7 @@ The CLI is located in `manager/interfaces/cli/` and includes:
 ```
 manager/interfaces/cli/
 ├── main.go                     # Main CLI entry point (Cobra)
-├── setup/                      # Setup component (first of many)
+├── setup/                      # Setup component (environment configuration)
 │   ├── setup.go               # Setup orchestrator
 │   ├── setup_linux.go         # Linux implementation
 │   ├── setup_windows.go       # Windows implementation
@@ -47,8 +48,21 @@ manager/interfaces/cli/
 │   ├── internal/              # Internal types and services
 │   ├── tests/                 # Unit and integration tests
 │   └── config/                # Configuration templates
+├── node/                       # Node component (node management)
+│   ├── src/                   # Source code
+│   │   ├── node.go            # Main orchestrator
+│   │   ├── cli.go             # CLI commands
+│   │   ├── types.go           # Public types and interfaces
+│   │   ├── create.go          # Create subcomponent
+│   │   ├── registration.go    # Registration subcomponent
+│   │   ├── handshake.go       # Handshake protocol
+│   │   ├── auto_config_generator.go # Configuration generator
+│   │   └── internal/          # Internal types and services
+│   ├── tests/                 # Unit and integration tests
+│   ├── docs/                  # Documentation
+│   └── README.md              # Node component documentation
 ├── build.sh                   # Linux/macOS build script
-├── build.ps1                  # Windows build script
+├── build.bat                  # Windows build script
 ├── Makefile                   # Make-based build system
 ├── BUILD_AND_TEST.md          # This document
 └── README.md                  # User documentation
@@ -258,6 +272,21 @@ go test -v -cover ./...
 go test -v -run TestSetupFlow ./setup_test.go
 ```
 
+### Test Node Component Specifically
+
+```bash
+# Test node component
+cd node
+go test -v ./...
+
+# Test with coverage
+go test -v -cover ./...
+
+# Test specific functionality
+go test -v -run TestNodeManager ./src/node_test.go
+go test -v -run TestCLICommands ./src/cli_test.go
+```
+
 ## 🚀 Execution and Manual Testing
 
 ### Test the CLI Manager
@@ -275,6 +304,11 @@ cd build
 ./syntropy setup --help
 ./syntropy setup validate
 ./syntropy setup status
+
+# Test node commands
+./syntropy node --help
+./syntropy node list
+./syntropy node status
 ```
 
 #### Windows
@@ -290,6 +324,11 @@ cd build
 .\syntropy.exe setup --help
 .\syntropy.exe setup validate
 .\syntropy.exe setup status
+
+# Test node commands
+.\syntropy.exe node --help
+.\syntropy.exe node list
+.\syntropy.exe node status
 ```
 
 ### Test Setup Component Functionality
@@ -306,6 +345,28 @@ cd build
 
 # Reset configuration (if needed)
 ./syntropy setup reset --force
+```
+
+### Test Node Component Functionality
+
+```bash
+# List existing nodes
+./syntropy node list
+
+# Check node status
+./syntropy node status
+
+# View node logs
+./syntropy node logs
+
+# Create a new node (requires USB device)
+./syntropy node create
+
+# Start node listener
+./syntropy node start-listener
+
+# Stop node listener
+./syntropy node stop-listener
 ```
 
 ## 📊 Quality Verification

@@ -25,7 +25,7 @@ import (
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
 )
 
 // GenerateNodeID generates a sequential node ID

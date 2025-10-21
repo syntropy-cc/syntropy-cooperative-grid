@@ -128,3 +128,4 @@ func (sm *SetupManager) GridTokenExists() (bool, error) {
 
 	return exists, nil
 }
+

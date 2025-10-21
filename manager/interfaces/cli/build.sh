@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Syntropy CLI Manager - Main Build Script
-# Script principal para compilar a aplicação CLI
+# Script principal para compilar a aplicação CLI com componentes setup e node
 
 set -e
 

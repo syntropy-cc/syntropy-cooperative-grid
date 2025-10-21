@@ -1,6 +1,6 @@
 @echo off
 REM Syntropy CLI Manager - Main Build Script for Windows
-REM Script principal para compilar a aplicação CLI no Windows
+REM Script principal para compilar a aplicação CLI no Windows com componentes setup e node
 
 setlocal enabledelayedexpansion
 

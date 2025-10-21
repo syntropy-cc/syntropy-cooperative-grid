@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Syntropy CLI Manager - Install Script
-# Script para instalar e testar a aplicação CLI do Syntropy
+# Script para instalar e testar a aplicação CLI do Syntropy com componentes setup e node
 
 set -e
 
@@ -98,13 +98,18 @@ echo -e "\n${BLUE}🚀 Next Steps:${NC}"
 echo -e "  1. Test Windows: ${YELLOW}$BUILD_DIR/syntropy-windows.exe --help${NC}"
 echo -e "  2. Test Linux: ${YELLOW}$BUILD_DIR/syntropy-linux --help${NC}"
 echo -e "  3. Run setup: ${YELLOW}$BUILD_DIR/syntropy-linux setup run --force${NC}"
+echo -e "  4. Test node commands: ${YELLOW}$BUILD_DIR/syntropy-linux node --help${NC}"
+echo -e "  5. List nodes: ${YELLOW}$BUILD_DIR/syntropy-linux node list${NC}"
 
 # Ask to run test
 echo -e "\n${YELLOW}Do you want to test the Linux application now? (y/N):${NC}"
 read -r response
 if [[ "$response" =~ ^[Yy]$ ]]; then
     echo -e "\n${CYAN}=== Testing Application ===${NC}"
+    echo -e "${BLUE}Testing main help...${NC}"
     "$BUILD_DIR/syntropy-linux" --help
+    echo -e "\n${BLUE}Testing node commands...${NC}"
+    "$BUILD_DIR/syntropy-linux" node --help
     echo -e "\n${GREEN}✅ Test completed!${NC}"
 fi
 

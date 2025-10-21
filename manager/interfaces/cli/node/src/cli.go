@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
 
 // CLICommands provides CLI commands for the node component

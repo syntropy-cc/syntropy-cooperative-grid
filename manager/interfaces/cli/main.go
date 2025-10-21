@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	setup "setup-component/src"
+	node "node-component/src"
 
 	"github.com/spf13/cobra"
 )
@@ -60,8 +61,10 @@ func addCommands() {
 	// Token commands
 	rootCmd.AddCommand(tokenCmd)
 
+	// Node commands
+	rootCmd.AddCommand(nodeCmd)
+
 	// Future component commands will be added here:
-	// rootCmd.AddCommand(nodeCmd)
 	// rootCmd.AddCommand(workloadCmd)
 	// rootCmd.AddCommand(configCmd)
 	// rootCmd.AddCommand(stateCmd)
@@ -629,6 +632,39 @@ func init() {
 	tokenRotateCmd.Flags().Bool("show", false, "display the new token")
 
 	tokenDeleteCmd.Flags().Bool("force", false, "skip confirmation prompt")
+}
+
+// nodeCmd represents the node command
+var nodeCmd = &cobra.Command{
+	Use:   "node",
+	Short: "Manage Syntropy nodes",
+	Long: `Manage Syntropy nodes for the cooperative grid.
+
+This command provides functionality to:
+- Create and provision new nodes automatically
+- List and monitor existing nodes
+- View node status and logs
+- Remove nodes from the grid
+- Start/stop node listeners
+
+The node component implements a plug-and-play system that creates bootable USB devices
+and automatically registers nodes without user intervention.`,
+}
+
+func init() {
+	// Initialize node commands
+	nodeManager := node.NewNodeManager()
+	if err := nodeManager.Initialize(); err != nil {
+		// Log error but don't fail - node commands will show appropriate error messages
+		fmt.Printf("Warning: Failed to initialize node manager: %v\n", err)
+	}
+
+	// Create CLI commands handler
+	logger := node.NewLogger()
+	cliCommands := node.NewCLICommands(nodeManager, logger)
+
+	// Register all node subcommands
+	cliCommands.RegisterCommands(nodeCmd)
 }
 
 func main() {

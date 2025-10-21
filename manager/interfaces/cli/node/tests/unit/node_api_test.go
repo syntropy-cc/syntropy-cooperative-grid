@@ -46,3 +46,4 @@ func TestNodeManager_GetNodeLogs_NodeNotFound(t *testing.T) {
 		t.Fatalf("expected error when fetching logs for unknown node, got logs: %+v", logs)
 	}
 }
+

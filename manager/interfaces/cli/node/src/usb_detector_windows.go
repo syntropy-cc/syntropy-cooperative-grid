@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/syntropy-grid/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
 
 // USBDetectorWindows implements USB detection for Windows systems

@@ -1,6 +1,6 @@
 @echo off
 REM Syntropy CLI Manager - Simple Build and Test Workflow for Windows
-REM Script para compilar e testar a aplicação CLI no Windows
+REM Script para compilar e testar a aplicação CLI no Windows com componentes setup e node
 
 setlocal enabledelayedexpansion
 
@@ -211,8 +211,10 @@ echo.
 echo %BLUE%🚀 Next Steps:%RESET%
 echo   1. Test the Windows application: %YELLOW%%OUTPUT_FILE% --help%RESET%
 echo   2. Run setup: %YELLOW%%OUTPUT_FILE% setup run --force%RESET%
-echo   3. Copy Linux binary to Linux machine for testing
-echo   4. Copy Windows .exe to another Windows machine for testing
+echo   3. Test node commands: %YELLOW%%OUTPUT_FILE% node --help%RESET%
+echo   4. List nodes: %YELLOW%%OUTPUT_FILE% node list%RESET%
+echo   5. Copy Linux binary to Linux machine for testing
+echo   6. Copy Windows .exe to another Windows machine for testing
 
 echo.
 echo %BLUE%💡 Usage Examples:%RESET%
@@ -221,6 +223,9 @@ echo   %CYAN%%OUTPUT_FILE% --version%RESET%                 # Show version
 echo   %CYAN%%OUTPUT_FILE% setup --help%RESET%              # Setup help
 echo   %CYAN%%OUTPUT_FILE% setup run --force%RESET%         # Run setup
 echo   %CYAN%%OUTPUT_FILE% setup status%RESET%              # Check status
+echo   %CYAN%%OUTPUT_FILE% node --help%RESET%               # Node help
+echo   %CYAN%%OUTPUT_FILE% node list%RESET%                 # List nodes
+echo   %CYAN%%OUTPUT_FILE% node create%RESET%               # Create node
 
 REM Ask if user wants to run the application
 echo.
@@ -231,7 +236,11 @@ if /i "%response%"=="y" (
     echo %CYAN%=== Running Application ===%RESET%
     echo %BLUE%[INFO] Running Syntropy CLI Manager...%RESET%
     echo.
+    echo %BLUE%Testing main help...%RESET%
     "%OUTPUT_FILE%" --help
+    echo.
+    echo %BLUE%Testing node commands...%RESET%
+    "%OUTPUT_FILE%" node --help
     echo.
     echo %GREEN%[SUCCESS] Application executed successfully!%RESET%
     echo.
@@ -240,6 +249,8 @@ if /i "%response%"=="y" (
     echo   %YELLOW%%OUTPUT_FILE% setup --help%RESET%
     echo   %YELLOW%%OUTPUT_FILE% setup validate%RESET%
     echo   %YELLOW%%OUTPUT_FILE% setup run --force%RESET%
+    echo   %YELLOW%%OUTPUT_FILE% node --help%RESET%
+    echo   %YELLOW%%OUTPUT_FILE% node list%RESET%
 )
 
 echo.
