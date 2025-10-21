@@ -422,3 +422,20 @@ type TokenBackup struct {
 	Version   string    `json:"version"`
 	Checksum  string    `json:"checksum"`
 }
+
+// OwnerKeyInfo informações da Owner Key
+type OwnerKeyInfo struct {
+	Algorithm   string    `json:"algorithm"`
+	Fingerprint string    `json:"fingerprint"`
+	PublicKey   string    `json:"public_key"`
+	CreatedAt   time.Time `json:"created_at"`
+	Path        string    `json:"path"`
+}
+
+// OwnerKeyExport estrutura de export de Owner Keys
+type OwnerKeyExport struct {
+	PublicKey           string    `json:"public_key"`
+	PrivateKeyEncrypted string    `json:"private_key_encrypted,omitempty"`
+	ExportedAt          time.Time `json:"exported_at"`
+	Version             string    `json:"version"`
+}

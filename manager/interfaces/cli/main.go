@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	setup "setup-component/src"
 
@@ -19,19 +20,24 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "syntropy",
-	Short: "Syntropy Cooperative Grid CLI Manager",
-	Long: `Syntropy Cooperative Grid CLI Manager provides a unified interface for managing
-the Syntropy Cooperative Grid network. It allows you to:
+	Short: "🌐 Syntropy Cooperative Grid - Gerenciador de Rede Cooperativa",
+	Long: `Syntropy Cooperative Grid CLI Manager
 
-- Setup and configure the Syntropy Manager environment
-- Create and manage nodes in the cooperative grid
-- Deploy and manage workloads across the network
-- Monitor network state and performance
-- Configure security and networking parameters
+O Syntropy CLI permite que você configure e gerencie sua participação na
+rede cooperativa descentralizada Syntropy.
 
-The CLI supports multiple operating systems (Linux, Windows, macOS) and provides
-both interactive and scriptable interfaces for automation.`,
-	Version: fmt.Sprintf("%s (built on %s, commit %s, %s/%s)",
+🚀 Começando:
+   syntropy setup run          Configure sua Command Station
+   syntropy setup status       Verifique o status da instalação
+
+📚 Principais Comandos:
+   setup     Configure e gerencie seu ambiente Syntropy
+   node      Crie e gerencie nós da rede cooperativa
+
+💡 Dica: Use 'syntropy [comando] --help' para mais informações sobre cada comando.
+
+Para mais informações visite: https://syntropy.network`,
+	Version: fmt.Sprintf("%s (build: %s, commit: %s, platform: %s/%s)",
 		version, buildTime, gitCommit, runtime.GOOS, runtime.GOARCH),
 }
 
@@ -48,7 +54,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("verbose", false, "verbose output")
 	rootCmd.PersistentFlags().Bool("quiet", false, "quiet output (suppress non-error messages)")
 
-	// Add subcommands
+	// Add commands
 	addCommands()
 }
 
@@ -56,9 +62,6 @@ func init() {
 func addCommands() {
 	// Setup commands
 	rootCmd.AddCommand(setupCmd)
-
-	// Token commands
-	rootCmd.AddCommand(tokenCmd)
 
 	// Node commands
 	rootCmd.AddCommand(nodeCmd)
@@ -69,84 +72,105 @@ func addCommands() {
 	// rootCmd.AddCommand(stateCmd)
 }
 
+func main() {
+	Execute()
+}
+
 // setupCmd represents the setup command
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Setup and configure the Syntropy Manager environment",
-	Long: `Setup and configure the Syntropy Manager environment for your operating system.
+	Short: "⚙️  Configurar e gerenciar a Command Station",
+	Long: `Configure seu computador como uma Command Station para gerenciar
+a rede Syntropy Cooperative Grid.
 
-This command will:
-- Validate your system environment and dependencies
-- Create the necessary directory structure (~/.syntropy/)
-- Generate configuration files and cryptographic keys
-- Install system services (if requested)
-- Prepare the environment for node management
+A Command Station é seu "quartel general" de onde você:
+   • Cria e gerencia nós da rede
+   • Monitora o status da rede cooperativa
+   • Configura segurança e autenticação
+   • Gerencia tokens e credenciais
 
-The setup process is designed to be idempotent and can be run multiple times safely.`,
-}
-
-func init() {
-	// Setup subcommands
-	setupCmd.AddCommand(setupRunCmd)
-	setupCmd.AddCommand(setupStatusCmd)
-	setupCmd.AddCommand(setupResetCmd)
-	setupCmd.AddCommand(setupValidateCmd)
+🎯 Comandos Disponíveis:
+   run        Executar configuração inicial
+   status     Verificar status da configuração
+   validate   Validar ambiente antes do setup
+   reset      Remover configuração (com backup)
+   token      Gerenciar Grid Token de autenticação
+   key        Gerenciar Owner Keys (Ed25519)`,
 }
 
 // setupRunCmd represents the setup run command
 var setupRunCmd = &cobra.Command{
-	Use:   "run [flags]",
-	Short: "Run the setup process",
-	Long: `Run the complete setup process for the Syntropy Manager environment.
+	Use:   "run",
+	Short: "🚀 Executar configuração da Command Station",
+	Long: `Configura seu computador como Command Station da rede Syntropy.
 
-This will validate your system, create the necessary configuration,
-and prepare the environment for managing nodes in the cooperative grid.
+Este comando irá:
+   ✓ Validar requisitos do sistema
+   ✓ Criar estrutura de diretórios (~/.syntropy/)
+   ✓ Gerar chaves criptográficas Ed25519
+   ✓ Criar Grid Token de autenticação
+   ✓ Configurar ambiente completo
 
-A secure Grid Token is automatically generated and stored during setup.
-Use --generate-grid-token to explicitly enable token generation (default behavior).`,
+O Grid Token será gerado automaticamente e armazenado de forma
+segura no keyring do sistema operacional.
+
+⚠️  Se um setup já existir, você será notificado e poderá:
+   • Manter o setup existente
+   • Sobrescrever com backup automático (--force)
+   • Resetar completamente (syntropy setup reset)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
-		configPath, _ := cmd.Flags().GetString("config-path")
 
-		// Criar SetupManager para usar o novo sistema
+		fmt.Println("🚀 Iniciando configuração do Syntropy Manager...")
+		fmt.Println()
+
 		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
+			return fmt.Errorf("❌ Falha ao inicializar: %w", err)
 		}
 
-		// Preparar opções do novo sistema
 		setupOptions := &setup.SetupOptions{
 			Force:          force,
-			ValidateOnly:   false,
-			TestMode:       false,
-			Verbose:        false,
-			Quiet:          false,
-			ConfigPath:     configPath,
-			CustomSettings: map[string]string{
-				// Token é gerado automaticamente por padrão
-				// Só desabilita se explicitamente solicitado via flag
-			},
+			CustomSettings: make(map[string]string),
 		}
 
-		fmt.Println("Starting Syntropy Manager setup...")
-
-		// Executar setup com novo sistema
 		err = manager.SetupWithPublicOptions(setupOptions)
 		if err != nil {
-			return fmt.Errorf("setup failed: %w", err)
+			// Verificar se é erro de setup existente
+			if setupErr, ok := err.(*setup.SetupError); ok && setupErr.Code == "SETUP_022" {
+				fmt.Println("ℹ️  Setup já existe!")
+				fmt.Println()
+				fmt.Printf("   Criado em: %v\n", setupErr.Context["created_at"])
+				fmt.Printf("   Versão: %v\n", setupErr.Context["version"])
+				fmt.Println()
+				fmt.Println("📋 Opções disponíveis:")
+				fmt.Println("   • Ver status:     syntropy setup status")
+				fmt.Println("   • Sobrescrever:   syntropy setup run --force")
+				fmt.Println("   • Resetar tudo:   syntropy setup reset")
+				fmt.Println()
+				fmt.Println("⚠️  Sobrescrever ou resetar criará backup automático em ~/.syntropy/backups/")
+				return nil
+			}
+			return fmt.Errorf("❌ Setup falhou: %w", err)
 		}
 
-		fmt.Printf("✅ Setup completed successfully!\n")
+		fmt.Println()
+		fmt.Println("✅ Setup concluído com sucesso!")
+		fmt.Println()
 
-		// Verificar se token foi criado
-		exists, err := manager.GridTokenExists()
-		if err == nil && exists {
-			fmt.Printf("🔐 Grid Token generated and stored securely\n")
-			fmt.Printf("📁 Token location: System Keyring (%s)\n", runtime.GOOS)
-			fmt.Printf("💡 Use 'syntropy token show' to view token preview\n")
-		} else {
-			fmt.Printf("⚠️  Grid Token not created (may already exist or was disabled)\n")
+		// Verificar token
+		exists, _ := manager.GridTokenExists()
+		if exists {
+			fmt.Println("🔐 Grid Token gerado e armazenado com segurança")
+			fmt.Printf("   📍 Localização: Keyring do Sistema (%s)\n", runtime.GOOS)
+			fmt.Println("   💡 Use 'syntropy setup token show' para visualizar")
 		}
+
+		fmt.Println()
+		fmt.Println("🎉 Próximos passos:")
+		fmt.Println("   1. Verifique o status:  syntropy setup status")
+		fmt.Println("   2. Crie um nó:          syntropy node create")
+		fmt.Println()
 
 		return nil
 	},
@@ -155,37 +179,51 @@ Use --generate-grid-token to explicitly enable token generation (default behavio
 // setupStatusCmd represents the setup status command
 var setupStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Check the status of the Syntropy Manager setup",
-	Long: `Check the current status of the Syntropy Manager setup and configuration.
+	Short: "📊 Verificar status da configuração",
+	Long: `Verifica o status atual da configuração do Syntropy Manager.
 
-This will verify:
-- Configuration files exist and are valid
-- System services are running (if installed)
-- Environment is properly configured
-- All dependencies are available`,
+Mostra informações sobre:
+   • Estado da configuração
+   • Chaves criptográficas
+   • Grid Token
+   • Configurações de nós
+   • Logs e diagnósticos`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, _ := cmd.Flags().GetString("config-path")
-
-		options := setup.LegacySetupOptions{
-			ConfigPath: configPath,
-		}
-
-		fmt.Println("Checking Syntropy Manager status...")
-		result, err := setup.StatusLegacy(options)
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("status check failed: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		if result.Success {
-			fmt.Printf("✅ Syntropy Manager is properly configured\n")
-			fmt.Printf("📁 Configuration: %s\n", result.ConfigPath)
-			fmt.Printf("🖥️  Environment: %s\n", result.Environment)
+		status, err := manager.GetStatus()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao obter status: %w", err)
+		}
+
+		fmt.Println("📊 Status do Syntropy Manager")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Printf("   Status:        %s\n", *status)
+		fmt.Println()
+
+		// Verificar componentes
+		fmt.Println("🔧 Componentes:")
+
+		// Verificar Grid Token
+		tokenExists, _ := manager.GridTokenExists()
+		if tokenExists {
+			fmt.Println("   ✅ Grid Token: Disponível")
 		} else {
-			fmt.Printf("❌ Setup issues detected: %v\n", result.Error)
-			fmt.Printf("💡 Run 'syntropy setup run' to fix issues\n")
-			return result.Error
+			fmt.Println("   ❌ Grid Token: Não encontrado")
 		}
 
+		// Verificar Owner Keys
+		keyInfo, err := manager.GetOwnerKeyInfo()
+		if err == nil {
+			fmt.Printf("   ✅ Owner Keys: %s (%s)\n", keyInfo.Algorithm, keyInfo.Fingerprint[:16]+"...")
+		} else {
+			fmt.Println("   ❌ Owner Keys: Não encontradas")
+		}
+
+		fmt.Println()
 		return nil
 	},
 }
@@ -193,48 +231,73 @@ This will verify:
 // setupResetCmd represents the setup reset command
 var setupResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Reset the Syntropy Manager configuration",
-	Long: `Reset the Syntropy Manager configuration and remove all local data.
+	Short: "🗑️  Remover configuração do setup (com backup)",
+	Long: `Remove completamente a configuração do Syntropy Manager.
 
-⚠️  WARNING: This will permanently delete:
-- All configuration files
-- Cryptographic keys
-- Node configurations
-- Local cache and backups
+⚠️  AVISO IMPORTANTE:
+   Esta operação irá remover:
+   • Todas as configurações em ~/.syntropy/
+   • Chaves criptográficas
+   • Grid Token
+   • Configurações de nós (se houver)
+   • Logs e estados salvos
 
-This action cannot be undone. Make sure to backup important data before proceeding.`,
+🔒 SEGURANÇA:
+   • Um backup automático será criado em ~/.syntropy/backups/
+   • Você pode restaurar manualmente se necessário
+   • O backup contém dados sensíveis - gerencie com cuidado!
+
+💡 Recomendações de segurança:
+   1. Exporte seu Grid Token antes: syntropy setup token export
+   2. Faça backup manual das chaves se necessário
+   3. Exclua backups antigos regularmente
+   4. Nunca compartilhe backups não criptografados`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
-		configPath, _ := cmd.Flags().GetString("config-path")
 
 		if !force {
-			fmt.Print("⚠️  This will permanently delete all Syntropy Manager data. Continue? (y/N): ")
+			fmt.Println("⚠️  AVISO: Esta operação irá remover TODAS as configurações do Syntropy!")
+			fmt.Println()
+			fmt.Println("📦 Um backup automático será criado em ~/.syntropy/backups/")
+			fmt.Println()
+			fmt.Print("   Tem certeza que deseja continuar? Digite 'yes' para confirmar: ")
 			var response string
 			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				fmt.Println("Reset cancelled.")
+			if response != "yes" {
+				fmt.Println("❌ Operação cancelada")
 				return nil
 			}
 		}
 
-		options := setup.LegacySetupOptions{
-			Force:      force,
-			ConfigPath: configPath,
-		}
-
-		fmt.Println("Resetting Syntropy Manager configuration...")
-		result, err := setup.ResetLegacy(options)
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("reset failed: %w", err)
+			return fmt.Errorf("❌ Falha ao inicializar: %w", err)
 		}
 
-		if result.Success {
-			fmt.Printf("✅ Reset completed successfully!\n")
-			fmt.Printf("💡 Run 'syntropy setup run' to reconfigure\n")
-		} else {
-			fmt.Printf("❌ Reset failed: %v\n", result.Error)
-			return result.Error
+		fmt.Println("🗑️  Removendo configuração do Syntropy...")
+		fmt.Println("📦 Criando backup automático...")
+
+		err = manager.Reset(true)
+		if err != nil {
+			return fmt.Errorf("❌ Reset falhou: %w", err)
 		}
+
+		homeDir, _ := os.UserHomeDir()
+		backupPath := fmt.Sprintf("%s/.syntropy/backups", homeDir)
+
+		fmt.Println()
+		fmt.Println("✅ Configuração removida com sucesso!")
+		fmt.Println()
+		fmt.Printf("📦 Backup salvo em: %s\n", backupPath)
+		fmt.Println()
+		fmt.Println("🔒 LEMBRETE DE SEGURANÇA:")
+		fmt.Println("   • Backups contêm chaves e tokens sensíveis")
+		fmt.Println("   • Gerencie os backups com cuidado")
+		fmt.Println("   • Considere criptografar backups importantes")
+		fmt.Println("   • Remova backups antigos regularmente")
+		fmt.Println()
+		fmt.Println("💡 Para reconfigurar: syntropy setup run")
+		fmt.Println()
 
 		return nil
 	},
@@ -243,449 +306,732 @@ This action cannot be undone. Make sure to backup important data before proceedi
 // setupValidateCmd represents the setup validate command
 var setupValidateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Validate the system environment without making changes",
-	Long: `Validate the system environment and check if it's ready for Syntropy Manager setup.
+	Short: "🔍 Validar ambiente antes do setup",
+	Long: `Valida o ambiente do sistema antes de executar o setup.
 
-This command performs all validation checks without making any changes:
-- Operating system compatibility
-- Required dependencies
-- System permissions
-- Network connectivity
-- Disk space availability`,
+Verifica:
+   • Sistema operacional compatível
+   • Permissões necessárias
+   • Dependências do sistema
+   • Espaço em disco disponível
+   • Conectividade de rede
+
+Este comando não faz alterações no sistema.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, _ := cmd.Flags().GetString("config-path")
 
-		options := setup.LegacySetupOptions{
-			ConfigPath: configPath,
-		}
-
-		fmt.Println("Validating system environment...")
-		result, err := setup.StatusLegacy(options)
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("validation failed: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		if result.Success {
-			fmt.Printf("✅ System environment is ready for Syntropy Manager\n")
-			fmt.Printf("🖥️  Environment: %s\n", result.Environment)
+		options := &setup.SetupOptions{
+			ConfigPath:     configPath,
+			CustomSettings: make(map[string]string),
+		}
+
+		fmt.Println("🔍 Validando ambiente do sistema...")
+		fmt.Println()
+
+		envInfo, err := manager.ValidateEnvironmentWithOptions(options)
+		if err != nil {
+			return fmt.Errorf("❌ Validação falhou: %w", err)
+		}
+
+		fmt.Println("✅ Validação concluída!")
+		fmt.Println()
+		fmt.Printf("   Sistema:       %s %s\n", envInfo.OS, envInfo.Architecture)
+		fmt.Printf("   Pode prosseguir: %t\n", envInfo.CanProceed)
+		fmt.Println()
+
+		if !envInfo.CanProceed {
+			fmt.Println("⚠️  Problemas encontrados:")
+			for _, issue := range envInfo.Issues {
+				fmt.Printf("   • %s\n", issue)
+			}
+			fmt.Println()
+			fmt.Println("💡 Corrija os problemas antes de executar o setup")
 		} else {
-			fmt.Printf("❌ Environment validation failed: %v\n", result.Error)
-			fmt.Printf("💡 Fix the issues above and run validation again\n")
-			return result.Error
+			fmt.Println("🎉 Sistema pronto para o setup!")
+			fmt.Println("   Execute: syntropy setup run")
 		}
 
 		return nil
 	},
 }
 
-func init() {
-	// Setup run flags
-	setupRunCmd.Flags().Bool("force", false, "force setup even if validation fails")
-	setupRunCmd.Flags().Bool("install-service", false, "install system service")
-	setupRunCmd.Flags().String("config-path", "", "custom configuration file path")
-	setupRunCmd.Flags().Bool("generate-grid-token", false, "generate Grid Token during setup")
-
-	// Setup status flags
-	setupStatusCmd.Flags().String("config-path", "", "custom configuration file path")
-
-	// Setup reset flags
-	setupResetCmd.Flags().Bool("force", false, "skip confirmation prompt")
-	setupResetCmd.Flags().String("config-path", "", "custom configuration file path")
-
-	// Setup validate flags
-	setupValidateCmd.Flags().String("config-path", "", "custom configuration file path")
-}
-
-// tokenCmd represents the token command
-var tokenCmd = &cobra.Command{
+// setupTokenCmd represents comandos de gerenciamento de token
+var setupTokenCmd = &cobra.Command{
 	Use:   "token",
-	Short: "Manage Grid Tokens for Syntropy Cooperative Grid",
-	Long: `Manage Grid Tokens for the Syntropy Cooperative Grid network.
+	Short: "🔐 Gerenciar Grid Token do setup",
+	Long: `Gerenciar o Grid Token usado para autenticação na rede Syntropy.
 
-Grid Tokens are secure authentication tokens used to identify and authenticate
-with the Syntropy Cooperative Grid network. They are stored securely in the
-system keyring and can be managed through these commands.
-
-Available operations:
-- Generate new Grid Tokens
-- View existing Grid Tokens (with security confirmation)
-- Rotate Grid Tokens for enhanced security
-- Export/Import Grid Tokens for backup and recovery
-- Delete Grid Tokens when no longer needed`,
+O Grid Token é gerado automaticamente durante o setup e armazenado
+de forma segura no keyring do sistema operacional.`,
 }
 
-func init() {
-	// Add token subcommands
-	tokenCmd.AddCommand(tokenShowCmd)
-	tokenCmd.AddCommand(tokenGenerateCmd)
-	tokenCmd.AddCommand(tokenRotateCmd)
-	tokenCmd.AddCommand(tokenExportCmd)
-	tokenCmd.AddCommand(tokenImportCmd)
-	tokenCmd.AddCommand(tokenDeleteCmd)
-}
-
-// tokenShowCmd represents the token show command
-var tokenShowCmd = &cobra.Command{
+// setupTokenShowCmd represents the token show command
+var setupTokenShowCmd = &cobra.Command{
 	Use:   "show",
-	Short: "Display the current Grid Token (with security confirmation)",
-	Long: `Display the current Grid Token with security confirmation.
+	Short: "👁️  Exibir o Grid Token atual",
+	Long: `Exibe o Grid Token atual com preview seguro.
 
-This command will prompt for confirmation before displaying the token,
-as Grid Tokens are sensitive authentication credentials that should be
-kept secure. The token will be displayed in a masked format by default.`,
+Use --full para exibir o token completo (requer --confirm por segurança).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		showFull, _ := cmd.Flags().GetBool("full")
+		full, _ := cmd.Flags().GetBool("full")
 		confirm, _ := cmd.Flags().GetBool("confirm")
 
-		// Create SetupManager
 		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		// Check if token exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
-
-		if !exists {
-			fmt.Println("❌ No Grid Token found")
-			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
-			return nil
-		}
-
-		// Get token
 		token, err := manager.GetGridToken()
 		if err != nil {
-			return fmt.Errorf("failed to retrieve token: %w", err)
+			return fmt.Errorf("❌ Falha ao obter token: %w", err)
 		}
 
-		if showFull && confirm {
-			fmt.Printf("🔐 Grid Token: %s\n", token)
-		} else if showFull {
-			fmt.Println("⚠️  To display the full token, use --confirm flag")
-			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
+		if full && confirm {
+			fmt.Printf("🔑 Grid Token (COMPLETO):\n%s\n", token)
+			fmt.Println("\n⚠️  AVISO: Mantenha este token em segurança!")
+		} else if full && !confirm {
+			fmt.Println("❌ Para exibir o token completo, use: --full --confirm")
 		} else {
-			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
-			fmt.Println("💡 Use --full --confirm to display the complete token")
+			fmt.Printf("🔑 Grid Token Preview: %s...[OCULTO]\n", token[:8])
+			fmt.Println("💡 Use --full --confirm para ver o token completo")
 		}
 
 		return nil
 	},
 }
 
-// tokenGenerateCmd represents the token generate command
-var tokenGenerateCmd = &cobra.Command{
+// setupTokenGenerateCmd represents the token generate command
+var setupTokenGenerateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate a new Grid Token",
-	Long: `Generate a new Grid Token for the Syntropy Cooperative Grid network.
+	Short: "🔄 Gerar novo Grid Token",
+	Long: `Gera um novo Grid Token substituindo o existente.
 
-This will create a new secure UUID v4 token and store it in the system keyring.
-If a token already exists, it will be replaced with the new one.`,
+⚠️  AVISO: Isto irá invalidar o token anterior!`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		showToken, _ := cmd.Flags().GetBool("show")
+		show, _ := cmd.Flags().GetBool("show")
 
-		// Create SetupManager
-		manager, err := setup.NewSetupManager()
-		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
-		}
-
-		// Check if token already exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
-
-		if exists {
-			fmt.Println("⚠️  A Grid Token already exists")
-			fmt.Println("💡 Use 'syntropy token rotate' to generate a new token")
+		// Confirmação
+		fmt.Print("⚠️  Gerar novo token irá invalidar o anterior. Continuar? (y/N): ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			fmt.Println("❌ Operação cancelada")
 			return nil
 		}
 
-		// Generate new token
-		fmt.Println("🔐 Generating new Grid Token...")
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
+		}
+
+		fmt.Println("🔄 Gerando novo Grid Token...")
 		token, err := manager.GenerateGridToken()
 		if err != nil {
-			return fmt.Errorf("failed to generate token: %w", err)
+			return fmt.Errorf("❌ Falha ao gerar token: %w", err)
 		}
 
-		fmt.Println("✅ Grid Token generated successfully!")
-		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
-
-		if showToken {
-			fmt.Printf("🔐 Grid Token: %s\n", token)
+		fmt.Println("✅ Novo Grid Token gerado com sucesso!")
+		if show {
+			fmt.Printf("🔑 Token: %s\n", token)
 		} else {
-			fmt.Printf("🔐 Grid Token Preview: %s\n", token[:8]+"...[HIDDEN]")
-			fmt.Println("💡 Use 'syntropy token show --full --confirm' to view the complete token")
+			fmt.Printf("🔑 Preview: %s...[OCULTO]\n", token[:8])
 		}
 
 		return nil
 	},
 }
 
-// tokenRotateCmd represents the token rotate command
-var tokenRotateCmd = &cobra.Command{
+// setupTokenRotateCmd represents the token rotate command
+var setupTokenRotateCmd = &cobra.Command{
 	Use:   "rotate",
-	Short: "Rotate the current Grid Token",
-	Long: `Rotate the current Grid Token by generating a new one.
+	Short: "🔄 Rotacionar Grid Token",
+	Long: `Rotaciona o Grid Token atual para maior segurança.
 
-This will create a new secure UUID v4 token to replace the existing one.
-The old token will be invalidated and the new token will be stored in the
-system keyring.`,
+⚠️  AVISO: Isto irá invalidar o token anterior!`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		showToken, _ := cmd.Flags().GetBool("show")
+		show, _ := cmd.Flags().GetBool("show")
 
-		// Create SetupManager
-		manager, err := setup.NewSetupManager()
-		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
-		}
-
-		// Check if token exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
-
-		if !exists {
-			fmt.Println("❌ No Grid Token found to rotate")
-			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
+		// Confirmação
+		fmt.Print("⚠️  Rotacionar token irá invalidar o anterior. Continuar? (y/N): ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			fmt.Println("❌ Operação cancelada")
 			return nil
 		}
 
-		// Rotate token
-		fmt.Println("🔄 Rotating Grid Token...")
-		newToken, err := manager.RotateGridToken()
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to rotate token: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		fmt.Println("✅ Grid Token rotated successfully!")
-		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
+		fmt.Println("🔄 Rotacionando Grid Token...")
+		token, err := manager.RotateGridToken()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao rotacionar token: %w", err)
+		}
 
-		if showToken {
-			fmt.Printf("🔐 New Grid Token: %s\n", newToken)
+		fmt.Println("✅ Grid Token rotacionado com sucesso!")
+		if show {
+			fmt.Printf("🔑 Novo Token: %s\n", token)
 		} else {
-			fmt.Printf("🔐 New Grid Token Preview: %s\n", newToken[:8]+"...[HIDDEN]")
-			fmt.Println("💡 Use 'syntropy token show --full --confirm' to view the complete token")
+			fmt.Printf("🔑 Preview: %s...[OCULTO]\n", token[:8])
 		}
 
 		return nil
 	},
 }
 
-// tokenExportCmd represents the token export command
-var tokenExportCmd = &cobra.Command{
-	Use:   "export [output-file]",
-	Short: "Export Grid Token to a backup file",
-	Long: `Export the current Grid Token to a backup file for safekeeping.
+// setupTokenExportCmd represents the token export command
+var setupTokenExportCmd = &cobra.Command{
+	Use:   "export <arquivo-saida>",
+	Short: "💾 Exportar Grid Token para backup",
+	Long: `Exporta o Grid Token para arquivo de backup criptografado.
 
-This will create a secure backup file containing the token with checksum
-validation. The backup file should be stored securely as it contains
-sensitive authentication credentials.`,
+FORMATO DO ARQUIVO:
+   • JSON estruturado com metadados
+   • Token criptografado com AES-256
+   • Inclui timestamp e versão
+   • Verificação de integridade
+
+EXEMPLO:
+   syntropy setup token export backup-token.json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputPath := args[0]
 
-		// Create SetupManager
 		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		// Check if token exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
+		fmt.Println("💾 Exportando Grid Token...")
 
-		if !exists {
-			fmt.Println("❌ No Grid Token found to export")
-			fmt.Println("💡 Run 'syntropy token generate' to create a new token")
-			return nil
-		}
-
-		// Export token
-		fmt.Printf("📤 Exporting Grid Token to: %s\n", outputPath)
 		err = manager.ExportGridToken(outputPath)
 		if err != nil {
-			return fmt.Errorf("failed to export token: %w", err)
+			return fmt.Errorf("❌ Falha ao exportar: %w", err)
 		}
 
-		fmt.Println("✅ Grid Token exported successfully!")
-		fmt.Println("🔒 Backup file contains encrypted token with checksum validation")
-		fmt.Println("⚠️  Store the backup file securely and do not share it")
+		fmt.Println()
+		fmt.Println("✅ Grid Token exportado com sucesso!")
+		fmt.Printf("   📁 Arquivo: %s\n", outputPath)
+		fmt.Println()
+		fmt.Println("🔒 BACKUP CONTÉM TOKEN CRIPTOGRAFADO")
+		fmt.Println()
+		fmt.Println("⚠️  INSTRUÇÕES DE SEGURANÇA:")
+		fmt.Println("   1. Guarde este arquivo em local MUITO SEGURO")
+		fmt.Println("   2. Considere armazenar cópias em locais diferentes")
+		fmt.Println("   3. NUNCA envie por email ou mensagem")
+		fmt.Println("   4. Use criptografia adicional se armazenar na nuvem")
+		fmt.Println()
+		fmt.Printf("💡 Para restaurar: syntropy setup token import %s\n", outputPath)
 
 		return nil
 	},
 }
 
-// tokenImportCmd represents the token import command
-var tokenImportCmd = &cobra.Command{
-	Use:   "import [input-file]",
-	Short: "Import Grid Token from a backup file",
-	Long: `Import a Grid Token from a backup file.
+// setupTokenImportCmd represents the token import command
+var setupTokenImportCmd = &cobra.Command{
+	Use:   "import <arquivo-backup>",
+	Short: "📥 Importar Grid Token de backup",
+	Long: `Importa Grid Token de arquivo de backup.
 
-This will restore a previously exported Grid Token from a backup file.
-The backup file will be validated for integrity before importing.`,
+⚠️  ATENÇÃO:
+   • Esta operação irá SOBRESCREVER o token atual
+   • Certifique-se de ter backup do token existente
+   • O arquivo deve estar no formato correto
+
+PROCESSO:
+   1. Cria backup automático do token atual
+   2. Valida o arquivo de backup
+   3. Descriptografa e instala o novo token
+   4. Valida a instalação`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputPath := args[0]
 
-		// Create SetupManager
-		manager, err := setup.NewSetupManager()
-		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
-		}
-
-		// Check if token already exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
-
-		if exists {
-			fmt.Println("⚠️  A Grid Token already exists")
-			fmt.Println("💡 Use 'syntropy token rotate' to replace the existing token")
+		fmt.Println("📥 Importando Grid Token")
+		fmt.Println()
+		fmt.Println("⚠️  AVISO: Isto irá sobrescrever o token atual!")
+		fmt.Println()
+		fmt.Print("   Digite 'IMPORT TOKEN' para confirmar: ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "IMPORT TOKEN" {
+			fmt.Println("❌ Operação cancelada")
 			return nil
 		}
 
-		// Import token
-		fmt.Printf("📥 Importing Grid Token from: %s\n", inputPath)
-		err = manager.ImportGridToken(inputPath)
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to import token: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		fmt.Println("✅ Grid Token imported successfully!")
-		fmt.Printf("📁 Storage: System Keyring (%s)\n", runtime.GOOS)
-		fmt.Println("💡 Use 'syntropy token show' to verify the imported token")
+		fmt.Println()
+		fmt.Println("📥 Importando token...")
+
+		err = manager.ImportGridToken(inputPath)
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao importar: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println("✅ Grid Token importado com sucesso!")
+		fmt.Println()
+		fmt.Println("💡 Verifique o token: syntropy setup token show")
 
 		return nil
 	},
 }
 
-// tokenDeleteCmd represents the token delete command
-var tokenDeleteCmd = &cobra.Command{
+// setupTokenDeleteCmd represents the token delete command
+var setupTokenDeleteCmd = &cobra.Command{
 	Use:   "delete",
-	Short: "Delete the current Grid Token",
-	Long: `Delete the current Grid Token from the system keyring.
+	Short: "🗑️  Deletar Grid Token",
+	Long: `Deleta o Grid Token atual do sistema.
 
-⚠️  WARNING: This will permanently remove the Grid Token and you will
-need to generate a new one or import from backup to authenticate with
-the Syntropy Cooperative Grid network.`,
+⚠️  AVISO IMPORTANTE:
+   • Esta operação é IRREVERSÍVEL
+   • Você perderá acesso ao sistema
+   • Faça backup antes de deletar
+   • Confirmação dupla é obrigatória`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		force, _ := cmd.Flags().GetBool("force")
 
-		// Create SetupManager
-		manager, err := setup.NewSetupManager()
-		if err != nil {
-			return fmt.Errorf("failed to create setup manager: %w", err)
-		}
-
-		// Check if token exists
-		exists, err := manager.GridTokenExists()
-		if err != nil {
-			return fmt.Errorf("failed to check token existence: %w", err)
-		}
-
-		if !exists {
-			fmt.Println("❌ No Grid Token found to delete")
-			return nil
-		}
-
-		// Confirmation prompt
 		if !force {
-			fmt.Print("⚠️  Are you sure you want to delete the Grid Token? (yes/no): ")
+			fmt.Println("🚨 ATENÇÃO: Você está prestes a DELETAR seu Grid Token!")
+			fmt.Println()
+			fmt.Println("⚠️  CONSEQUÊNCIAS:")
+			fmt.Println("   • Perda total de acesso ao sistema")
+			fmt.Println("   • Necessidade de reconfiguração completa")
+			fmt.Println("   • Operação IRREVERSÍVEL")
+			fmt.Println()
+			fmt.Print("   Digite 'DELETE TOKEN' para confirmar: ")
 			var response string
 			fmt.Scanln(&response)
-			if response != "yes" {
-				fmt.Println("❌ Token deletion cancelled")
+			if response != "DELETE TOKEN" {
+				fmt.Println("❌ Operação cancelada")
 				return nil
 			}
 		}
 
-		// Delete token
-		fmt.Println("🗑️  Deleting Grid Token...")
-		err = manager.DeleteGridToken()
+		manager, err := setup.NewSetupManager()
 		if err != nil {
-			return fmt.Errorf("failed to delete token: %w", err)
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
 		}
 
-		fmt.Println("✅ Grid Token deleted successfully!")
-		fmt.Println("💡 Use 'syntropy token generate' to create a new token")
+		fmt.Println()
+		fmt.Println("🗑️  Deletando Grid Token...")
+
+		err = manager.DeleteGridToken()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao deletar: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println("✅ Grid Token deletado com sucesso!")
+		fmt.Println()
+		fmt.Println("⚠️  PRÓXIMOS PASSOS:")
+		fmt.Println("   1. Execute: syntropy setup run")
+		fmt.Println("   2. Ou restaure de backup: syntropy setup token import")
+		fmt.Println()
 
 		return nil
 	},
 }
 
-func init() {
-	// Token command flags
-	tokenShowCmd.Flags().Bool("full", false, "show full token (requires --confirm)")
-	tokenShowCmd.Flags().Bool("confirm", false, "confirm display of full token")
+// setupKeyCmd represents comandos de gerenciamento de Owner Keys
+var setupKeyCmd = &cobra.Command{
+	Use:   "key",
+	Short: "🔑 Gerenciar Owner Keys (Ed25519)",
+	Long: `Gerenciar as Owner Keys criptográficas do Command Station.
 
-	tokenGenerateCmd.Flags().Bool("show", false, "display the generated token")
+As Owner Keys são chaves Ed25519 usadas para identificação criptográfica
+do seu Command Station na rede Syntropy. Elas são PERMANENTES e críticas
+para a segurança da sua infraestrutura.
 
-	tokenRotateCmd.Flags().Bool("show", false, "display the new token")
+⚠️  IMPORTANTE:
+   • Owner Keys NÃO podem ser rotacionadas
+   • A perda das chaves resulta em perda de acesso ao Command Station
+   • Faça backup regular das chaves
+   • Mantenha o backup em local seguro
 
-	tokenDeleteCmd.Flags().Bool("force", false, "skip confirmation prompt")
+🔐 Comandos Disponíveis:
+   info       Ver informações das Owner Keys
+   show       Exibir chaves (pública livre, privada com confirmação)
+   export     Exportar chaves para backup seguro
+   import     Importar chaves de backup`,
+}
+
+// setupKeyInfoCmd represents the key info command
+var setupKeyInfoCmd = &cobra.Command{
+	Use:   "info",
+	Short: "📋 Exibir informações das Owner Keys",
+	Long: `Exibe informações gerais das Owner Keys sem expor dados sensíveis.
+
+Mostra:
+   • Algoritmo criptográfico (Ed25519)
+   • Fingerprint (hash SHA256)
+   • Data de criação
+   • Localização dos arquivos`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
+		}
+
+		keyInfo, err := manager.GetOwnerKeyInfo()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao obter informações: %w", err)
+		}
+
+		fmt.Println("🔑 Owner Keys - Informações")
+		fmt.Println()
+		fmt.Printf("   Algoritmo:    %s\n", keyInfo.Algorithm)
+		fmt.Printf("   Fingerprint:  %s\n", keyInfo.Fingerprint)
+		fmt.Printf("   Criada em:    %s\n", keyInfo.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("   Localização:  %s\n", keyInfo.Path)
+		fmt.Println()
+		fmt.Println("💡 Use 'syntropy setup key show' para ver as chaves")
+		fmt.Println("💡 Use 'syntropy setup key export' para fazer backup")
+
+		return nil
+	},
+}
+
+// setupKeyShowCmd represents the key show command
+var setupKeyShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "👁️  Exibir Owner Keys",
+	Long: `Exibe as Owner Keys do Command Station.
+
+CHAVE PÚBLICA:
+   • Pode ser compartilhada livremente
+   • Usada por outros para verificar sua identidade
+   • Sempre visível sem restrições
+
+CHAVE PRIVADA:
+   • EXTREMAMENTE SENSÍVEL - nunca compartilhe!
+   • Requer confirmação dupla (--private --confirm)
+   • Acesso é registrado em log de auditoria
+   • Use apenas quando absolutamente necessário`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		showPrivate, _ := cmd.Flags().GetBool("private")
+		confirm, _ := cmd.Flags().GetBool("confirm")
+
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
+		}
+
+		// Sempre mostrar chave pública
+		publicKey, err := manager.GetOwnerPublicKey()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao obter chave pública: %w", err)
+		}
+
+		fmt.Println("🔓 Owner Public Key")
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println(publicKey)
+		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		fmt.Println()
+		fmt.Println("✅ Esta chave pode ser compartilhada livremente")
+		fmt.Println()
+
+		// Mostrar chave privada apenas com confirmação
+		if showPrivate {
+			if !confirm {
+				fmt.Println("⚠️  Para exibir a chave PRIVADA, use: --private --confirm")
+				fmt.Println()
+				fmt.Println("🚨 AVISO DE SEGURANÇA:")
+				fmt.Println("   • A chave privada é EXTREMAMENTE SENSÍVEL")
+				fmt.Println("   • NUNCA compartilhe sua chave privada")
+				fmt.Println("   • Esta operação será registrada em log")
+				return nil
+			}
+
+			// Dupla confirmação
+			fmt.Println("🚨 ATENÇÃO: Você está prestes a visualizar sua CHAVE PRIVADA!")
+			fmt.Print("   Digite 'SHOW PRIVATE KEY' para confirmar: ")
+			var response string
+			fmt.Scanln(&response)
+			if response != "SHOW PRIVATE KEY" {
+				fmt.Println("❌ Operação cancelada")
+				return nil
+			}
+
+			privateKey, err := manager.GetOwnerPrivateKey("default_passphrase")
+			if err != nil {
+				return fmt.Errorf("❌ Falha ao obter chave privada: %w", err)
+			}
+
+			fmt.Println()
+			fmt.Println("🔐 Owner Private Key")
+			fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			fmt.Println(privateKey)
+			fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			fmt.Println()
+			fmt.Println("🚨 MANTENHA ESTA CHAVE EM SEGURANÇA ABSOLUTA!")
+			fmt.Println("   • NUNCA compartilhe esta chave")
+			fmt.Println("   • Apague esta tela após copiar")
+			fmt.Println("   • Considere fazer backup: syntropy setup key export")
+		}
+
+		return nil
+	},
+}
+
+// setupKeyExportCmd represents the key export command
+var setupKeyExportCmd = &cobra.Command{
+	Use:   "export <arquivo-saida>",
+	Short: "💾 Exportar Owner Keys para backup",
+	Long: `Exporta Owner Keys para arquivo de backup criptografado.
+
+EXPORTAÇÃO:
+   • Chave pública: sempre incluída (não criptografada)
+   • Chave privada: opcional, criptografada com senha
+
+FLAGS:
+   --include-private    Incluir chave privada no backup
+   --password          Senha para criptografar chave privada
+
+FORMATO DO ARQUIVO:
+   • JSON estruturado com metadados
+   • Chave pública em texto claro
+   • Chave privada criptografada com AES-256
+   • Inclui timestamp e versão
+
+EXEMPLO:
+   # Exportar apenas chave pública
+   syntropy setup key export backup-public.json
+
+   # Exportar com chave privada (recomendado)
+   syntropy setup key export backup-full.json --include-private
+
+   💡 Você será solicitado a criar uma senha forte para o backup`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outputPath := args[0]
+		includePrivate, _ := cmd.Flags().GetBool("include-private")
+
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
+		}
+
+		var passphrase string
+		if includePrivate {
+			fmt.Println("🔐 Exportando Owner Keys com chave privada")
+			fmt.Println()
+			fmt.Println("📝 Você precisará criar uma SENHA FORTE para criptografar o backup.")
+			fmt.Println("   Esta senha será necessária para restaurar as chaves.")
+			fmt.Println()
+			fmt.Print("   Digite a senha do backup: ")
+			fmt.Scanln(&passphrase)
+
+			if len(passphrase) < 12 {
+				return fmt.Errorf("❌ Senha muito curta (mínimo 12 caracteres)")
+			}
+
+			fmt.Print("   Confirme a senha: ")
+			var confirm string
+			fmt.Scanln(&confirm)
+
+			if passphrase != confirm {
+				return fmt.Errorf("❌ Senhas não correspondem")
+			}
+		} else {
+			fmt.Println("🔓 Exportando apenas chave pública (sem criptografia)")
+		}
+
+		fmt.Println()
+		fmt.Println("💾 Criando backup...")
+
+		err = manager.ExportOwnerKeys(outputPath, includePrivate, passphrase)
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao exportar: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println("✅ Owner Keys exportadas com sucesso!")
+		fmt.Printf("   📁 Arquivo: %s\n", outputPath)
+		fmt.Println()
+
+		if includePrivate {
+			fmt.Println("🔒 BACKUP CONTÉM CHAVE PRIVADA CRIPTOGRAFADA")
+			fmt.Println()
+			fmt.Println("⚠️  INSTRUÇÕES DE SEGURANÇA:")
+			fmt.Println("   1. Guarde este arquivo em local MUITO SEGURO")
+			fmt.Println("   2. Anote a senha em local separado")
+			fmt.Println("   3. Considere armazenar cópias em locais diferentes")
+			fmt.Println("   4. NUNCA envie por email ou mensagem")
+			fmt.Println("   5. Use criptografia adicional se armazenar na nuvem")
+			fmt.Println()
+			fmt.Printf("💡 Para restaurar: syntropy setup key import %s\n", outputPath)
+		} else {
+			fmt.Println("ℹ️  Este backup contém apenas a chave PÚBLICA")
+			fmt.Println("   Para backup completo, use: --include-private")
+		}
+
+		return nil
+	},
+}
+
+// setupKeyImportCmd represents the key import command
+var setupKeyImportCmd = &cobra.Command{
+	Use:   "import <arquivo-backup>",
+	Short: "📥 Importar Owner Keys de backup",
+	Long: `Importa Owner Keys de arquivo de backup.
+
+⚠️  ATENÇÃO:
+   • Esta operação irá SOBRESCREVER as chaves atuais
+   • Certifique-se de ter backup das chaves existentes
+   • A senha usada na exportação será necessária
+
+PROCESSO:
+   1. Cria backup automático das chaves atuais
+   2. Valida o arquivo de backup
+   3. Descriptografa chave privada (se incluída)
+   4. Instala as novas chaves
+   5. Valida a instalação`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		inputPath := args[0]
+
+		fmt.Println("📥 Importando Owner Keys")
+		fmt.Println()
+		fmt.Println("⚠️  AVISO: Isto irá sobrescrever as chaves atuais!")
+		fmt.Println()
+		fmt.Print("   Digite 'IMPORT KEYS' para confirmar: ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "IMPORT KEYS" {
+			fmt.Println("❌ Operação cancelada")
+			return nil
+		}
+
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao criar gerenciador: %w", err)
+		}
+
+		// Criar backup das chaves atuais
+		fmt.Println()
+		fmt.Println("📦 Criando backup das chaves atuais...")
+		backupPath := fmt.Sprintf("keys-backup-%d.json", time.Now().Unix())
+		if err := manager.ExportOwnerKeys(backupPath, true, "auto-backup"); err != nil {
+			fmt.Printf("⚠️  Aviso: Não foi possível fazer backup: %v\n", err)
+		} else {
+			fmt.Printf("✅ Backup criado: %s\n", backupPath)
+		}
+
+		// Solicitar senha se backup incluir chave privada
+		fmt.Println()
+		fmt.Print("   Digite a senha do backup: ")
+		var passphrase string
+		fmt.Scanln(&passphrase)
+
+		fmt.Println()
+		fmt.Println("📥 Importando chaves...")
+
+		err = manager.ImportOwnerKeys(inputPath, passphrase)
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao importar: %w", err)
+		}
+
+		fmt.Println()
+		fmt.Println("✅ Owner Keys importadas com sucesso!")
+		fmt.Println()
+		fmt.Println("💡 Verifique as chaves: syntropy setup key info")
+
+		return nil
+	},
 }
 
 // nodeCmd represents the node command
 var nodeCmd = &cobra.Command{
 	Use:   "node",
-	Short: "Manage Syntropy nodes",
-	Long: `Manage Syntropy nodes for the cooperative grid.
+	Short: "🖥️  Gerenciar nós da rede cooperativa",
+	Long: `Gerencie nós da rede cooperativa Syntropy.
 
-This command provides functionality to:
-- Create and provision new nodes automatically
-- List and monitor existing nodes
-- View node status and logs
-- Remove nodes from the grid
-- Start/stop node listeners
+Este comando permite:
+   • Criar e provisionar novos nós automaticamente
+   • Listar e monitorar nós existentes
+   • Visualizar status e logs dos nós
+   • Remover nós da rede
+   • Iniciar/parar listeners dos nós
 
-The node component implements a plug-and-play system that creates bootable USB devices
-and automatically registers nodes without user intervention.`,
+O componente node implementa um sistema plug-and-play que cria dispositivos
+USB bootáveis e registra nós automaticamente sem intervenção do usuário.`,
 }
 
 func init() {
-	// Add node subcommands (stub implementation for build)
-	nodeCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List all nodes",
-		Long:  "List all nodes in the cooperative grid",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Node component is not yet fully integrated.")
-			fmt.Println("This is a placeholder command for build testing.")
-			return nil
-		},
-	})
+	// Setup subcommands
+	setupCmd.AddCommand(setupRunCmd)
+	setupCmd.AddCommand(setupStatusCmd)
+	setupCmd.AddCommand(setupValidateCmd)
+	setupCmd.AddCommand(setupResetCmd)
+	setupCmd.AddCommand(setupTokenCmd)
+	setupCmd.AddCommand(setupKeyCmd)
 
+	// Token subcommands
+	setupTokenCmd.AddCommand(setupTokenShowCmd)
+	setupTokenCmd.AddCommand(setupTokenGenerateCmd)
+	setupTokenCmd.AddCommand(setupTokenRotateCmd)
+	setupTokenCmd.AddCommand(setupTokenExportCmd)
+	setupTokenCmd.AddCommand(setupTokenImportCmd)
+	setupTokenCmd.AddCommand(setupTokenDeleteCmd)
+
+	// Key subcommands
+	setupKeyCmd.AddCommand(setupKeyInfoCmd)
+	setupKeyCmd.AddCommand(setupKeyShowCmd)
+	setupKeyCmd.AddCommand(setupKeyExportCmd)
+	setupKeyCmd.AddCommand(setupKeyImportCmd)
+
+	// Setup flags
+	setupRunCmd.Flags().Bool("force", false, "forçar sobrescrever setup existente")
+	setupResetCmd.Flags().Bool("force", false, "pular confirmação de reset")
+
+	// Token flags
+	setupTokenShowCmd.Flags().Bool("full", false, "exibir token completo (requer --confirm)")
+	setupTokenShowCmd.Flags().Bool("confirm", false, "confirmar exibição de token completo")
+	setupTokenGenerateCmd.Flags().Bool("show", false, "exibir token após gerar")
+	setupTokenRotateCmd.Flags().Bool("show", false, "exibir token após rotacionar")
+	setupTokenDeleteCmd.Flags().Bool("force", false, "pular confirmação de deleção")
+
+	// Key flags
+	setupKeyShowCmd.Flags().Bool("private", false, "exibir chave privada (requer --confirm)")
+	setupKeyShowCmd.Flags().Bool("confirm", false, "confirmar exibição de chave privada")
+	setupKeyExportCmd.Flags().Bool("include-private", false, "incluir chave privada no backup")
+
+	// Setup validate flags
+	setupValidateCmd.Flags().String("config-path", "", "caminho personalizado do arquivo de configuração")
+
+	// Add placeholder node subcommands
 	nodeCmd.AddCommand(&cobra.Command{
 		Use:   "create",
-		Short: "Create a new node",
-		Long:  "Create and provision a new node in the cooperative grid",
+		Short: "Criar novo nó",
+		Long:  "Cria um novo nó na rede cooperativa",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Node component is not yet fully integrated.")
+			fmt.Println("🖥️  Node component is not yet fully integrated.")
 			fmt.Println("This is a placeholder command for build testing.")
 			return nil
 		},
 	})
 
 	nodeCmd.AddCommand(&cobra.Command{
-		Use:   "status",
-		Short: "Show node status",
-		Long:  "Show the status of a specific node",
+		Use:   "list",
+		Short: "Listar nós existentes",
+		Long:  "Lista todos os nós registrados na rede",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Node component is not yet fully integrated.")
+			fmt.Println("🖥️  Node component is not yet fully integrated.")
 			fmt.Println("This is a placeholder command for build testing.")
 			return nil
 		},
 	})
-}
-
-func main() {
-	Execute()
 }

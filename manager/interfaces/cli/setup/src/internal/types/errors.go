@@ -38,6 +38,7 @@ const (
 	ErrIntegrityCheck      = "SETUP_019"
 	ErrTemplateProcess     = "SETUP_020"
 	ErrSchemaValidation    = "SETUP_021"
+	ErrSetupAlreadyExists  = "SETUP_022"
 )
 
 // Error implementa a interface error
@@ -349,5 +350,18 @@ func ErrSchemaValidationError(schema string, cause error) *SetupError {
 		"Verifique formato do arquivo",
 		"Verifique campos obrigatórios",
 		"Verifique tipos de dados",
+	})
+}
+
+// ErrSetupAlreadyExistsError erro para setup já existente
+func ErrSetupAlreadyExistsError(createdAt time.Time, version string) *SetupError {
+	return NewSetupError(
+		ErrSetupAlreadyExists,
+		"Setup já existe e está completo",
+		nil,
+	).WithContext("created_at", createdAt).WithContext("version", version).WithSuggestions([]string{
+		"Use 'syntropy setup status' para ver detalhes",
+		"Use 'syntropy setup run --force' para sobrescrever",
+		"Use 'syntropy setup reset' para remover e recriar",
 	})
 }

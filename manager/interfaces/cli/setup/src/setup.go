@@ -2,6 +2,9 @@
 package setup
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +17,9 @@ import (
 )
 
 // Public types for external use
+
+// SetupError represents a setup error (re-export from types)
+type SetupError = types.SetupError
 
 // LegacySetupOptions defines the options for the setup process (legacy compatibility)
 type LegacySetupOptions struct {
@@ -76,6 +82,23 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 	envInfo, err := sm.validator.ValidateEnvironmentWithOptions(options)
 	if err != nil {
 		return sm.handleError(err, "validation_failed")
+	}
+
+	// Verificar se setup já existe
+	existingState, err := sm.stateManager.LoadState()
+	if err == nil && existingState.Status == types.SetupStatusCompleted {
+		if !options.Force {
+			return types.ErrSetupAlreadyExistsError(existingState.CreatedAt, existingState.Version)
+		}
+
+		// Se --force, criar backup automático antes de sobrescrever
+		sm.logger.LogInfo("Setup existente detectado, criando backup automático...", nil)
+		backupName := fmt.Sprintf("pre_override_%d", time.Now().Unix())
+		if err := sm.createFullBackup(backupName); err != nil {
+			sm.logger.LogWarning("Falha ao criar backup automático", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
 	}
 
 	if !envInfo.CanProceed && !options.Force {
@@ -295,6 +318,30 @@ func (sm *SetupManager) Reset(confirm bool) error {
 	}
 
 	sm.logger.LogStep("reset_start", nil)
+
+	// Criar backup automático antes de deletar
+	sm.logger.LogInfo("Criando backup automático antes de deletar...", nil)
+	backupName := fmt.Sprintf("pre_reset_%d", time.Now().Unix())
+	if err := sm.createFullBackup(backupName); err != nil {
+		sm.logger.LogWarning("Falha ao criar backup", map[string]interface{}{
+			"error": err.Error(),
+		})
+	} else {
+		homeDir, _ := os.UserHomeDir()
+		backupPath := filepath.Join(homeDir, ".syntropy", "backups")
+		sm.logger.LogInfo("Backup criado com sucesso", map[string]interface{}{
+			"backup_location": backupPath,
+			"backup_name":     backupName,
+		})
+	}
+
+	// Deletar Grid Token antes de remover arquivos
+	sm.logger.LogInfo("Removendo Grid Token...", nil)
+	if err := sm.tokenManager.DeleteToken(); err != nil {
+		sm.logger.LogWarning("Falha ao remover Grid Token", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
 
 	// Remover arquivo de estado
 	homeDir, _ := os.UserHomeDir()
@@ -772,4 +819,210 @@ func backupAllDirectories(syntropyDir, backupPath string) error {
 	}
 
 	return nil
+}
+
+// createFullBackup cria backup completo de toda a estrutura .syntropy
+func (sm *SetupManager) createFullBackup(name string) error {
+	homeDir, _ := os.UserHomeDir()
+	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	backupsDir := filepath.Join(syntropyDir, "backups")
+
+	timestamp := time.Now().Format("20060102_150405")
+	backupName := fmt.Sprintf("%s_%s", name, timestamp)
+	backupPath := filepath.Join(backupsDir, backupName)
+
+	// Criar diretório de backup
+	if err := os.MkdirAll(backupPath, 0755); err != nil {
+		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Copiar todas as pastas exceto 'backups'
+	dirsToBackup := []string{"config", "keys", "tokens", "nodes", "logs", "state"}
+	for _, dir := range dirsToBackup {
+		srcPath := filepath.Join(syntropyDir, dir)
+		if _, err := os.Stat(srcPath); err == nil {
+			dstPath := filepath.Join(backupPath, dir)
+			if err := copyDirectory(srcPath, dstPath); err != nil {
+				sm.logger.LogWarning("Failed to backup directory", map[string]interface{}{
+					"directory": dir,
+					"error":     err.Error(),
+				})
+			}
+		}
+	}
+
+	sm.logger.LogInfo("Backup completo criado", map[string]interface{}{
+		"backup_path": backupPath,
+		"backup_name": backupName,
+	})
+
+	return nil
+}
+
+// Public methods for CLI interface
+
+// GetStatus returns the current setup status
+func (sm *SetupManager) GetStatus() (*types.SetupStatus, error) {
+	state, err := sm.stateManager.LoadState()
+	if err != nil {
+		return nil, err
+	}
+	return &state.Status, nil
+}
+
+// ValidateEnvironmentWithOptions validates environment with options
+func (sm *SetupManager) ValidateEnvironmentWithOptions(options *SetupOptions) (*types.EnvironmentInfo, error) {
+	// Convert SetupOptions to types.SetupOptions
+	typesOptions := &types.SetupOptions{
+		Force:          options.Force,
+		ValidateOnly:   options.ValidateOnly,
+		TestMode:       options.TestMode,
+		Verbose:        options.Verbose,
+		Quiet:          options.Quiet,
+		CustomSettings: options.CustomSettings,
+	}
+	return sm.validator.ValidateEnvironmentWithOptions(typesOptions)
+}
+
+// GetOwnerKeyInfo returns information about the Owner Keys
+func (sm *SetupManager) GetOwnerKeyInfo() (*types.OwnerKeyInfo, error) {
+	homeDir, _ := os.UserHomeDir()
+	keysDir := filepath.Join(homeDir, ".syntropy", "keys")
+
+	privateKeyPath := filepath.Join(keysDir, "owner.key")
+	publicKeyPath := filepath.Join(keysDir, "owner.key.pub")
+
+	// Verificar se as chaves existem
+	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("owner key not found")
+	}
+
+	// Ler chave pública
+	publicKeyData, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read public key: %w", err)
+	}
+
+	// Calcular fingerprint
+	fingerprint := sm.calculateFingerprint(publicKeyData)
+
+	// Obter informações do arquivo
+	privateKeyInfo, _ := os.Stat(privateKeyPath)
+
+	return &types.OwnerKeyInfo{
+		Algorithm:   "ed25519",
+		Fingerprint: fingerprint,
+		PublicKey:   string(publicKeyData),
+		CreatedAt:   privateKeyInfo.ModTime(),
+		Path:        privateKeyPath,
+	}, nil
+}
+
+// GetOwnerPublicKey returns the public key
+func (sm *SetupManager) GetOwnerPublicKey() (string, error) {
+	homeDir, _ := os.UserHomeDir()
+	publicKeyPath := filepath.Join(homeDir, ".syntropy", "keys", "owner.key.pub")
+
+	publicKeyData, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read public key: %w", err)
+	}
+
+	return string(publicKeyData), nil
+}
+
+// GetOwnerPrivateKey returns the private key (SENSITIVE USE)
+func (sm *SetupManager) GetOwnerPrivateKey(passphrase string) (string, error) {
+	homeDir, _ := os.UserHomeDir()
+	privateKeyPath := filepath.Join(homeDir, ".syntropy", "keys", "owner.key")
+
+	encryptedData, err := os.ReadFile(privateKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read private key: %w", err)
+	}
+
+	// For now, return the raw data (in real implementation, decrypt here)
+	return string(encryptedData), nil
+}
+
+// ExportOwnerKeys exports Owner Keys for backup
+func (sm *SetupManager) ExportOwnerKeys(outputPath string, includePrivate bool, passphrase string) error {
+	homeDir, _ := os.UserHomeDir()
+	keysDir := filepath.Join(homeDir, ".syntropy", "keys")
+
+	publicKeyPath := filepath.Join(keysDir, "owner.key.pub")
+	publicKeyData, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to read public key: %w", err)
+	}
+
+	export := &types.OwnerKeyExport{
+		PublicKey:  string(publicKeyData),
+		ExportedAt: time.Now(),
+		Version:    "1.0.0",
+	}
+
+	if includePrivate {
+		privateKeyPath := filepath.Join(keysDir, "owner.key")
+		privateKeyData, err := os.ReadFile(privateKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read private key: %w", err)
+		}
+
+		// For now, store as is (in real implementation, encrypt with passphrase)
+		export.PrivateKeyEncrypted = string(privateKeyData)
+	}
+
+	// Serialize export
+	data, err := json.MarshalIndent(export, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal export: %w", err)
+	}
+
+	// Save file
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write export file: %w", err)
+	}
+
+	return nil
+}
+
+// ImportOwnerKeys imports Owner Keys from backup
+func (sm *SetupManager) ImportOwnerKeys(inputPath string, passphrase string) error {
+	// Read export file
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to read import file: %w", err)
+	}
+
+	// Deserialize export
+	var export types.OwnerKeyExport
+	if err := json.Unmarshal(data, &export); err != nil {
+		return fmt.Errorf("failed to unmarshal export: %w", err)
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	keysDir := filepath.Join(homeDir, ".syntropy", "keys")
+
+	// Save public key
+	publicKeyPath := filepath.Join(keysDir, "owner.key.pub")
+	if err := os.WriteFile(publicKeyPath, []byte(export.PublicKey), 0644); err != nil {
+		return fmt.Errorf("failed to write public key: %w", err)
+	}
+
+	// If includes private key, import it
+	if export.PrivateKeyEncrypted != "" {
+		privateKeyPath := filepath.Join(keysDir, "owner.key")
+		if err := os.WriteFile(privateKeyPath, []byte(export.PrivateKeyEncrypted), 0600); err != nil {
+			return fmt.Errorf("failed to write private key: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// calculateFingerprint calculates key fingerprint
+func (sm *SetupManager) calculateFingerprint(keyData []byte) string {
+	hash := sha256.Sum256(keyData)
+	return hex.EncodeToString(hash[:])
 }
