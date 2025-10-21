@@ -139,53 +139,15 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 		"algorithm": keyPair.Algorithm,
 	})
 
-	// Validar passphrase
-	if passphrase == "" {
-		return fmt.Errorf("passphrase não pode estar vazia")
-	}
-
-	// Criptografar chave privada
-	encryptedPrivateKey, err := km.encryptPrivateKey(keyPair.PrivateKey, passphrase)
-	if err != nil {
-		return types.ErrKeyStorageError(keyPair.ID, err)
-	}
-
-	// Salvar chave privada criptografada
-	privateKeyPath := filepath.Join(km.keysDir, "owner.key")
-	if err := os.WriteFile(privateKeyPath, encryptedPrivateKey, 0600); err != nil {
-		return types.ErrKeyStorageError(keyPair.ID, err)
-	}
-
-	// Salvar chave pública
-	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
-	if err := os.WriteFile(publicKeyPath, keyPair.PublicKey, 0600); err != nil {
-		// Limpar chave privada em caso de erro
-		os.Remove(privateKeyPath)
-		return types.ErrKeyStorageError(keyPair.ID, err)
-	}
-
-	// Salvar metadados
-	metadataPath := filepath.Join(km.keysDir, "owner.meta")
-	metadata, err := json.MarshalIndent(keyPair.Metadata, "", "  ")
-	if err != nil {
-		// Limpar arquivos em caso de erro
-		os.Remove(privateKeyPath)
-		os.Remove(publicKeyPath)
-		return types.ErrKeyStorageError(keyPair.ID, err)
-	}
-
-	if err := os.WriteFile(metadataPath, metadata, 0600); err != nil {
-		// Limpar arquivos em caso de erro
-		os.Remove(privateKeyPath)
-		os.Remove(publicKeyPath)
+	// Use keyring manager for Owner Key storage
+	keyringManager := NewOwnerKeyKeyringManager(km.logger)
+	if err := keyringManager.StorePrivateKeyInKeyring(keyPair, passphrase); err != nil {
 		return types.ErrKeyStorageError(keyPair.ID, err)
 	}
 
 	km.logger.LogStep("key_storage_completed", map[string]interface{}{
-		"key_id":           keyPair.ID,
-		"private_key_path": privateKeyPath,
-		"public_key_path":  publicKeyPath,
-		"metadata_path":    metadataPath,
+		"key_id":      keyPair.ID,
+		"fingerprint": keyPair.Fingerprint,
 	})
 
 	// Log critical operation for audit
@@ -204,71 +166,11 @@ func (km *KeyManager) LoadKeyPair(keyID string, passphrase string) (*types.KeyPa
 		"key_id": keyID,
 	})
 
-	// Verificar se os arquivos existem (usando nomes fixos)
-	privateKeyPath := filepath.Join(km.keysDir, "owner.key")
-	publicKeyPath := filepath.Join(km.keysDir, "owner.key.pub")
-	metadataPath := filepath.Join(km.keysDir, "owner.meta")
-
-	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("chave privada não encontrada: %s", keyID)
-	}
-
-	if _, err := os.Stat(publicKeyPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("chave pública não encontrada: %s", keyID)
-	}
-
-	// Ler chave privada criptografada
-	encryptedPrivateKey, err := os.ReadFile(privateKeyPath)
+	// Use keyring manager for Owner Key loading
+	keyringManager := NewOwnerKeyKeyringManager(km.logger)
+	keyPair, err := keyringManager.LoadPrivateKeyFromKeyring(keyID, passphrase)
 	if err != nil {
-		return nil, fmt.Errorf("falha ao ler chave privada: %w", err)
-	}
-
-	// Descriptografar chave privada
-	privateKey, err := km.decryptPrivateKey(encryptedPrivateKey, passphrase)
-	if err != nil {
-		return nil, fmt.Errorf("falha ao descriptografar chave privada: %w", err)
-	}
-
-	// Ler chave pública
-	publicKey, err := os.ReadFile(publicKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("falha ao ler chave pública: %w", err)
-	}
-
-	// Ler metadados
-	var metadata map[string]string
-	if _, err := os.Stat(metadataPath); err == nil {
-		metadataData, err := os.ReadFile(metadataPath)
-		if err == nil {
-			json.Unmarshal(metadataData, &metadata)
-		}
-	}
-
-	if metadata == nil {
-		metadata = make(map[string]string)
-	}
-
-	// Criar par de chaves
-	keyPair := &types.KeyPair{
-		ID:          keyID,
-		Algorithm:   "ed25519", // Assumindo Ed25519 por enquanto
-		PrivateKey:  privateKey,
-		PublicKey:   publicKey,
-		Fingerprint: km.generateFingerprint(publicKey),
-		Metadata:    metadata,
-	}
-
-	// Tentar extrair timestamps dos metadados
-	if createdAtStr, exists := metadata["created_at"]; exists {
-		if createdAt, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
-			keyPair.CreatedAt = createdAt
-		}
-	}
-
-	if expiresAtStr, exists := metadata["expires_at"]; exists {
-		if expiresAt, err := time.Parse(time.RFC3339, expiresAtStr); err == nil {
-			keyPair.ExpiresAt = expiresAt
-		}
+		return nil, fmt.Errorf("falha ao carregar chave: %w", err)
 	}
 
 	km.logger.LogDebug("Par de chaves carregado com sucesso", map[string]interface{}{
