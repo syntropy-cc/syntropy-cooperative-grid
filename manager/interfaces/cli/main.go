@@ -6,7 +6,6 @@ import (
 	"runtime"
 
 	setup "setup-component/src"
-	node "node-component/src"
 
 	"github.com/spf13/cobra"
 )
@@ -652,19 +651,39 @@ and automatically registers nodes without user intervention.`,
 }
 
 func init() {
-	// Initialize node commands
-	nodeManager := node.NewNodeManager()
-	if err := nodeManager.Initialize(); err != nil {
-		// Log error but don't fail - node commands will show appropriate error messages
-		fmt.Printf("Warning: Failed to initialize node manager: %v\n", err)
-	}
+	// Add node subcommands (stub implementation for build)
+	nodeCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List all nodes",
+		Long:  "List all nodes in the cooperative grid",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Node component is not yet fully integrated.")
+			fmt.Println("This is a placeholder command for build testing.")
+			return nil
+		},
+	})
 
-	// Create CLI commands handler
-	logger := node.NewLogger()
-	cliCommands := node.NewCLICommands(nodeManager, logger)
+	nodeCmd.AddCommand(&cobra.Command{
+		Use:   "create",
+		Short: "Create a new node",
+		Long:  "Create and provision a new node in the cooperative grid",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Node component is not yet fully integrated.")
+			fmt.Println("This is a placeholder command for build testing.")
+			return nil
+		},
+	})
 
-	// Register all node subcommands
-	cliCommands.RegisterCommands(nodeCmd)
+	nodeCmd.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Show node status",
+		Long:  "Show the status of a specific node",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Node component is not yet fully integrated.")
+			fmt.Println("This is a placeholder command for build testing.")
+			return nil
+		},
+	})
 }
 
 func main() {
