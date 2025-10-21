@@ -62,23 +62,11 @@ func (okm *OwnerKeyKeyringManager) StorePrivateKeyInKeyring(keyPair *types.KeyPa
 		return fmt.Errorf("failed to encrypt private key: %w", err)
 	}
 
-	// 2. Create keyring entry with metadata
-	keyringData := map[string]interface{}{
-		"encrypted_key": base64.StdEncoding.EncodeToString(encryptedKey),
-		"key_id":        keyPair.ID,
-		"algorithm":     keyPair.Algorithm,
-		"fingerprint":   keyPair.Fingerprint,
-		"created_at":    keyPair.CreatedAt.Format(time.RFC3339),
-		"metadata":      keyPair.Metadata,
-	}
-
-	jsonData, err := json.Marshal(keyringData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal keyring data: %w", err)
-	}
+	// 2. Store encrypted private key directly in keyring (like token)
+	encryptedKeyBase64 := base64.StdEncoding.EncodeToString(encryptedKey)
 
 	// 3. Store in system keyring
-	if err := keyring.Set(KeyringServiceOwnerKey, KeyringUserPrivateKey, string(jsonData)); err != nil {
+	if err := keyring.Set(KeyringServiceOwnerKey, KeyringUserPrivateKey, encryptedKeyBase64); err != nil {
 		okm.logger.LogWarning("keyring_save_failed", map[string]interface{}{
 			"error":            err.Error(),
 			"fallback_to_file": true,
@@ -112,7 +100,7 @@ func (okm *OwnerKeyKeyringManager) LoadPrivateKeyFromKeyring(keyID string, passp
 	}
 
 	// 1. Load from keyring
-	jsonData, err := keyring.Get(KeyringServiceOwnerKey, KeyringUserPrivateKey)
+	encryptedKeyBase64, err := keyring.Get(KeyringServiceOwnerKey, KeyringUserPrivateKey)
 	if err != nil {
 		okm.logger.LogWarning("keyring_load_failed", map[string]interface{}{
 			"error":            err.Error(),
@@ -121,15 +109,8 @@ func (okm *OwnerKeyKeyringManager) LoadPrivateKeyFromKeyring(keyID string, passp
 		return okm.loadPrivateKeyFromFile(keyID, passphrase)
 	}
 
-	// 2. Unmarshal keyring data
-	var keyringData map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonData), &keyringData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal keyring data: %w", err)
-	}
-
-	// 3. Decode and decrypt private key
-	encryptedKeyB64 := keyringData["encrypted_key"].(string)
-	encryptedKey, err := base64.StdEncoding.DecodeString(encryptedKeyB64)
+	// 2. Decode and decrypt private key
+	encryptedKey, err := base64.StdEncoding.DecodeString(encryptedKeyBase64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode encrypted key: %w", err)
 	}
@@ -139,27 +120,32 @@ func (okm *OwnerKeyKeyringManager) LoadPrivateKeyFromKeyring(keyID string, passp
 		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
 	}
 
-	// 4. Load public key from disk
+	// 3. Load public key from disk
 	publicKeyPath := filepath.Join(okm.keysDir, "owner.key.pub")
 	publicKey, err := os.ReadFile(publicKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public key: %w", err)
 	}
 
-	// 5. Reconstruct KeyPair
-	keyPair := &types.KeyPair{
-		ID:          keyringData["key_id"].(string),
-		Algorithm:   keyringData["algorithm"].(string),
-		PrivateKey:  privateKey,
-		PublicKey:   publicKey,
-		Fingerprint: keyringData["fingerprint"].(string),
-		Metadata:    keyringData["metadata"].(map[string]string),
+	// 4. Load metadata from disk
+	metadataPath := filepath.Join(okm.keysDir, "owner.meta")
+	var metadata map[string]string
+	if metadataBytes, err := os.ReadFile(metadataPath); err == nil {
+		json.Unmarshal(metadataBytes, &metadata)
+	}
+	if metadata == nil {
+		metadata = make(map[string]string)
 	}
 
-	if createdAtStr, ok := keyringData["created_at"].(string); ok {
-		if createdAt, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
-			keyPair.CreatedAt = createdAt
-		}
+	// 5. Reconstruct KeyPair
+	keyPair := &types.KeyPair{
+		ID:          keyID,
+		Algorithm:   "Ed25519",
+		PrivateKey:  privateKey,
+		PublicKey:   publicKey,
+		Fingerprint: fmt.Sprintf("%x", sha256.Sum256(publicKey)),
+		Metadata:    metadata,
+		CreatedAt:   time.Now(), // Default timestamp
 	}
 
 	okm.logger.LogStep("owner_key_keyring_load_completed", map[string]interface{}{
@@ -319,19 +305,20 @@ func (okm *OwnerKeyKeyringManager) loadPrivateKeyFromFile(keyID string, passphra
 	privateKeyPath := filepath.Join(okm.keysDir, "owner.key")
 	encryptedKey, err := os.ReadFile(privateKeyPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read private key file: %w", err)
 	}
 
+	// Decrypt the private key
 	privateKey, err := okm.decryptPrivateKeyCascade(encryptedKey, passphrase)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
 	}
 
 	// Load public key
 	publicKeyPath := filepath.Join(okm.keysDir, "owner.key.pub")
 	publicKey, err := os.ReadFile(publicKeyPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read public key file: %w", err)
 	}
 
 	// Load metadata
@@ -339,6 +326,9 @@ func (okm *OwnerKeyKeyringManager) loadPrivateKeyFromFile(keyID string, passphra
 	var metadata map[string]string
 	if metadataBytes, err := os.ReadFile(metadataPath); err == nil {
 		json.Unmarshal(metadataBytes, &metadata)
+	}
+	if metadata == nil {
+		metadata = make(map[string]string)
 	}
 
 	return &types.KeyPair{
@@ -348,6 +338,7 @@ func (okm *OwnerKeyKeyringManager) loadPrivateKeyFromFile(keyID string, passphra
 		PublicKey:   publicKey,
 		Fingerprint: fmt.Sprintf("%x", sha256.Sum256(publicKey)),
 		Metadata:    metadata,
+		CreatedAt:   time.Now(), // Default timestamp
 	}, nil
 }
 

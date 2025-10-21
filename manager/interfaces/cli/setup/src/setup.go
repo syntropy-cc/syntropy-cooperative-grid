@@ -920,29 +920,24 @@ func (sm *SetupManager) GetOwnerKeyInfo() (*types.OwnerKeyInfo, error) {
 
 // GetOwnerPublicKey returns the public key
 func (sm *SetupManager) GetOwnerPublicKey() (string, error) {
-	homeDir, _ := os.UserHomeDir()
-	publicKeyPath := filepath.Join(homeDir, ".syntropy", "keys", "owner.key.pub")
-
-	publicKeyData, err := os.ReadFile(publicKeyPath)
+	// Use KeyManager to load the key pair
+	keyPair, err := sm.keyManager.LoadKeyPair("owner", "default_passphrase")
 	if err != nil {
-		return "", fmt.Errorf("failed to read public key: %w", err)
+		return "", fmt.Errorf("failed to load public key: %w", err)
 	}
 
-	return string(publicKeyData), nil
+	return string(keyPair.PublicKey), nil
 }
 
 // GetOwnerPrivateKey returns the private key (SENSITIVE USE)
 func (sm *SetupManager) GetOwnerPrivateKey(passphrase string) (string, error) {
-	homeDir, _ := os.UserHomeDir()
-	privateKeyPath := filepath.Join(homeDir, ".syntropy", "keys", "owner.key")
-
-	encryptedData, err := os.ReadFile(privateKeyPath)
+	// Use KeyManager to load the key pair with proper decryption
+	keyPair, err := sm.keyManager.LoadKeyPair("owner", passphrase)
 	if err != nil {
-		return "", fmt.Errorf("failed to read private key: %w", err)
+		return "", fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	// For now, return the raw data (in real implementation, decrypt here)
-	return string(encryptedData), nil
+	return string(keyPair.PrivateKey), nil
 }
 
 // ExportOwnerKeys exports Owner Keys for backup

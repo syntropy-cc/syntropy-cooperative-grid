@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	setup "setup-component/src"
@@ -717,11 +719,11 @@ CHAVE PÚBLICA:
 
 CHAVE PRIVADA:
    • EXTREMAMENTE SENSÍVEL - nunca compartilhe!
-   • Requer confirmação dupla (--private --confirm)
+   • Requer confirmação dupla (--force --confirm)
    • Acesso é registrado em log de auditoria
    • Use apenas quando absolutamente necessário`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		showPrivate, _ := cmd.Flags().GetBool("private")
+		showPrivate, _ := cmd.Flags().GetBool("force")
 		confirm, _ := cmd.Flags().GetBool("confirm")
 
 		manager, err := setup.NewSetupManager()
@@ -743,27 +745,53 @@ CHAVE PRIVADA:
 		fmt.Println("✅ Esta chave pode ser compartilhada livremente")
 		fmt.Println()
 
-		// Mostrar chave privada apenas com confirmação
+		// Mostrar preview da chave privada ou chave completa
 		if showPrivate {
 			if !confirm {
-				fmt.Println("⚠️  Para exibir a chave PRIVADA, use: --private --confirm")
+				// Mostrar preview da chave privada
+				privateKey, err := manager.GetOwnerPrivateKey("default_passphrase")
+				if err != nil {
+					return fmt.Errorf("❌ Falha ao obter chave privada: %w", err)
+				}
+
+				fmt.Println("🔐 Owner Private Key (Preview)")
+				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+				fmt.Printf("%s...[OCULTO]\n", privateKey[:8])
+				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 				fmt.Println()
 				fmt.Println("🚨 AVISO DE SEGURANÇA:")
 				fmt.Println("   • A chave privada é EXTREMAMENTE SENSÍVEL")
 				fmt.Println("   • NUNCA compartilhe sua chave privada")
-				fmt.Println("   • Esta operação será registrada em log")
+				fmt.Println("   • Use --force --confirm para ver a chave completa")
 				return nil
 			}
 
 			// Dupla confirmação
 			fmt.Println("🚨 ATENÇÃO: Você está prestes a visualizar sua CHAVE PRIVADA!")
 			fmt.Print("   Digite 'SHOW PRIVATE KEY' para confirmar: ")
-			var response string
-			fmt.Scanln(&response)
-			if response != "SHOW PRIVATE KEY" {
-				fmt.Println("❌ Operação cancelada")
+
+			// Usar bufio.Reader para melhor compatibilidade com Windows/WSL
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("❌ Erro ao ler entrada:", err)
 				return nil
 			}
+
+			// Remover quebras de linha e espaços
+			response = strings.TrimSpace(response)
+
+			// Verificar se a resposta está correta (case-insensitive para melhor UX)
+			expected := "SHOW PRIVATE KEY"
+			if strings.ToUpper(response) != strings.ToUpper(expected) {
+				fmt.Println("❌ Operação cancelada - confirmação incorreta")
+				fmt.Printf("   Esperado: '%s'\n", expected)
+				fmt.Printf("   Recebido: '%s'\n", response)
+				fmt.Println("   💡 Dica: Digite exatamente: SHOW PRIVATE KEY")
+				return nil
+			}
+
+			fmt.Println("✅ Confirmação aceita!")
 
 			privateKey, err := manager.GetOwnerPrivateKey("default_passphrase")
 			if err != nil {
@@ -1005,7 +1033,7 @@ func init() {
 	setupTokenDeleteCmd.Flags().Bool("force", false, "pular confirmação de deleção")
 
 	// Key flags
-	setupKeyShowCmd.Flags().Bool("private", false, "exibir chave privada (requer --confirm)")
+	setupKeyShowCmd.Flags().Bool("force", false, "exibir chave privada (requer --confirm)")
 	setupKeyShowCmd.Flags().Bool("confirm", false, "confirmar exibição de chave privada")
 	setupKeyExportCmd.Flags().Bool("include-private", false, "incluir chave privada no backup")
 
