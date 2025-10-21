@@ -135,6 +135,13 @@ func (tm *TokenManager) SaveToken(token string) error {
 		"token_preview":  token[:8] + "...[HIDDEN]",
 	})
 
+	// Log critical operation for audit
+	auditLogger := NewSecurityAuditLogger()
+	auditLogger.LogCriticalOperation("token", "grid_token", "save", "success", map[string]interface{}{
+		"storage_method": "keyring",
+		"token_preview":  token[:8] + "...",
+	})
+
 	return nil
 }
 
@@ -168,6 +175,10 @@ func (tm *TokenManager) LoadToken() (string, error) {
 		"token_preview":  token[:8] + "...[HIDDEN]",
 	})
 
+	// Log critical operation for audit
+	auditLogger := NewSecurityAuditLogger()
+	auditLogger.LogCriticalOperation("token", "grid_token", "load", "success", nil)
+
 	return token, nil
 }
 
@@ -193,6 +204,10 @@ func (tm *TokenManager) DeleteToken() error {
 	tm.logger.LogStep("token_delete_completed", map[string]interface{}{
 		"storage_method": "keyring",
 	})
+
+	// Log critical operation for audit
+	auditLogger := NewSecurityAuditLogger()
+	auditLogger.LogCriticalOperation("token", "grid_token", "delete", "success", nil)
 
 	return nil
 }

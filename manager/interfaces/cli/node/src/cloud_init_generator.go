@@ -1,6 +1,11 @@
 package node
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +16,7 @@ import (
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // CloudInitGenerator generates cloud-init configurations for nodes
@@ -22,14 +28,14 @@ type CloudInitGenerator struct {
 
 // CloudInitTemplateData contains data for cloud-init templates
 type CloudInitTemplateData struct {
-	NodeID           string
-	GridToken        string
-	SSHPublicKey     string
-	CommandStationIP string
-	NodeCertificate  string
-	CreatedAt        string
-	InstanceID       string
-	Hostname         string
+	NodeID             string
+	GridTokenEncrypted string // CHANGED: was GridToken
+	SSHPublicKey       string
+	CommandStationIP   string
+	NodeCertificate    string
+	CreatedAt          string
+	InstanceID         string
+	Hostname           string
 }
 
 // NewCloudInitGenerator creates a new cloud-init generator
@@ -48,16 +54,22 @@ func NewCloudInitGenerator(logger types.Logger) types.CloudInitGenerator {
 func (cig *CloudInitGenerator) GenerateCloudInit(config *types.NodeConfig) (*types.CloudInitConfig, error) {
 	cig.logger.Info("Generating cloud-init configuration", "nodeID", config.NodeID)
 
+	// Criptografar token antes de incluir no template
+	encryptedToken, err := cig.encryptGridToken(config.GridToken, config.NodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt grid token: %w", err)
+	}
+
 	// Prepare template data with default options
 	templateData := &CloudInitTemplateData{
-		NodeID:           config.NodeID,
-		GridToken:        config.GridToken,
-		SSHPublicKey:     config.SSHPublicKey,
-		CommandStationIP: config.CommandStationIP,
-		NodeCertificate:  config.NodeCertificate,
-		CreatedAt:        config.CreatedAt.Format(time.RFC3339),
-		InstanceID:       fmt.Sprintf("syntropy-node-%s", config.NodeID),
-		Hostname:         config.NodeID,
+		NodeID:             config.NodeID,
+		GridTokenEncrypted: encryptedToken.Ciphertext,
+		SSHPublicKey:       config.SSHPublicKey,
+		CommandStationIP:   config.CommandStationIP,
+		NodeCertificate:    config.NodeCertificate,
+		CreatedAt:          config.CreatedAt.Format(time.RFC3339),
+		InstanceID:         fmt.Sprintf("syntropy-node-%s", config.NodeID),
+		Hostname:           config.NodeID,
 	}
 
 	// Generate user-data.yaml
@@ -149,6 +161,38 @@ func (cig *CloudInitGenerator) generateUserData(data *CloudInitTemplateData) (st
 	}
 
 	return output.String(), nil
+}
+
+// encryptGridToken encrypts token with node-specific key
+func (cig *CloudInitGenerator) encryptGridToken(token string, nodeID string) (*types.EncryptedTokenData, error) {
+	// Gerar chave derivada do Node Certificate
+	nodeSeed := sha256.Sum256([]byte(nodeID))
+	nodeKey := pbkdf2.Key(nodeSeed[:], []byte("syntropy-grid"), 50000, 32, sha256.New)
+
+	// Criptografar token
+	block, err := aes.NewCipher(nodeKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, []byte(token), nil)
+
+	// Retornar dados estruturados
+	return &types.EncryptedTokenData{
+		Ciphertext:  base64.StdEncoding.EncodeToString(ciphertext),
+		NodeID:      nodeID,
+		EncryptedAt: time.Now(),
+	}, nil
 }
 
 // generateNetworkConfig generates the network-config.yaml file
@@ -438,14 +482,14 @@ func (cig *CloudInitGenerator) GetCloudInitStats() (*types.CloudInitStats, error
 // GenerateNetworkConfig generates network configuration
 func (cig *CloudInitGenerator) GenerateNetworkConfig() (string, error) {
 	templateData := &CloudInitTemplateData{
-		NodeID:           "default",
-		GridToken:        "",
-		SSHPublicKey:     "",
-		CommandStationIP: "",
-		NodeCertificate:  "",
-		CreatedAt:        time.Now().Format(time.RFC3339),
-		InstanceID:       "default",
-		Hostname:         "default",
+		NodeID:             "default",
+		GridTokenEncrypted: "",
+		SSHPublicKey:       "",
+		CommandStationIP:   "",
+		NodeCertificate:    "",
+		CreatedAt:          time.Now().Format(time.RFC3339),
+		InstanceID:         "default",
+		Hostname:           "default",
 	}
 
 	return cig.generateNetworkConfig(templateData)

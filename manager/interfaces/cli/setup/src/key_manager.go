@@ -1,7 +1,10 @@
 package setup
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -13,6 +16,9 @@ import (
 	"time"
 
 	"setup-component/src/internal/types"
+
+	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // KeyManager implementa a interface KeyManager
@@ -182,6 +188,13 @@ func (km *KeyManager) StoreKeyPair(keyPair *types.KeyPair, passphrase string) er
 		"metadata_path":    metadataPath,
 	})
 
+	// Log critical operation for audit
+	auditLogger := NewSecurityAuditLogger()
+	auditLogger.LogCriticalOperation("owner_key", keyPair.ID, "store", "success", map[string]interface{}{
+		"algorithm":   keyPair.Algorithm,
+		"fingerprint": keyPair.Fingerprint,
+	})
+
 	return nil
 }
 
@@ -263,6 +276,10 @@ func (km *KeyManager) LoadKeyPair(keyID string, passphrase string) (*types.KeyPa
 		"algorithm":   keyPair.Algorithm,
 		"fingerprint": keyPair.Fingerprint,
 	})
+
+	// Log critical operation for audit
+	auditLogger := NewSecurityAuditLogger()
+	auditLogger.LogCriticalOperation("owner_key", keyID, "load", "success", nil)
 
 	return keyPair, nil
 }
@@ -526,18 +543,96 @@ func (km *KeyManager) generateKeyID() string {
 	return base64.StdEncoding.EncodeToString(randomBytes)
 }
 
-// encryptPrivateKey criptografa a chave privada
+// encryptPrivateKey criptografa a chave privada com cascade encryption
 func (km *KeyManager) encryptPrivateKey(privateKey []byte, passphrase string) ([]byte, error) {
-	// Implementação simplificada - em produção usar AES-256-GCM
-	// Por enquanto, apenas codificar em base64
-	return []byte(base64.StdEncoding.EncodeToString(privateKey)), nil
+	// 1. Derivar chave com argon2id (resistente a GPU)
+	salt := make([]byte, 32)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	key1 := argon2.IDKey([]byte(passphrase), salt, 3, 64*1024, 4, 32)
+
+	// 2. Segunda derivação com PBKDF2 (defesa em profundidade)
+	key2 := pbkdf2.Key(key1, salt, 100000, 32, sha256.New)
+
+	// 3. Criptografar com AES-256-GCM
+	block, err := aes.NewCipher(key2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, privateKey, nil)
+
+	// 4. Computar HMAC para verificação de integridade
+	mac := hmac.New(sha256.New, key2)
+	mac.Write(ciphertext)
+	hmacValue := mac.Sum(nil)
+
+	// 5. Empacotar: salt + ciphertext + hmac
+	result := append(salt, ciphertext...)
+	result = append(result, hmacValue...)
+
+	return result, nil
 }
 
-// decryptPrivateKey descriptografa a chave privada
+// decryptPrivateKey descriptografa a chave privada com cascade decryption
 func (km *KeyManager) decryptPrivateKey(encryptedPrivateKey []byte, passphrase string) ([]byte, error) {
-	// Implementação simplificada - em produção usar AES-256-GCM
-	// Por enquanto, apenas decodificar de base64
-	return base64.StdEncoding.DecodeString(string(encryptedPrivateKey))
+	// 1. Extrair componentes: salt + ciphertext + hmac
+	if len(encryptedPrivateKey) < 96 { // 32 (salt) + 32 (hmac) + mínimo para ciphertext
+		return nil, fmt.Errorf("encrypted data too short")
+	}
+
+	salt := encryptedPrivateKey[:32]
+	ciphertext := encryptedPrivateKey[32 : len(encryptedPrivateKey)-32]
+	hmacValue := encryptedPrivateKey[len(encryptedPrivateKey)-32:]
+
+	// 2. Derivar chaves (mesmo processo da criptografia)
+	key1 := argon2.IDKey([]byte(passphrase), salt, 3, 64*1024, 4, 32)
+	key2 := pbkdf2.Key(key1, salt, 100000, 32, sha256.New)
+
+	// 3. Verificar HMAC
+	mac := hmac.New(sha256.New, key2)
+	mac.Write(ciphertext)
+	expectedHMAC := mac.Sum(nil)
+
+	if !hmac.Equal(hmacValue, expectedHMAC) {
+		return nil, fmt.Errorf("HMAC verification failed - data may be corrupted")
+	}
+
+	// 4. Descriptografar com AES-256-GCM
+	block, err := aes.NewCipher(key2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return plaintext, nil
 }
 
 // backupKey cria um backup de uma chave específica

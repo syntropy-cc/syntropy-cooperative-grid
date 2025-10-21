@@ -49,6 +49,13 @@ type CloudInitConfig struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+// EncryptedTokenData encrypted token for cloud-init
+type EncryptedTokenData struct {
+	Ciphertext  string    `json:"ciphertext"`
+	NodeID      string    `json:"node_id"`
+	EncryptedAt time.Time `json:"encrypted_at"`
+}
+
 type NodeAnnouncement struct {
 	Type            string        `json:"type"`
 	NodeID          string        `json:"node_id"`
