@@ -55,6 +55,14 @@ func NewTokenManager(logger types.SetupLogger) *TokenManager {
 	homeDir, _ := os.UserHomeDir()
 	tokensDir := filepath.Join(homeDir, ".syntropy", "tokens")
 
+	// Garantir que o diretório seja criado com permissões corretas
+	if err := os.MkdirAll(tokensDir, 0700); err != nil {
+		logger.LogWarning("failed to create tokens directory", map[string]interface{}{
+			"error": err.Error(),
+			"path":  tokensDir,
+		})
+	}
+
 	return &TokenManager{
 		logger:           logger,
 		tokensDir:        tokensDir, // Agora usa ~/.syntropy/tokens/ em vez de backups

@@ -117,6 +117,7 @@ func (c *Configurator) CreateStructure() error {
 		filepath.Join(baseDir, "backups"),
 		filepath.Join(baseDir, "templates"),
 		filepath.Join(baseDir, "state"),
+		filepath.Join(baseDir, "tokens"),
 	}
 
 	for _, dir := range directories {

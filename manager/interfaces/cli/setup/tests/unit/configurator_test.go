@@ -156,6 +156,7 @@ func TestConfigurator_CreateStructure(t *testing.T) {
 					"backups",
 					"templates",
 					"state",
+					"tokens",
 				}
 
 				for _, dir := range directories {

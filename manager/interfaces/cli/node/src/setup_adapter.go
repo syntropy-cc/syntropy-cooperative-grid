@@ -1,9 +1,11 @@
 package node
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
@@ -60,14 +62,27 @@ func (stma *SetupTokenManagerAdapter) LoadToken() (string, error) {
 		return token, nil
 	}
 
-	// Fallback to file-based storage
-	tokenFile := filepath.Join(homeDir, ".syntropy", "tokens", "grid-token")
+	// Fallback: ler grid-token.json (formato do Setup)
+	tokenFile := filepath.Join(homeDir, ".syntropy", "tokens", "grid-token.json")
 	if _, err := os.Stat(tokenFile); err == nil {
 		tokenBytes, err := os.ReadFile(tokenFile)
 		if err != nil {
 			return "", fmt.Errorf("failed to read token file: %w", err)
 		}
-		return string(tokenBytes), nil
+
+		// Parse JSON estrutura TokenBackup
+		var backup struct {
+			Token     string    `json:"token"`
+			CreatedAt time.Time `json:"created_at"`
+			Version   string    `json:"version"`
+			Checksum  string    `json:"checksum"`
+		}
+
+		if err := json.Unmarshal(tokenBytes, &backup); err != nil {
+			return "", fmt.Errorf("failed to parse token file: %w", err)
+		}
+
+		return backup.Token, nil
 	}
 
 	return "", fmt.Errorf("grid token not found - please run 'syntropy setup' first")
