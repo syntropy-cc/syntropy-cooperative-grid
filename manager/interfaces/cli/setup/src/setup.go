@@ -163,9 +163,11 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 			return sm.handleError(err, "grid_token_save_failed")
 		}
 
+		// Log apenas durante setup run (não em comandos subsequentes)
 		sm.logger.LogStep("grid_token_generation_completed", map[string]interface{}{
 			"token_preview":  gridToken[:8] + "...[HIDDEN]",
 			"storage_method": "keyring",
+			"setup_phase":    "initial_setup",
 		})
 	}
 

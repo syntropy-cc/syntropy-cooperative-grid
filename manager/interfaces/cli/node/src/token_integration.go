@@ -52,17 +52,36 @@ func (ti *TokenIntegration) Initialize(setupTokenManager SetupTokenManager, logg
 	ti.setupTokenManager = setupTokenManager
 	ti.logger = logger
 
+	// Log debug info about token check
+	ti.logger.Debug("Checking for existing grid token in setup component")
+
 	// Verify token exists in Setup Component
 	exists, err := ti.setupTokenManager.TokenExists()
 	if err != nil {
+		// Log detailed error for debugging
+		ti.logger.Error("Failed to check token existence", "error", err.Error())
 		return fmt.Errorf("failed to check token existence: %w", err)
 	}
 
 	if !exists {
-		return fmt.Errorf("grid token not found in setup component - please run 'syntropy setup' first")
+		ti.logger.Warn("Grid token not found in setup component")
+		return fmt.Errorf("grid token not found in setup component - please run 'syntropy setup run' first")
 	}
 
-	ti.logger.Info("Token integration initialized successfully")
+	// Try to load token to verify it's accessible
+	token, err := ti.setupTokenManager.LoadToken()
+	if err != nil {
+		ti.logger.Error("Token exists but cannot be loaded", "error", err.Error())
+		return fmt.Errorf("token exists but cannot be loaded: %w", err)
+	}
+
+	// Validate token format
+	if err := ti.validateTokenFormat(token); err != nil {
+		ti.logger.Error("Token loaded but format is invalid", "error", err.Error())
+		return fmt.Errorf("token format is invalid: %w", err)
+	}
+
+	ti.logger.Info("Token integration initialized successfully", "token_preview", token[:8]+"...")
 	return nil
 }
 

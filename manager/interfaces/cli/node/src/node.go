@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -72,9 +73,19 @@ func (nm *NodeManager) Initialize() error {
 
 	// Initialize the token integration with Setup Component
 	if err := setupAdapter.InitializeTokenIntegration(nm.tokenIntegration); err != nil {
-		nm.logger.Warn("Failed to initialize token integration with Setup Component - continuing in degraded mode", "error", err)
-		// Continue without token integration - some commands may not work but basic functionality remains
-		nm.tokenIntegration = nil
+		// Check if this is a "token not found" error vs other errors
+		if strings.Contains(err.Error(), "grid token not found in setup component") {
+			// Token doesn't exist - this is expected and should fail commands that need token
+			nm.logger.Warn("Grid token not found - some commands will not be available", "error", err)
+			nm.tokenIntegration = nil
+		} else {
+			// Other errors (permission, corruption, etc.) - fail initialization
+			nm.logger.Error("Failed to initialize token integration due to system error", "error", err)
+			return fmt.Errorf("token integration initialization failed: %w", err)
+		}
+	} else {
+		// Token integration successful - no warnings needed
+		nm.logger.Debug("Token integration initialized successfully")
 	}
 
 	// Initialize component services
@@ -572,8 +583,29 @@ func NewEventBus() types.EventBus {
 
 // NewLogger creates a new logger
 func NewLogger() types.Logger {
+	homeDir, _ := os.UserHomeDir()
+	logDir := filepath.Join(homeDir, ".syntropy", "logs")
+
+	// Criar diretório de logs se não existir
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		// Se não conseguir criar diretório, usar diretório temporário
+		logDir = os.TempDir()
+	}
+
+	// Criar arquivo de log com timestamp
+	timestamp := time.Now().Format("20060102")
+	logPath := filepath.Join(logDir, fmt.Sprintf("syntropy-%s.log", timestamp))
+
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		// Fallback para stdout se não conseguir criar arquivo
+		logFile = os.Stdout
+	}
+
 	return &logger{
-		level: constants.DefaultLogLevel,
+		level:   constants.DefaultLogLevel,
+		logFile: logFile,
+		logDir:  logDir,
 	}
 }
 

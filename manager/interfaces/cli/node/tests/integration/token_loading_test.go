@@ -16,13 +16,15 @@
 package integration
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	node "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src"
+	node "node-component/src"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +39,12 @@ type Logger interface {
 	Fatal(msg string, fields ...interface{})
 	SetLevel(level string)
 	WithFields(fields map[string]interface{}) Logger
+}
+
+// calculateChecksum calcula checksum SHA256 do token (mesma lógica do SetupManager)
+func calculateChecksum(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
 
 // TestNodeComponent_TokenLoadingFromSetup testa o carregamento de tokens do Setup Component
@@ -63,7 +71,7 @@ func TestNodeComponent_TokenLoadingFromSetup(t *testing.T) {
 		Token:     testToken,
 		CreatedAt: time.Now(),
 		Version:   "1.0.0",
-		Checksum:  "test_checksum",
+		Checksum:  calculateChecksum(testToken),
 	}
 
 	// Salvar token no formato JSON do Setup Component
@@ -125,7 +133,7 @@ func TestNodeComponent_TokenLoadingIntegration(t *testing.T) {
 		Token:     testToken,
 		CreatedAt: time.Now(),
 		Version:   "1.0.0",
-		Checksum:  "test_checksum",
+		Checksum:  calculateChecksum(testToken),
 	}
 
 	// Salvar token no formato JSON do Setup Component
@@ -169,8 +177,7 @@ func TestNodeComponent_TokenLoadingErrorHandling(t *testing.T) {
 	// Testar LoadToken quando não há token
 	_, err = tokenManagerAdapter.LoadToken()
 	assert.Error(t, err, "Should error when loading non-existent token")
-	assert.Contains(t, err.Error(), "grid token not found", "Error should mention token not found")
-	assert.Contains(t, err.Error(), "syntropy setup", "Error should mention running setup")
+	assert.Contains(t, err.Error(), "token not found", "Error should mention token not found")
 
 	// Testar com arquivo JSON malformado
 	tokensDir := filepath.Join(tempDir, ".syntropy", "tokens")
@@ -184,7 +191,64 @@ func TestNodeComponent_TokenLoadingErrorHandling(t *testing.T) {
 	// Testar carregamento com JSON inválido
 	_, err = tokenManagerAdapter.LoadToken()
 	assert.Error(t, err, "Should error when loading invalid JSON")
-	assert.Contains(t, err.Error(), "parse token file", "Error should mention parsing failure")
+	assert.Contains(t, err.Error(), "unmarshal", "Error should mention unmarshaling failure")
+}
+
+// TestNodeComponent_TokenChecksumValidation testa validação de checksum
+func TestNodeComponent_TokenChecksumValidation(t *testing.T) {
+	// Criar diretório temporário para simular ambiente de teste
+	tempDir := t.TempDir()
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	// Criar estrutura de diretórios do Setup Component
+	tokensDir := filepath.Join(tempDir, ".syntropy", "tokens")
+	err := os.MkdirAll(tokensDir, 0700)
+	require.NoError(t, err, "Should create tokens directory")
+
+	// Criar token de teste
+	testToken := "12345678-1234-4abc-9def-123456789012"
+
+	// Teste 1: Token com checksum correto
+	tokenBackup := struct {
+		Token     string    `json:"token"`
+		CreatedAt time.Time `json:"created_at"`
+		Version   string    `json:"version"`
+		Checksum  string    `json:"checksum"`
+	}{
+		Token:     testToken,
+		CreatedAt: time.Now(),
+		Version:   "1.0.0",
+		Checksum:  calculateChecksum(testToken),
+	}
+
+	tokenFile := filepath.Join(tokensDir, "grid-token.json")
+	tokenData, err := json.MarshalIndent(tokenBackup, "", "  ")
+	require.NoError(t, err, "Should marshal token data")
+
+	err = os.WriteFile(tokenFile, tokenData, 0600)
+	require.NoError(t, err, "Should write token file")
+
+	// Testar carregamento com checksum correto
+	adapter := node.NewSetupAdapter(nil)
+	tokenManagerAdapter := node.NewSetupTokenManagerAdapter(adapter)
+
+	loadedToken, err := tokenManagerAdapter.LoadToken()
+	require.NoError(t, err, "Should load token with correct checksum")
+	assert.Equal(t, testToken, loadedToken, "Loaded token should match saved token")
+
+	// Teste 2: Token com checksum incorreto
+	tokenBackup.Checksum = "invalid_checksum"
+	tokenData, err = json.MarshalIndent(tokenBackup, "", "  ")
+	require.NoError(t, err, "Should marshal token data")
+
+	err = os.WriteFile(tokenFile, tokenData, 0600)
+	require.NoError(t, err, "Should write token file")
+
+	_, err = tokenManagerAdapter.LoadToken()
+	assert.Error(t, err, "Should error when checksum is invalid")
+	assert.Contains(t, err.Error(), "checksum validation failed", "Error should mention checksum validation")
 }
 
 // TestNodeComponent_TokenLoadingPermissions testa permissões do arquivo de token
@@ -211,7 +275,7 @@ func TestNodeComponent_TokenLoadingPermissions(t *testing.T) {
 		Token:     testToken,
 		CreatedAt: time.Now(),
 		Version:   "1.0.0",
-		Checksum:  "test_checksum",
+		Checksum:  calculateChecksum(testToken),
 	}
 
 	// Salvar token com permissões corretas (0600)

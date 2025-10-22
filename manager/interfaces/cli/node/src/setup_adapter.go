@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"node-component/src/internal/types"
+
+	"github.com/zalando/go-keyring"
 )
 
 // Constantes para o Keyring (mesmas do SetupManager)
@@ -43,14 +46,26 @@ func NewSetupTokenManagerAdapter(adapter *SetupAdapter) *SetupTokenManagerAdapte
 	homeDir, _ := os.UserHomeDir()
 	tokensDir := filepath.Join(homeDir, ".syntropy", "tokens")
 
+	// Log debug para identificar o ambiente (apenas em modo debug)
+	if adapter.logger != nil {
+		adapter.logger.Debug("Creating SetupTokenManagerAdapter",
+			"home_dir", homeDir,
+			"tokens_dir", tokensDir,
+			"os", runtime.GOOS,
+			"arch", runtime.GOARCH)
+	}
+
 	// Garantir que o diretório seja criado com permissões corretas
 	if err := os.MkdirAll(tokensDir, 0700); err != nil {
 		adapter.logger.Warn("Failed to create tokens directory", "error", err, "path", tokensDir)
 	}
 
+	// Detectar se o keyring está disponível (mesmo que o Setup Component)
+	keyringAvailable := isKeyringAvailable()
+
 	return &SetupTokenManagerAdapter{
 		adapter:          adapter,
-		keyringAvailable: false, // Simplificado: usar apenas arquivo
+		keyringAvailable: keyringAvailable,
 		tokensDir:        tokensDir,
 	}
 }
@@ -71,9 +86,36 @@ func (stma *SetupTokenManagerAdapter) SaveToken(token string) error {
 
 // LoadToken loads the token from Setup Component storage
 func (stma *SetupTokenManagerAdapter) LoadToken() (string, error) {
-	// Para simplificar e evitar dependências externas, usar apenas fallback de arquivo
-	// O SetupManager já gerencia o keyring, então o NodeManager pode usar apenas o arquivo
-	return stma.loadTokenFromFile()
+	// Usar a mesma lógica do Setup Component: keyring primeiro, fallback para arquivo
+	if !stma.keyringAvailable {
+		return stma.loadTokenFromFile()
+	}
+
+	// Tentar carregar do keyring primeiro
+	token, err := keyring.Get(KeyringService, KeyringUser)
+	if err != nil {
+		if err == keyring.ErrNotFound {
+			// Log que está usando fallback para arquivo
+			if stma.adapter.logger != nil {
+				stma.adapter.logger.Debug("Token not found in keyring, using file fallback")
+			}
+			// Verificar se existe em arquivo como fallback
+			return stma.loadTokenFromFile()
+		}
+		return "", fmt.Errorf("failed to load token from keyring: %w", err)
+	}
+
+	// Log que carregou do keyring
+	if stma.adapter.logger != nil {
+		stma.adapter.logger.Debug("Token loaded from keyring")
+	}
+
+	// Validar token carregado
+	if err := stma.ValidateToken(token); err != nil {
+		return "", fmt.Errorf("loaded token is invalid: %w", err)
+	}
+
+	return token, nil
 }
 
 // DeleteToken deletes the token (delegates to Setup Component)
@@ -84,9 +126,22 @@ func (stma *SetupTokenManagerAdapter) DeleteToken() error {
 
 // TokenExists checks if token exists (delegates to Setup Component)
 func (stma *SetupTokenManagerAdapter) TokenExists() (bool, error) {
-	// Para simplificar e evitar dependências externas, verificar apenas arquivo
-	// O SetupManager já gerencia o keyring, então o NodeManager pode usar apenas o arquivo
-	return stma.tokenExistsInFile()
+	// Usar a mesma lógica do Setup Component: keyring primeiro, fallback para arquivo
+	if !stma.keyringAvailable {
+		return stma.tokenExistsInFile()
+	}
+
+	// Verificar no keyring primeiro
+	_, err := keyring.Get(KeyringService, KeyringUser)
+	if err != nil {
+		if err == keyring.ErrNotFound {
+			// Verificar se existe em arquivo como fallback
+			return stma.tokenExistsInFile()
+		}
+		return false, fmt.Errorf("failed to check token existence: %w", err)
+	}
+
+	return true, nil
 }
 
 // RotateToken rotates the token (delegates to Setup Component)
@@ -152,7 +207,23 @@ func (stma *SetupTokenManagerAdapter) loadTokenFromFile() (string, error) {
 	// Validar checksum (mesma lógica do SetupManager)
 	expectedChecksum := stma.calculateChecksum(backup.Token)
 	if backup.Checksum != expectedChecksum {
-		return "", fmt.Errorf("token backup checksum validation failed")
+		// Log detalhado para debug
+		if stma.adapter.logger != nil {
+			stma.adapter.logger.Warn("Token checksum validation failed",
+				"expected", expectedChecksum,
+				"actual", backup.Checksum,
+				"token_preview", backup.Token[:8]+"...",
+				"file_path", backupPath)
+		}
+		return "", fmt.Errorf("token backup checksum validation failed: expected %s, got %s", expectedChecksum, backup.Checksum)
+	}
+
+	// Log sucesso para debug
+	if stma.adapter.logger != nil {
+		stma.adapter.logger.Debug("Token loaded successfully from file",
+			"token_preview", backup.Token[:8]+"...",
+			"file_path", backupPath,
+			"checksum_valid", true)
 	}
 
 	return backup.Token, nil
@@ -169,6 +240,19 @@ func (stma *SetupTokenManagerAdapter) tokenExistsInFile() (bool, error) {
 func (stma *SetupTokenManagerAdapter) calculateChecksum(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
+}
+
+// isKeyringAvailable verifica se o keyring está disponível (mesma lógica do SetupManager)
+func isKeyringAvailable() bool {
+	// Tentar uma operação simples para verificar disponibilidade
+	err := keyring.Set("test-service", "test-user", "test-value")
+	if err != nil {
+		return false
+	}
+
+	// Limpar o teste
+	keyring.Delete("test-service", "test-user")
+	return true
 }
 
 // CreateTokenIntegration creates a TokenIntegration instance using the Setup Component

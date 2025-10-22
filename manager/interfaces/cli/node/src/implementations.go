@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -63,33 +64,61 @@ func (eb *eventBus) Close() {
 
 // Logger implementation
 type logger struct {
-	level string
+	level   string
+	logFile *os.File
+	logDir  string
 }
 
 func (l *logger) Debug(msg string, fields ...interface{}) {
 	if l.level == "debug" {
-		fmt.Printf("[DEBUG] %s %v\n", msg, fields)
+		l.writeToFile("DEBUG", msg, fields...)
 	}
 }
 
 func (l *logger) Info(msg string, fields ...interface{}) {
-	fmt.Printf("[INFO] %s %v\n", msg, fields)
+	// INFO vai apenas para arquivo, não para terminal
+	l.writeToFile("INFO", msg, fields...)
 }
 
 func (l *logger) Warn(msg string, fields ...interface{}) {
+	// WARN vai para terminal E arquivo
 	fmt.Printf("[WARN] %s %v\n", msg, fields)
+	l.writeToFile("WARN", msg, fields...)
 }
 
 func (l *logger) Error(msg string, fields ...interface{}) {
+	// ERROR vai para terminal E arquivo
 	fmt.Printf("[ERROR] %s %v\n", msg, fields)
+	l.writeToFile("ERROR", msg, fields...)
 }
 
 func (l *logger) Fatal(msg string, fields ...interface{}) {
+	// FATAL vai para terminal E arquivo
 	fmt.Printf("[FATAL] %s %v\n", msg, fields)
+	l.writeToFile("FATAL", msg, fields...)
 }
 
 func (l *logger) SetLevel(level string) {
 	l.level = level
+}
+
+// writeToFile escreve mensagem de log para arquivo
+func (l *logger) writeToFile(level, msg string, fields ...interface{}) {
+	if l.logFile == nil {
+		return
+	}
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("[%s] [%s] %s %v\n", timestamp, level, msg, fields)
+
+	// Escrever no arquivo
+	if _, err := l.logFile.WriteString(logEntry); err != nil {
+		// Se falhar, silenciosamente retornar
+		return
+	}
+
+	// Sincronizar para garantir que foi escrito
+	l.logFile.Sync()
 }
 
 func (l *logger) WithFields(fields map[string]interface{}) types.Logger {
