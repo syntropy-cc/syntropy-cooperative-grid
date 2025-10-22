@@ -38,9 +38,7 @@ func (cli *CLICommands) RegisterCommands(nodeCmd *cobra.Command) {
 	nodeCmd.AddCommand(cli.nodeStatusCmd())
 	nodeCmd.AddCommand(cli.nodeLogsCmd())
 	nodeCmd.AddCommand(cli.removeNodeCmd())
-	nodeCmd.AddCommand(cli.startListenerCmd())
-	nodeCmd.AddCommand(cli.stopListenerCmd())
-	nodeCmd.AddCommand(cli.listenerStatusCmd())
+	nodeCmd.AddCommand(cli.listenerCmd())
 }
 
 // createNodeCmd creates the node create command
@@ -246,20 +244,42 @@ Examples:
 	return cmd
 }
 
-// startListenerCmd creates the start listener command
-func (cli *CLICommands) startListenerCmd() *cobra.Command {
+// listenerCmd creates the listener command with subcommands
+func (cli *CLICommands) listenerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "listener",
+		Short: "Manage node registration listener",
+		Long: `Manage the TCP listener for node registration.
+
+The listener accepts incoming connections from nodes that are booting up
+and trying to register with the Command Station.`,
+	}
+
+	// Add subcommands
+	cmd.AddCommand(cli.listenerStartCmd())
+	cmd.AddCommand(cli.listenerStopCmd())
+	cmd.AddCommand(cli.listenerStatusCmd())
+
+	return cmd
+}
+
+// listenerStartCmd creates the listener start command
+func (cli *CLICommands) listenerStartCmd() *cobra.Command {
 	var (
 		port int
 	)
 
 	cmd := &cobra.Command{
-		Use:   "start-listener",
+		Use:   "start",
 		Short: "Start the node registration listener",
 		Long: `Start the TCP listener for node registration.
 
+The listener will accept incoming connections from nodes and process
+their registration handshakes. The command will block until Ctrl+C is pressed.
+
 Examples:
-  syntropy node start-listener          # Start listener on default port 51000
-  syntropy node start-listener --port 51001 # Start listener on custom port`,
+  syntropy node listener start              # Start listener on default port 51000
+  syntropy node listener start --port 51001 # Start listener on custom port`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cli.handleStartListener(cmd.Context(), &StartListenerOptions{
 				Port: port,
@@ -273,20 +293,22 @@ Examples:
 	return cmd
 }
 
-// stopListenerCmd creates the stop listener command
-func (cli *CLICommands) stopListenerCmd() *cobra.Command {
+// listenerStopCmd creates the listener stop command
+func (cli *CLICommands) listenerStopCmd() *cobra.Command {
 	var (
 		port int
 	)
 
 	cmd := &cobra.Command{
-		Use:   "stop-listener",
+		Use:   "stop",
 		Short: "Stop the node registration listener",
 		Long: `Stop the TCP listener for node registration.
 
+This will close all active connections and stop accepting new node registrations.
+
 Examples:
-  syntropy node stop-listener           # Stop listener on default port 51000
-  syntropy node stop-listener --port 51001 # Stop listener on custom port`,
+  syntropy node listener stop               # Stop listener on default port 51000
+  syntropy node listener stop --port 51001  # Stop listener on custom port`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cli.handleStopListener(cmd.Context(), &StopListenerOptions{
 				Port: port,
@@ -303,7 +325,7 @@ Examples:
 // listenerStatusCmd creates the listener status command
 func (cli *CLICommands) listenerStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "listener-status",
+		Use:   "status",
 		Short: "Show listener status",
 		Long:  `Display the current status of the node registration listener.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -434,7 +456,7 @@ func (cli *CLICommands) handleCreateNode(ctx context.Context, options *CreateNod
 				fmt.Printf("\n⚠️  Wait canceled by user\n")
 				fmt.Printf("💡 Node will still register when ready\n")
 				fmt.Printf("💡 Use 'syntropy node list' to check status\n")
-				fmt.Printf("💡 Use 'syntropy node stop-listener' to stop the listener\n")
+				fmt.Printf("💡 Use 'syntropy node listener stop' to stop the listener\n")
 				return nil
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -634,7 +656,7 @@ func (cli *CLICommands) handleListenerStatus(ctx context.Context) error {
 		fmt.Printf("   Ready to accept node registrations\n")
 	} else {
 		fmt.Printf("❌ Listener Status: STOPPED\n")
-		fmt.Printf("💡 Use 'syntropy node start-listener' to start\n")
+		fmt.Printf("💡 Use 'syntropy node listener start' to start\n")
 	}
 
 	return nil
