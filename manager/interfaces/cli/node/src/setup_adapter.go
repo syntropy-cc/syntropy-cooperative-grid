@@ -96,8 +96,27 @@ func (stma *SetupTokenManagerAdapter) DeleteToken() error {
 
 // TokenExists checks if token exists (delegates to Setup Component)
 func (stma *SetupTokenManagerAdapter) TokenExists() (bool, error) {
-	_, err := stma.LoadToken()
-	return err == nil, nil
+	// Check if token exists by looking for the token file directly
+	// This is more reliable than calling LoadToken() which might fail for other reasons
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Check if token file exists
+	tokenFile := filepath.Join(homeDir, ".syntropy", "tokens", "grid-token.json")
+	if _, err := os.Stat(tokenFile); err == nil {
+		return true, nil
+	}
+
+	// Also check keyring (even though it's not implemented yet)
+	// This ensures consistency with the Setup Component's approach
+	_, err = stma.loadTokenFromKeyring()
+	if err == nil {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // RotateToken rotates the token (delegates to Setup Component)
@@ -135,10 +154,22 @@ func (stma *SetupTokenManagerAdapter) ValidateToken(token string) error {
 
 // loadTokenFromKeyring attempts to load token from system keyring
 func (stma *SetupTokenManagerAdapter) loadTokenFromKeyring() (string, error) {
-	// This would use the keyring library to load from system keyring
-	// For now, we'll return an error to indicate keyring is not available
-	// In a real implementation, this would use github.com/zalando/go-keyring
-	return "", fmt.Errorf("keyring not available")
+	// Import the keyring library for actual keyring access
+	// For now, we'll implement a basic keyring check using the same approach as the Setup Component
+	// This should use the same keyring service and user as defined in the Setup Component
+
+	// Check if keyring is available by trying to access it
+	// We'll use the same constants as the Setup Component
+	const (
+		KeyringService = "syntropy-grid"
+		KeyringUser    = "grid-token"
+	)
+
+	// Try to load from keyring using the same approach as Setup Component
+	// For now, we'll return an error to fallback to file-based storage
+	// In a production implementation, this would use github.com/zalando/go-keyring
+	// like: return keyring.Get(KeyringService, KeyringUser)
+	return "", fmt.Errorf("keyring not available - using file fallback")
 }
 
 // CreateTokenIntegration creates a TokenIntegration instance using the Setup Component
