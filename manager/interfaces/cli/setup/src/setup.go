@@ -896,16 +896,16 @@ func (sm *SetupManager) ValidateEnvironmentWithOptions(options *SetupOptions) (*
 
 // GetOwnerKeyInfo returns information about the Owner Keys
 func (sm *SetupManager) GetOwnerKeyInfo() (*types.OwnerKeyInfo, error) {
+	// First check if Owner Keys exist using the new comprehensive check
+	if !OwnerKeyExists() {
+		return nil, fmt.Errorf("owner key not found")
+	}
+
 	homeDir, _ := os.UserHomeDir()
 	keysDir := filepath.Join(homeDir, ".syntropy", "keys")
 
 	privateKeyPath := filepath.Join(keysDir, "owner.key")
 	publicKeyPath := filepath.Join(keysDir, "owner.key.pub")
-
-	// Verificar se as chaves existem
-	if _, err := os.Stat(privateKeyPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("owner key not found")
-	}
 
 	// Ler chave pública
 	publicKeyData, err := os.ReadFile(publicKeyPath)
@@ -916,15 +916,31 @@ func (sm *SetupManager) GetOwnerKeyInfo() (*types.OwnerKeyInfo, error) {
 	// Calcular fingerprint
 	fingerprint := sm.calculateFingerprint(publicKeyData)
 
-	// Obter informações do arquivo
-	privateKeyInfo, _ := os.Stat(privateKeyPath)
+	// Obter informações do arquivo (pode ser do arquivo ou do keyring)
+	var createdAt time.Time
+	var path string
+
+	// Try to get file info first
+	if privateKeyInfo, err := os.Stat(privateKeyPath); err == nil {
+		createdAt = privateKeyInfo.ModTime()
+		path = privateKeyPath
+	} else {
+		// If file doesn't exist, it's in keyring - use public key file info
+		if publicKeyInfo, err := os.Stat(publicKeyPath); err == nil {
+			createdAt = publicKeyInfo.ModTime()
+			path = "keyring"
+		} else {
+			createdAt = time.Now()
+			path = "keyring"
+		}
+	}
 
 	return &types.OwnerKeyInfo{
 		Algorithm:   "ed25519",
 		Fingerprint: fingerprint,
 		PublicKey:   string(publicKeyData),
-		CreatedAt:   privateKeyInfo.ModTime(),
-		Path:        privateKeyPath,
+		CreatedAt:   createdAt,
+		Path:        path,
 	}, nil
 }
 

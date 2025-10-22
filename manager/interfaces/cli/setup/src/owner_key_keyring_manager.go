@@ -346,3 +346,38 @@ func (okm *OwnerKeyKeyringManager) deletePrivateKeyFile() error {
 	privateKeyPath := filepath.Join(okm.keysDir, "owner.key")
 	return os.Remove(privateKeyPath)
 }
+
+// OwnerKeyExists checks if Owner Keys exist in keyring or file
+func (okm *OwnerKeyKeyringManager) OwnerKeyExists() bool {
+	// First check if keyring is available and has the key
+	if okm.keyringAvailable {
+		_, err := keyring.Get(KeyringServiceOwnerKey, KeyringUserPrivateKey)
+		if err == nil {
+			// Key exists in keyring, also check if public key file exists
+			publicKeyPath := filepath.Join(okm.keysDir, "owner.key.pub")
+			if _, err := os.Stat(publicKeyPath); err == nil {
+				return true
+			}
+		}
+	}
+
+	// Fallback: check if private key file exists
+	privateKeyPath := filepath.Join(okm.keysDir, "owner.key")
+	if _, err := os.Stat(privateKeyPath); err == nil {
+		// Also check if public key file exists
+		publicKeyPath := filepath.Join(okm.keysDir, "owner.key.pub")
+		if _, err := os.Stat(publicKeyPath); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// OwnerKeyExists is a global function to check if Owner Keys exist
+func OwnerKeyExists() bool {
+	// Create a temporary logger for the keyring manager
+	logger := NewSetupLogger()
+	keyringManager := NewOwnerKeyKeyringManager(logger)
+	return keyringManager.OwnerKeyExists()
+}
