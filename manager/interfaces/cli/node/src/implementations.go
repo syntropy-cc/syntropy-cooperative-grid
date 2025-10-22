@@ -15,11 +15,13 @@ import (
 
 // RegistrationSubcomponent handles node registration and monitoring
 type RegistrationSubcomponent struct {
-	nodeState types.NodeStateManager
-	eventBus  types.EventBus
-	logger    types.Logger
-	config    *types.Configuration
-	mutex     sync.RWMutex
+	nodeState        types.NodeStateManager
+	eventBus         types.EventBus
+	logger           types.Logger
+	config           *types.Configuration
+	mutex            sync.RWMutex
+	listenerManager  *ListenerManager
+	handshakeManager *HandshakeManager
 }
 
 // EventBus implementation
@@ -280,18 +282,71 @@ func (nsm *nodeStateManager) LoadState() error {
 
 // RegistrationSubcomponent methods
 func (rs *RegistrationSubcomponent) StartListener(port int) error {
-	// TODO: Implement TCP listener
+	rs.mutex.Lock()
+	defer rs.mutex.Unlock()
+
+	rs.logger.Info("Starting registration listener", "port", port)
+
+	// Initialize listener manager if not already done
+	if rs.listenerManager == nil {
+		rs.listenerManager = NewListenerManager(rs.logger)
+	}
+
+	// Initialize handshake manager if not already done
+	if rs.handshakeManager == nil {
+		rs.handshakeManager = NewHandshakeManager(
+			nil, // tokenIntegration - will be set by NodeManager
+			rs.nodeState,
+			nil, // certificateManager - will be set by NodeManager
+			rs.logger,
+		)
+	}
+
+	// Create listener
+	listener, err := rs.listenerManager.CreateListener(rs.handshakeManager, port)
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w", err)
+	}
+
+	// Start listener
+	if err := listener.Start(); err != nil {
+		return fmt.Errorf("failed to start listener: %w", err)
+	}
+
+	rs.logger.Info("Registration listener started successfully", "port", port)
 	return nil
 }
 
 func (rs *RegistrationSubcomponent) StopListener() error {
-	// TODO: Implement listener stop
+	rs.mutex.Lock()
+	defer rs.mutex.Unlock()
+
+	rs.logger.Info("Stopping registration listener")
+
+	if rs.listenerManager == nil {
+		rs.logger.Debug("Listener manager not initialized, nothing to stop")
+		return nil
+	}
+
+	// Stop all listeners
+	if err := rs.listenerManager.StopAllListeners(); err != nil {
+		return fmt.Errorf("failed to stop listeners: %w", err)
+	}
+
+	rs.logger.Info("Registration listener stopped successfully")
 	return nil
 }
 
 func (rs *RegistrationSubcomponent) IsListenerRunning() bool {
-	// TODO: Implement listener status check
-	return false
+	rs.mutex.RLock()
+	defer rs.mutex.RUnlock()
+
+	if rs.listenerManager == nil {
+		return false
+	}
+
+	// Check if default listener is running
+	return rs.listenerManager.IsListenerRunning(constants.DefaultRegistrationPort)
 }
 
 func (rs *RegistrationSubcomponent) StartHeartbeat(nodeID string, conn net.Conn) error {

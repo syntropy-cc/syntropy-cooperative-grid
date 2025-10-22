@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -364,6 +365,95 @@ func (nm *NodeManager) StopRegistrationListener() error {
 	nm.logger.Info("Registration listener stopped successfully")
 
 	return nil
+}
+
+// IsListenerRunning checks if the registration listener is running
+func (nm *NodeManager) IsListenerRunning() bool {
+	nm.mutex.RLock()
+	defer nm.mutex.RUnlock()
+
+	if !nm.isRunning {
+		return false
+	}
+
+	return nm.registrationSubcomponent.IsListenerRunning()
+}
+
+// WaitForNodeRegistration waits for a node to register with progress feedback
+func (nm *NodeManager) WaitForNodeRegistration(ctx context.Context, nodeID string, timeout time.Duration) error {
+	nm.logger.Info("Waiting for node registration", "node_id", nodeID, "timeout", timeout)
+
+	// Create context with timeout
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Poll interval
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// Progress indicators
+	progressChars := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	progressIndex := 0
+
+	startTime := time.Now()
+	lastStatus := ""
+
+	for {
+		select {
+		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				return fmt.Errorf("registration timeout after %v", timeout)
+			}
+			return waitCtx.Err()
+
+		case <-ticker.C:
+			// Check node status
+			status, err := nm.getNodeStatus(nodeID)
+			if err != nil {
+				nm.logger.Debug("Failed to get node status", "node_id", nodeID, "error", err)
+				continue
+			}
+
+			// Update progress indicator
+			progressIndex = (progressIndex + 1) % len(progressChars)
+			elapsed := time.Since(startTime)
+
+			// Show progress if status changed or every 30 seconds
+			if status != lastStatus || elapsed.Seconds() > 0 && int(elapsed.Seconds())%30 == 0 {
+				fmt.Printf("\r%s Waiting for node '%s' to register... (elapsed: %v, status: %s)",
+					progressChars[progressIndex], nodeID, elapsed.Round(time.Second), status)
+				lastStatus = status
+			}
+
+			// Check if node is now active
+			if status == "active" {
+				fmt.Printf("\r✅ Node '%s' registered successfully! (elapsed: %v)\n", nodeID, elapsed.Round(time.Second))
+				return nil
+			}
+
+			// Check if node is in error state
+			if status == "error" || status == "failed" {
+				return fmt.Errorf("node registration failed with status: %s", status)
+			}
+		}
+	}
+}
+
+// getNodeStatus gets the current status of a node
+func (nm *NodeManager) getNodeStatus(nodeID string) (string, error) {
+	// Check if node is pending
+	if nm.nodeState.IsNodePending(nodeID) {
+		return "pending", nil
+	}
+
+	// Check if node is active
+	if nm.nodeState.IsNodeActive(nodeID) {
+		return "active", nil
+	}
+
+	// For now, assume any node that's not pending or active is inactive
+	// TODO: Implement proper IsNodeInactive method
+	return "inactive", nil
 }
 
 // Shutdown gracefully shuts down the NodeManager

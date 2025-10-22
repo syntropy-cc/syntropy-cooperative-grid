@@ -2,10 +2,12 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"node-component/src/internal/constants"
 	"node-component/src/internal/helpers"
@@ -38,6 +40,7 @@ func (cli *CLICommands) RegisterCommands(nodeCmd *cobra.Command) {
 	nodeCmd.AddCommand(cli.removeNodeCmd())
 	nodeCmd.AddCommand(cli.startListenerCmd())
 	nodeCmd.AddCommand(cli.stopListenerCmd())
+	nodeCmd.AddCommand(cli.listenerStatusCmd())
 }
 
 // createNodeCmd creates the node create command
@@ -297,6 +300,19 @@ Examples:
 	return cmd
 }
 
+// listenerStatusCmd creates the listener status command
+func (cli *CLICommands) listenerStatusCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "listener-status",
+		Short: "Show listener status",
+		Long:  `Display the current status of the node registration listener.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleListenerStatus(cmd.Context())
+		},
+	}
+	return cmd
+}
+
 // Command option types
 
 // CreateNodeOptions represents options for creating a node
@@ -389,8 +405,50 @@ func (cli *CLICommands) handleCreateNode(ctx context.Context, options *CreateNod
 			}
 		}
 
-		fmt.Printf("\n🚀 Your node is ready! Connect the USB to your hardware and boot.\n")
-		fmt.Printf("The node will automatically register with this Command Station.\n")
+		fmt.Printf("\n📋 Next Steps:\n")
+		fmt.Printf("1. Connect the USB device to your target hardware\n")
+		fmt.Printf("2. Boot from USB (may require BIOS/UEFI configuration)\n")
+		fmt.Printf("3. Wait for Ubuntu installation (~5-10 minutes)\n")
+		fmt.Printf("4. Node will automatically register when ready\n\n")
+
+		// Auto-start listener
+		if !cli.nodeManager.IsListenerRunning() {
+			fmt.Printf("🚀 Starting registration listener on port 51000...\n")
+			if err := cli.nodeManager.StartRegistrationListener(); err != nil {
+				return fmt.Errorf("failed to start listener: %w", err)
+			}
+			fmt.Printf("✅ Listener started successfully\n\n")
+		} else {
+			fmt.Printf("ℹ️  Registration listener is already running\n\n")
+		}
+
+		// Wait for registration
+		fmt.Printf("⏳ Waiting for node '%s' to register (timeout: 60 minutes)...\n", result.NodeID)
+		fmt.Printf("💡 Press Ctrl+C to stop waiting (listener will continue running)\n\n")
+
+		waitCtx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+		defer cancel()
+
+		if err := cli.nodeManager.WaitForNodeRegistration(waitCtx, result.NodeID, 60*time.Minute); err != nil {
+			if errors.Is(err, context.Canceled) {
+				fmt.Printf("\n⚠️  Wait canceled by user\n")
+				fmt.Printf("💡 Node will still register when ready\n")
+				fmt.Printf("💡 Use 'syntropy node list' to check status\n")
+				fmt.Printf("💡 Use 'syntropy node stop-listener' to stop the listener\n")
+				return nil
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Printf("\n⏰ Registration timeout reached\n")
+				fmt.Printf("💡 Node might still be installing or booting\n")
+				fmt.Printf("💡 Use 'syntropy node list' to check status later\n")
+				fmt.Printf("💡 Listener is still running and accepting connections\n")
+				return nil
+			}
+			return fmt.Errorf("wait failed: %w", err)
+		}
+
+		fmt.Printf("\n🎉 Node '%s' registered successfully!\n", result.NodeID)
+		fmt.Printf("💡 Use 'syntropy node status %s' to view details\n", result.NodeID)
 	} else {
 		fmt.Printf("❌ Node creation failed: %s\n", result.ErrorMessage)
 		if len(result.StepsFailed) > 0 {
@@ -511,26 +569,74 @@ func (cli *CLICommands) handleRemoveNode(ctx context.Context, nodeID string, opt
 func (cli *CLICommands) handleStartListener(ctx context.Context, options *StartListenerOptions) error {
 	cli.logger.Info("Starting listener", "port", options.Port)
 
+	// Initialize node manager
+	if err := cli.nodeManager.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize: %w", err)
+	}
+
+	// Check if already running
+	if cli.nodeManager.IsListenerRunning() {
+		fmt.Printf("ℹ️  Listener is already running on port %d\n", options.Port)
+		return nil
+	}
+
 	// Start listener
 	if err := cli.nodeManager.StartRegistrationListener(); err != nil {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
 	fmt.Printf("✅ Listener started on port %d\n", options.Port)
-	fmt.Printf("Waiting for nodes to register...\n")
-	return nil
+	fmt.Printf("⏳ Waiting for nodes to register...\n")
+	fmt.Printf("💡 Press Ctrl+C to stop\n\n")
+
+	// Block until Ctrl+C
+	<-ctx.Done()
+	fmt.Printf("\n🛑 Stopping listener...\n")
+
+	return cli.nodeManager.StopRegistrationListener()
 }
 
 // handleStopListener handles the stop listener command
 func (cli *CLICommands) handleStopListener(ctx context.Context, options *StopListenerOptions) error {
 	cli.logger.Info("Stopping listener", "port", options.Port)
 
+	// Initialize node manager
+	if err := cli.nodeManager.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize: %w", err)
+	}
+
+	// Check if running
+	if !cli.nodeManager.IsListenerRunning() {
+		fmt.Printf("ℹ️  Listener is not running\n")
+		return nil
+	}
+
 	// Stop listener
 	if err := cli.nodeManager.StopRegistrationListener(); err != nil {
 		return fmt.Errorf("failed to stop listener: %w", err)
 	}
 
-	fmt.Printf("✅ Listener stopped on port %d\n", options.Port)
+	fmt.Printf("✅ Listener stopped successfully\n")
+	return nil
+}
+
+// handleListenerStatus handles the listener status command
+func (cli *CLICommands) handleListenerStatus(ctx context.Context) error {
+	if err := cli.nodeManager.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize: %w", err)
+	}
+
+	running := cli.nodeManager.IsListenerRunning()
+
+	if running {
+		fmt.Printf("✅ Listener Status: RUNNING\n")
+		fmt.Printf("   Port: 51000\n")
+		fmt.Printf("   Ready to accept node registrations\n")
+	} else {
+		fmt.Printf("❌ Listener Status: STOPPED\n")
+		fmt.Printf("💡 Use 'syntropy node start-listener' to start\n")
+	}
+
 	return nil
 }
 

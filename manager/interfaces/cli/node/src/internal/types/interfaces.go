@@ -247,6 +247,7 @@ type NodeStateManager interface {
 	RemoveNode(nodeID string) error
 	IsNodePending(nodeID string) bool
 	IsNodeActive(nodeID string) bool
+	IsNodeInactive(nodeID string) bool
 	SaveState() error
 	LoadState() error
 }
