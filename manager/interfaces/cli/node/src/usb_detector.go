@@ -50,39 +50,12 @@ func NewUSBDetectorFactory() *USBDetectorFactory {
 
 // CreateUSBDetector creates a platform-specific USB detector
 func (f *USBDetectorFactory) CreateUSBDetector(logger types.Logger) (USBDetector, error) {
-	switch runtime.GOOS {
-	case "windows":
-		return f.createWindowsDetector(logger), nil
-	case "linux":
-		return f.createLinuxDetector(logger), nil
-	case "darwin":
-		return f.createMacOSDetector(logger), nil
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	detector := NewPlatformUSBDetector(logger)
+	if detector == nil {
+		return nil, fmt.Errorf("failed to create USB detector for platform: %s", runtime.GOOS)
 	}
+	return detector, nil
 }
-
-// createWindowsDetector creates a Windows USB detector
-func (f *USBDetectorFactory) createWindowsDetector(logger types.Logger) USBDetector {
-	// This will be implemented by platform-specific files
-	return nil
-}
-
-// createLinuxDetector creates a Linux USB detector
-func (f *USBDetectorFactory) createLinuxDetector(logger types.Logger) USBDetector {
-	// This will be implemented by platform-specific files with build constraints
-	// For now, return nil to avoid compilation errors on non-Linux platforms
-	return nil
-}
-
-// createMacOSDetector creates a macOS USB detector
-func (f *USBDetectorFactory) createMacOSDetector(logger types.Logger) USBDetector {
-	// This will be implemented by platform-specific files
-	return nil
-}
-
-// Platform-specific detector constructors will be implemented in separate files
-// with build constraints for each platform
 
 // USBDetectorBase provides common functionality for USB detectors
 type USBDetectorBase struct {

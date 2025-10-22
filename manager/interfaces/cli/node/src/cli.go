@@ -7,6 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"node-component/src/internal/constants"
+	"node-component/src/internal/helpers"
 	"node-component/src/internal/types"
 
 	"github.com/spf13/cobra"
@@ -52,6 +54,7 @@ func (cli *CLICommands) createNodeCmd() *cobra.Command {
 		forceOverwrite   bool
 		autoStart        bool
 		interactive      bool
+		listDevices      bool
 	)
 
 	cmd := &cobra.Command{
@@ -69,10 +72,16 @@ This command will:
 
 Examples:
   syntropy node create                           # Interactive mode
+  syntropy node create --list-devices            # List available USB devices
   syntropy node create --ubuntu-version 24.04    # Specify Ubuntu version
   syntropy node create --device /dev/sdb         # Specify USB device
   syntropy node create --auto-start              # Auto-start listener`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// If --list-devices flag is set, only list devices without creating node
+			if listDevices {
+				return cli.handleListUSBDevices(cmd.Context())
+			}
+
 			return cli.handleCreateNode(cmd.Context(), &CreateNodeOptions{
 				UbuntuVersion:    ubuntuVersion,
 				DevicePath:       devicePath,
@@ -101,6 +110,7 @@ Examples:
 	cmd.Flags().BoolVar(&forceOverwrite, "force", false, "Force overwrite USB device")
 	cmd.Flags().BoolVar(&autoStart, "auto-start", true, "Auto-start listener after creation")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Interactive mode with prompts")
+	cmd.Flags().BoolVar(&listDevices, "list-devices", false, "List available USB devices without creating node")
 
 	return cmd
 }
@@ -524,6 +534,25 @@ func (cli *CLICommands) handleStopListener(ctx context.Context, options *StopLis
 	return nil
 }
 
+// handleListUSBDevices handles the list USB devices command
+func (cli *CLICommands) handleListUSBDevices(ctx context.Context) error {
+	cli.logger.Info("Listing USB devices")
+
+	// Initialize node manager if needed
+	if err := cli.nodeManager.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize node manager: %w", err)
+	}
+
+	// Get USB devices
+	devices, err := cli.nodeManager.ListUSBDevices(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list USB devices: %w", err)
+	}
+
+	// Display devices
+	return cli.outputUSBDevicesTable(devices)
+}
+
 // Output helpers
 
 // outputNodesJSON outputs nodes in JSON format
@@ -605,5 +634,60 @@ func (cli *CLICommands) outputNodeStatusTable(status *NodeStatus) error {
 		fmt.Printf("  Hostname: %s\n", status.Hardware.Hostname)
 	}
 
+	return nil
+}
+
+// outputUSBDevicesTable outputs USB devices in table format
+func (cli *CLICommands) outputUSBDevicesTable(devices []types.USBDevice) error {
+	if len(devices) == 0 {
+		fmt.Println("No USB devices found.")
+		fmt.Println("Please connect a USB device and try again.")
+		return nil
+	}
+
+	// Create table writer
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer w.Flush()
+
+	// Print header
+	fmt.Printf("Found %d USB device(s):\n\n", len(devices))
+	fmt.Fprintf(w, "DEVICE\tCAPACITY\tVENDOR\tMODEL\tREMOVABLE\tSYSTEM\tSTATUS\n")
+
+	// Print devices
+	for _, device := range devices {
+		capacity := helpers.FormatBytes(device.Capacity)
+		removable := "No"
+		if device.IsRemovable {
+			removable = "Yes"
+		}
+		system := "No"
+		if device.IsSystem {
+			system = "Yes"
+		}
+
+		// Determine status
+		status := "Ready"
+		if device.IsSystem {
+			status = "System Device (Cannot Use)"
+		} else if !device.IsRemovable {
+			status = "Not Removable"
+		} else if device.Capacity < constants.DefaultMinUSBCapacity {
+			status = fmt.Sprintf("Too Small (Min %s)", helpers.FormatBytes(constants.DefaultMinUSBCapacity))
+		} else if device.Capacity > constants.DefaultMaxUSBCapacity {
+			status = fmt.Sprintf("Too Large (Max %s)", helpers.FormatBytes(constants.DefaultMaxUSBCapacity))
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			device.Path,
+			capacity,
+			device.Vendor,
+			device.Model,
+			removable,
+			system,
+			status,
+		)
+	}
+
+	fmt.Println("\nRecommendation: Use devices with status 'Ready' for node creation.")
 	return nil
 }

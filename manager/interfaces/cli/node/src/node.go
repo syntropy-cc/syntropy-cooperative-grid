@@ -194,6 +194,28 @@ func (nm *NodeManager) ListNodes() (*NodeList, error) {
 	}, nil
 }
 
+// ListUSBDevices lists all available USB devices
+func (nm *NodeManager) ListUSBDevices(ctx context.Context) ([]types.USBDevice, error) {
+	nm.mutex.Lock()
+	defer nm.mutex.Unlock()
+
+	nm.logger.Debug("Listing USB devices")
+
+	// Check if USB detector is initialized
+	if nm.usbDetector == nil {
+		return nil, fmt.Errorf("USB detector not initialized")
+	}
+
+	// Detect all USB devices (not just removable)
+	devices, err := nm.usbDetector.DetectDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect USB devices: %w", err)
+	}
+
+	nm.logger.Info("USB devices detected", "count", len(devices))
+	return devices, nil
+}
+
 // GetNodeStatus gets detailed status of a specific node
 func (nm *NodeManager) GetNodeStatus(nodeID string) (*NodeStatus, error) {
 	nm.mutex.RLock()

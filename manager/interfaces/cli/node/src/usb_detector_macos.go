@@ -421,3 +421,8 @@ type USBDeviceInfo struct {
 	Serial string
 	Speed  int
 }
+
+// NewPlatformUSBDetector creates the platform-specific USB detector
+func NewPlatformUSBDetector(logger types.Logger) USBDetector {
+	return NewUSBDetectorMacOS(logger)
+}
