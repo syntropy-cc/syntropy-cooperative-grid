@@ -19,11 +19,12 @@ type SetupOptions struct {
 	Force          bool              `json:"force"`
 	ValidateOnly   bool              `json:"validate_only"`
 	SkipValidation bool              `json:"skip_validation"`
-	TestMode       bool              `json:"test_mode"`       // Bypass strict validation for unit tests
+	TestMode       bool              `json:"test_mode"` // Bypass strict validation for unit tests
 	Verbose        bool              `json:"verbose"`
 	Quiet          bool              `json:"quiet"`
 	ConfigPath     string            `json:"config_path"`
 	CustomSettings map[string]string `json:"custom_settings"`
+	Passphrase     string            `json:"passphrase"` // NOVO: Senha para criptografia das chaves
 }
 
 // ValidationResult resultado da validação

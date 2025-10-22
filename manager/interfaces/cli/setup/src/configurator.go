@@ -146,7 +146,11 @@ func (c *Configurator) GenerateKeys() (*types.KeyPair, error) {
 	}
 
 	// Armazenar chaves
-	if err := keyManager.StoreKeyPair(keyPair, "default_passphrase"); err != nil {
+	passphrase, err := LoadPassphraseFromKeyring()
+	if err != nil {
+		return nil, types.ErrKeyStorageError(keyPair.ID, fmt.Errorf("passphrase not found - setup may be incomplete"))
+	}
+	if err := keyManager.StoreKeyPair(keyPair, passphrase); err != nil {
 		return nil, types.ErrKeyStorageError(keyPair.ID, err)
 	}
 

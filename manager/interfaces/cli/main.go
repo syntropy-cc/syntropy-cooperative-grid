@@ -1,16 +1,15 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	setup "setup-component/src"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -131,9 +130,28 @@ segura no keyring do sistema operacional.
 			return fmt.Errorf("❌ Falha ao inicializar: %w", err)
 		}
 
+		// Solicitar senha para criptografia das chaves
+		fmt.Println("🔐 Configuração de Segurança")
+		fmt.Println()
+		fmt.Println("Para proteger suas chaves privadas, você precisa definir uma SENHA FORTE.")
+		fmt.Println()
+		fmt.Println("📋 Requisitos da senha:")
+		fmt.Println("   • Mínimo 12 caracteres")
+		fmt.Println("   • Pelo menos uma letra maiúscula")
+		fmt.Println("   • Pelo menos uma letra minúscula")
+		fmt.Println("   • Pelo menos um número")
+		fmt.Println("   • Pelo menos um caractere especial (!@#$%^&*)")
+		fmt.Println()
+
+		passphrase, err := setup.PromptForPassphrase()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao obter senha: %w", err)
+		}
+
 		setupOptions := &setup.SetupOptions{
 			Force:          force,
 			CustomSettings: make(map[string]string),
+			Passphrase:     passphrase,
 		}
 
 		err = manager.SetupWithPublicOptions(setupOptions)
@@ -707,6 +725,77 @@ Mostra:
 }
 
 // setupKeyShowCmd represents the key show command
+var setupKeyMigrateCmd = &cobra.Command{
+	Use:   "migrate",
+	Short: "🔄 Migrar chaves antigas para nova senha",
+	Long: `Migra chaves que usam senha padrão para nova senha segura.
+	
+Use este comando se você instalou o Syntropy antes da implementação
+do sistema de senhas e deseja adicionar proteção adicional.
+
+Este comando irá:
+1. Carregar suas chaves existentes (criptografadas com senha padrão)
+2. Solicitar uma nova senha forte
+3. Re-criptografar as chaves com a nova senha
+4. Armazenar a nova senha no keyring do sistema`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println("🔄 Migração de Chaves para Nova Senha")
+		fmt.Println()
+
+		// Verificar se já existe senha no keyring
+		if setup.PassphraseExists() {
+			fmt.Println("✅ Já existe uma senha configurada no sistema.")
+			fmt.Println("   Se você deseja alterar a senha, use 'syntropy setup run --force'")
+			return nil
+		}
+
+		// Inicializar manager
+		manager, err := setup.NewSetupManager()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao inicializar: %w", err)
+		}
+
+		// Solicitar nova senha
+		fmt.Println("🔐 Configuração de Nova Senha")
+		fmt.Println()
+		fmt.Println("Para migrar suas chaves, você precisa definir uma SENHA FORTE.")
+		fmt.Println()
+		fmt.Println("📋 Requisitos da senha:")
+		fmt.Println("   • Mínimo 12 caracteres")
+		fmt.Println("   • Pelo menos uma letra maiúscula")
+		fmt.Println("   • Pelo menos uma letra minúscula")
+		fmt.Println("   • Pelo menos um número")
+		fmt.Println("   • Pelo menos um caractere especial (!@#$%^&*)")
+		fmt.Println()
+		fmt.Println("⚠️  BOAS PRÁTICAS DE SEGURANÇA:")
+		fmt.Println("   • Use uma senha única (não reutilize de outros serviços)")
+		fmt.Println("   • Considere usar um gerenciador de senhas")
+		fmt.Println("   • NUNCA compartilhe sua senha")
+		fmt.Println("   • Faça backup da senha em local seguro")
+		fmt.Println()
+
+		passphrase, err := setup.PromptForPassphrase()
+		if err != nil {
+			return fmt.Errorf("❌ Falha ao obter senha: %w", err)
+		}
+
+		// Executar migração
+		fmt.Println("🔄 Iniciando migração...")
+		if err := manager.MigrateFromDefaultPassphrase(passphrase); err != nil {
+			return fmt.Errorf("❌ Falha na migração: %w", err)
+		}
+
+		fmt.Println("✅ Migração concluída com sucesso!")
+		fmt.Println()
+		fmt.Println("🎉 Suas chaves agora estão protegidas com uma senha forte.")
+		fmt.Println("   • A senha foi armazenada no keyring do sistema")
+		fmt.Println("   • Suas chaves foram re-criptografadas")
+		fmt.Println("   • Use 'syntropy setup key show' para visualizar suas chaves")
+
+		return nil
+	},
+}
+
 var setupKeyShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "👁️  Exibir Owner Keys",
@@ -748,8 +837,19 @@ CHAVE PRIVADA:
 		// Mostrar preview da chave privada ou chave completa
 		if showPrivate {
 			if !confirm {
+				// Solicitar senha para preview
+				passphrase, err := setup.PromptForExistingPassphrase()
+				if err != nil {
+					return fmt.Errorf("❌ Falha ao obter senha: %w", err)
+				}
+
+				// Validar senha
+				if err := setup.ValidatePassphrase(passphrase); err != nil {
+					return fmt.Errorf("❌ %s", err.Error())
+				}
+
 				// Mostrar preview da chave privada
-				privateKey, err := manager.GetOwnerPrivateKey("default_passphrase")
+				privateKey, err := manager.GetOwnerPrivateKey(passphrase)
 				if err != nil {
 					return fmt.Errorf("❌ Falha ao obter chave privada: %w", err)
 				}
@@ -766,34 +866,39 @@ CHAVE PRIVADA:
 				return nil
 			}
 
-			// Dupla confirmação
+			// Solicitar senha para visualização completa
 			fmt.Println("🚨 ATENÇÃO: Você está prestes a visualizar sua CHAVE PRIVADA!")
-			fmt.Print("   Digite 'SHOW PRIVATE KEY' para confirmar: ")
+			fmt.Println()
+			fmt.Println("🔒 REQUISITO DE SEGURANÇA:")
+			fmt.Println("   Para acessar a chave privada, você precisa fornecer a senha")
+			fmt.Println("   definida durante o setup inicial.")
+			fmt.Println()
+			fmt.Print("   Digite sua senha: ")
 
-			// Usar bufio.Reader para melhor compatibilidade com Windows/WSL
-			reader := bufio.NewReader(os.Stdin)
-			response, err := reader.ReadString('\n')
+			// Usar golang.org/x/term para entrada sem echo
+			passphrase, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println() // Nova linha após senha
 			if err != nil {
-				fmt.Println("❌ Erro ao ler entrada:", err)
-				return nil
+				// Fallback para entrada normal se term.ReadPassword falhar
+				fmt.Print("   (entrada sem echo não disponível, digite normalmente): ")
+				var input string
+				fmt.Scanln(&input)
+				passphrase = []byte(input)
 			}
 
-			// Remover quebras de linha e espaços
-			response = strings.TrimSpace(response)
-
-			// Verificar se a resposta está correta (case-insensitive para melhor UX)
-			expected := "SHOW PRIVATE KEY"
-			if strings.ToUpper(response) != strings.ToUpper(expected) {
-				fmt.Println("❌ Operação cancelada - confirmação incorreta")
-				fmt.Printf("   Esperado: '%s'\n", expected)
-				fmt.Printf("   Recebido: '%s'\n", response)
-				fmt.Println("   💡 Dica: Digite exatamente: SHOW PRIVATE KEY")
-				return nil
+			// Validar senha comparando com keyring
+			storedPassphrase, err := setup.LoadPassphraseFromKeyring()
+			if err != nil {
+				return fmt.Errorf("❌ Senha não encontrada. Execute 'syntropy setup run' novamente.")
 			}
 
-			fmt.Println("✅ Confirmação aceita!")
+			if string(passphrase) != storedPassphrase {
+				return fmt.Errorf("❌ Senha incorreta")
+			}
 
-			privateKey, err := manager.GetOwnerPrivateKey("default_passphrase")
+			fmt.Println("✅ Senha aceita!")
+
+			privateKey, err := manager.GetOwnerPrivateKey(string(passphrase))
 			if err != nil {
 				return fmt.Errorf("❌ Falha ao obter chave privada: %w", err)
 			}
@@ -1020,6 +1125,7 @@ func init() {
 	setupKeyCmd.AddCommand(setupKeyShowCmd)
 	setupKeyCmd.AddCommand(setupKeyExportCmd)
 	setupKeyCmd.AddCommand(setupKeyImportCmd)
+	setupKeyCmd.AddCommand(setupKeyMigrateCmd)
 
 	// Setup flags
 	setupRunCmd.Flags().Bool("force", false, "forçar sobrescrever setup existente")

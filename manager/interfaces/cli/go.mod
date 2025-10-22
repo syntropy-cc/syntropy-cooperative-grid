@@ -4,6 +4,7 @@ go 1.24.7
 
 require (
 	github.com/spf13/cobra v1.10.1
+	golang.org/x/term v0.36.0
 	setup-component v0.0.0
 )
 

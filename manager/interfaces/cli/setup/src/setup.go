@@ -3,6 +3,7 @@ package setup
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -118,7 +119,14 @@ func (sm *SetupManager) Setup(options *types.SetupOptions) error {
 		return sm.handleError(err, "structure_creation_failed")
 	}
 
-	// 3. Gerar ou carregar chaves existentes
+	// 3. Armazenar senha no keyring (se fornecida)
+	if options.Passphrase != "" {
+		if err := StorePassphraseInKeyring(options.Passphrase); err != nil {
+			return sm.handleError(err, "passphrase_storage_failed")
+		}
+	}
+
+	// 4. Gerar ou carregar chaves existentes
 	keyPair, err := sm.keyManager.GenerateOrLoadKeyPair("ed25519")
 	if err != nil {
 		return sm.handleError(err, "key_generation_failed")
@@ -920,8 +928,15 @@ func (sm *SetupManager) GetOwnerKeyInfo() (*types.OwnerKeyInfo, error) {
 
 // GetOwnerPublicKey returns the public key
 func (sm *SetupManager) GetOwnerPublicKey() (string, error) {
+	// Tentar carregar com senha do keyring primeiro
+	passphrase, err := LoadPassphraseFromKeyring()
+	if err != nil {
+		// Tentar migração de chaves antigas
+		passphrase = "default_passphrase"
+	}
+
 	// Use KeyManager to load the key pair
-	keyPair, err := sm.keyManager.LoadKeyPair("owner", "default_passphrase")
+	keyPair, err := sm.keyManager.LoadKeyPair("owner", passphrase)
 	if err != nil {
 		return "", fmt.Errorf("failed to load public key: %w", err)
 	}
@@ -931,13 +946,27 @@ func (sm *SetupManager) GetOwnerPublicKey() (string, error) {
 
 // GetOwnerPrivateKey returns the private key (SENSITIVE USE)
 func (sm *SetupManager) GetOwnerPrivateKey(passphrase string) (string, error) {
+	sm.logger.LogInfo("GetOwnerPrivateKey called", map[string]interface{}{
+		"passphrase_length": len(passphrase),
+	})
+
+	// Validar que a senha está correta antes de tentar descriptografar
+	storedPassphrase, err := LoadPassphraseFromKeyring()
+	if err == nil && storedPassphrase != passphrase {
+		return "", fmt.Errorf("senha incorreta")
+	}
+
 	// Use KeyManager to load the key pair with proper decryption
 	keyPair, err := sm.keyManager.LoadKeyPair("owner", passphrase)
 	if err != nil {
 		return "", fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	return string(keyPair.PrivateKey), nil
+	// Converter chave privada Ed25519 para formato PEM
+	sm.logger.LogInfo("Converting private key to PEM", map[string]interface{}{
+		"key_length": len(keyPair.PrivateKey),
+	})
+	return sm.convertPrivateKeyToPEM(keyPair.PrivateKey), nil
 }
 
 // ExportOwnerKeys exports Owner Keys for backup
@@ -1014,6 +1043,85 @@ func (sm *SetupManager) ImportOwnerKeys(inputPath string, passphrase string) err
 	}
 
 	return nil
+}
+
+// MigrateFromDefaultPassphrase migra chaves antigas para nova senha
+func (sm *SetupManager) MigrateFromDefaultPassphrase(newPassphrase string) error {
+	sm.logger.LogStep("setup_migration_start", map[string]interface{}{
+		"from": "default_passphrase",
+		"to":   "user_passphrase",
+	})
+
+	// Usar KeyManager para migração
+	if err := sm.keyManager.MigrateFromDefaultPassphrase(newPassphrase); err != nil {
+		return sm.handleError(err, "key_migration_failed")
+	}
+
+	sm.logger.LogStep("setup_migration_completed", nil)
+
+	return nil
+}
+
+// convertPrivateKeyToPEM converts Ed25519 private key to PEM format
+func (sm *SetupManager) convertPrivateKeyToPEM(privateKeyData []byte) string {
+	sm.logger.LogInfo("Converting private key to PEM", map[string]interface{}{
+		"key_length": len(privateKeyData),
+	})
+
+	// Para Ed25519, a chave privada pode ser de 32 ou 64 bytes
+	// 32 bytes = apenas a chave privada
+	// 64 bytes = chave privada (32 bytes) + chave pública (32 bytes)
+	var privateKeyBytes []byte
+
+	if len(privateKeyData) == 32 {
+		// Apenas a chave privada
+		privateKeyBytes = privateKeyData
+	} else if len(privateKeyData) == 64 {
+		// Chave privada + pública concatenadas, extrair apenas os primeiros 32 bytes
+		privateKeyBytes = privateKeyData[:32]
+		sm.logger.LogInfo("Extracted 32-byte private key from 64-byte data", map[string]interface{}{
+			"original_length": len(privateKeyData),
+		})
+	} else {
+		// Formato não reconhecido, retornar como está
+		sm.logger.LogInfo("Private key format not recognized, returning as string", map[string]interface{}{
+			"length": len(privateKeyData),
+		})
+		return string(privateKeyData)
+	}
+
+	// Criar estrutura ASN.1 para Ed25519 private key
+	// Ed25519 private key no formato PKCS#8
+	asn1Data := []byte{
+		0x30, 0x2e, // SEQUENCE
+		0x02, 0x01, 0x00, // INTEGER version (0)
+		0x30, 0x05, // SEQUENCE AlgorithmIdentifier
+		0x06, 0x03, 0x2b, 0x65, 0x70, // OID Ed25519 (1.3.101.112)
+		0x04, 0x22, // OCTET STRING
+		0x04, 0x20, // OCTET STRING (32 bytes)
+	}
+
+	// Adicionar os 32 bytes da chave privada
+	asn1Data = append(asn1Data, privateKeyBytes...)
+
+	// Codificar em base64
+	encoded := base64.StdEncoding.EncodeToString(asn1Data)
+
+	// Criar formato PEM
+	pemData := "-----BEGIN PRIVATE KEY-----\n"
+
+	// Quebrar em linhas de 64 caracteres
+	for i := 0; i < len(encoded); i += 64 {
+		end := i + 64
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		pemData += encoded[i:end] + "\n"
+	}
+
+	pemData += "-----END PRIVATE KEY-----\n"
+
+	return pemData
 }
 
 // calculateFingerprint calculates key fingerprint

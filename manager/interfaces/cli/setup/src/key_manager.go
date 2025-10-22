@@ -92,7 +92,14 @@ func (km *KeyManager) GenerateOrLoadKeyPair(algorithm string) (*types.KeyPair, e
 			"key_id": keyID,
 		})
 
-		keyPair, err := km.LoadKeyPair(keyID, "default_passphrase")
+		// Tentar carregar com senha do keyring primeiro
+		passphrase, err := LoadPassphraseFromKeyring()
+		if err != nil {
+			// Tentar migração de chaves antigas
+			passphrase = "default_passphrase"
+		}
+
+		keyPair, err := km.LoadKeyPair(keyID, passphrase)
 		if err != nil {
 			km.logger.LogWarning("Falha ao carregar chave existente, gerando nova", map[string]interface{}{
 				"key_id": keyID,
@@ -114,7 +121,12 @@ func (km *KeyManager) GenerateOrLoadKeyPair(algorithm string) (*types.KeyPair, e
 	}
 
 	// Salvar a nova chave
-	if err := km.StoreKeyPair(keyPair, "default_passphrase"); err != nil {
+	passphrase, err := LoadPassphraseFromKeyring()
+	if err != nil {
+		// Se não há senha no keyring, usar default_passphrase para compatibilidade
+		passphrase = "default_passphrase"
+	}
+	if err := km.StoreKeyPair(keyPair, passphrase); err != nil {
 		return nil, err
 	}
 
@@ -209,8 +221,12 @@ func (km *KeyManager) RotateKeys(keyID string) error {
 		return types.ErrKeyRotationError(keyID, err)
 	}
 
-	// Armazenar nova chave (sem passphrase por enquanto - em produção seria necessário)
-	if err := km.StoreKeyPair(newKeyPair, "default_passphrase"); err != nil {
+	// Armazenar nova chave
+	passphrase, err := LoadPassphraseFromKeyring()
+	if err != nil {
+		return types.ErrKeyRotationError(keyID, fmt.Errorf("passphrase not found - setup may be incomplete"))
+	}
+	if err := km.StoreKeyPair(newKeyPair, passphrase); err != nil {
 		return types.ErrKeyRotationError(keyID, err)
 	}
 
@@ -570,8 +586,15 @@ func (km *KeyManager) backupKey(keyID, backupKeyID string) error {
 func (km *KeyManager) GetSSHPublicKey() (string, error) {
 	km.logger.LogStep("ssh_public_key_retrieval_start", nil)
 
+	// Tentar carregar com senha do keyring primeiro
+	passphrase, err := LoadPassphraseFromKeyring()
+	if err != nil {
+		// Tentar migração de chaves antigas
+		passphrase = "default_passphrase"
+	}
+
 	// Load the owner key pair
-	keyPair, err := km.LoadKeyPair("owner", "default_passphrase")
+	keyPair, err := km.LoadKeyPair("owner", passphrase)
 	if err != nil {
 		return "", fmt.Errorf("failed to load owner key pair: %w", err)
 	}
@@ -618,4 +641,34 @@ func (km *KeyManager) convertToSSHFormat(publicKey []byte) string {
 
 	// Format as SSH public key: ssh-ed25519 <base64-encoded-key> <comment>
 	return fmt.Sprintf("ssh-ed25519 %s syntropy-owner-key", encodedKey)
+}
+
+// MigrateFromDefaultPassphrase migra chaves antigas para nova senha
+func (km *KeyManager) MigrateFromDefaultPassphrase(newPassphrase string) error {
+	km.logger.LogStep("key_migration_start", map[string]interface{}{
+		"from": "default_passphrase",
+		"to":   "user_passphrase",
+	})
+
+	// 1. Tentar carregar com senha antiga
+	keyPair, err := km.LoadKeyPair("owner", "default_passphrase")
+	if err != nil {
+		return fmt.Errorf("falha ao carregar chaves antigas: %w", err)
+	}
+
+	// 2. Armazenar com nova senha
+	if err := km.StoreKeyPair(keyPair, newPassphrase); err != nil {
+		return fmt.Errorf("falha ao re-criptografar chaves: %w", err)
+	}
+
+	// 3. Armazenar nova senha no keyring
+	if err := StorePassphraseInKeyring(newPassphrase); err != nil {
+		return fmt.Errorf("falha ao armazenar senha: %w", err)
+	}
+
+	km.logger.LogStep("key_migration_completed", map[string]interface{}{
+		"key_id": keyPair.ID,
+	})
+
+	return nil
 }

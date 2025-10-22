@@ -110,6 +110,9 @@ type KeyManager interface {
 
 	// Restauração de chaves
 	RestoreKeys(backupData []byte, passphrase string) error
+
+	// Migração de chaves antigas
+	MigrateFromDefaultPassphrase(newPassphrase string) error
 }
 
 // SetupLogger interface de logging
@@ -195,6 +198,7 @@ type SetupOptions struct {
 	Quiet          bool              `json:"quiet"`
 	ConfigPath     string            `json:"config_path"`
 	CustomSettings map[string]string `json:"custom_settings"`
+	Passphrase     string            `json:"passphrase"` // NOVO: Senha para criptografia das chaves
 }
 
 // ConfigOptions define as opções de configuração
