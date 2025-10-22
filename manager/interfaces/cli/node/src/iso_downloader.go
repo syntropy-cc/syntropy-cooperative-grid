@@ -58,10 +58,20 @@ func NewISODownloader(logger types.Logger) *ISODownloaderImpl {
 		homeDir = os.TempDir()
 	}
 
-	// Create cache directory
+	// Cache directory should be .syntropy/cache/isos (cache dir created by setup)
 	cacheDir := filepath.Join(homeDir, ".syntropy", "cache", "isos")
+
+	// Check if .syntropy/cache exists (should be created by setup component)
+	syntropyCacheDir := filepath.Join(homeDir, ".syntropy", "cache")
+	if _, err := os.Stat(syntropyCacheDir); err != nil {
+		logger.Error("Setup cache directory not found", "error", err, "path", syntropyCacheDir)
+		// Fallback to temp directory if setup not found
+		cacheDir = filepath.Join(os.TempDir(), "syntropy", "cache", "isos")
+	}
+
+	// Create isos subdirectory if it doesn't exist
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		logger.Error("Failed to create cache directory", "error", err)
+		logger.Error("Failed to create isos cache directory", "error", err)
 	}
 
 	// Create HTTP client with timeout

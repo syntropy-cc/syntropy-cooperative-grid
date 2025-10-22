@@ -208,20 +208,71 @@ func (cs *CreateSubcomponent) CreateNodeInteractive(ctx context.Context) (*Creat
 
 // Private helper methods
 
+// validateSetupComponent validates that the setup component has been run successfully
+func (cs *CreateSubcomponent) validateSetupComponent() error {
+	cs.logger.Debug("Validating setup component")
+
+	// Get home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Check if .syntropy directory exists
+	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	if _, err := os.Stat(syntropyDir); err != nil {
+		return fmt.Errorf("setup not found - please run 'syntropy setup' first")
+	}
+
+	// Check if cache directory exists (created by setup)
+	cacheDir := filepath.Join(syntropyDir, "cache")
+	if _, err := os.Stat(cacheDir); err != nil {
+		return fmt.Errorf("setup incomplete - cache directory not found, please run 'syntropy setup' first")
+	}
+
+	// Check if config directory exists (created by setup)
+	configDir := filepath.Join(syntropyDir, "config")
+	if _, err := os.Stat(configDir); err != nil {
+		return fmt.Errorf("setup incomplete - config directory not found, please run 'syntropy setup' first")
+	}
+
+	// Check if manager.yaml configuration file exists (created by setup)
+	managerConfigPath := filepath.Join(configDir, "manager.yaml")
+	if _, err := os.Stat(managerConfigPath); err != nil {
+		return fmt.Errorf("setup incomplete - manager configuration not found, please run 'syntropy setup' first")
+	}
+
+	// Validate that the configuration file is readable and not empty
+	configData, err := os.ReadFile(managerConfigPath)
+	if err != nil {
+		return fmt.Errorf("setup incomplete - cannot read manager configuration, please run 'syntropy setup' first: %w", err)
+	}
+
+	if len(configData) == 0 {
+		return fmt.Errorf("setup incomplete - manager configuration is empty, please run 'syntropy setup' first")
+	}
+
+	cs.logger.Debug("Setup component validation passed")
+	return nil
+}
+
 // validatePrerequisites validates that all prerequisites are met
 func (cs *CreateSubcomponent) validatePrerequisites(ctx context.Context) error {
 	cs.logger.Debug("Validating prerequisites")
 
+	// First, validate that setup component has been run successfully
+	if err := cs.validateSetupComponent(); err != nil {
+		return fmt.Errorf("setup validation failed: %w", err)
+	}
+
 	// Check if token integration is available
 	if cs.tokenIntegration == nil {
-		cs.logger.Warn("Token integration is not available - continuing in degraded mode")
-		// Continue without token integration - some features may not work
-	} else {
-		// Check if Grid Token is available
-		if _, err := cs.tokenIntegration.GetGridToken(); err != nil {
-			cs.logger.Warn("grid token is not available - continuing in degraded mode", "error", err)
-			// Continue without token - some features may not work
-		}
+		return fmt.Errorf("token integration is not available - please run 'syntropy setup' first")
+	}
+
+	// Check if Grid Token is available
+	if _, err := cs.tokenIntegration.GetGridToken(); err != nil {
+		return fmt.Errorf("grid token is not available - please run 'syntropy setup' first: %w", err)
 	}
 
 	// Check if required tools are available
@@ -334,13 +385,22 @@ func (cs *CreateSubcomponent) saveNodeState(ctx context.Context, config *types.N
 	}
 
 	// Also save to disk for backward compatibility
+	// Note: .syntropy directory should already exist from setup component
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 	nodesDir := filepath.Join(homeDir, ".syntropy", "nodes")
-	if err := os.MkdirAll(nodesDir, 0755); err != nil {
-		return fmt.Errorf("failed to create nodes directory: %w", err)
+	// Check if .syntropy directory exists (created by setup component)
+	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	if _, err := os.Stat(syntropyDir); err != nil {
+		return fmt.Errorf("setup not found - please run 'syntropy setup' first: %w", err)
+	}
+	// Only create nodes subdirectory if it doesn't exist
+	if _, err := os.Stat(nodesDir); err != nil {
+		if err := os.MkdirAll(nodesDir, 0755); err != nil {
+			return fmt.Errorf("failed to create nodes directory: %w", err)
+		}
 	}
 
 	// Create node directory
@@ -397,13 +457,13 @@ func (cs *CreateSubcomponent) checkWritePermissions() error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Ensure .syntropy directory exists
+	// Check if .syntropy directory exists (should be created by setup component)
 	syntropyDir := filepath.Join(homeDir, ".syntropy")
-	if err := os.MkdirAll(syntropyDir, 0755); err != nil {
-		return fmt.Errorf("cannot create .syntropy directory: %w", err)
+	if _, err := os.Stat(syntropyDir); err != nil {
+		return fmt.Errorf("setup not found - please run 'syntropy setup' first: %w", err)
 	}
 
-	// Try to create a temporary file
+	// Try to create a temporary file to test write permissions
 	testFile := filepath.Join(syntropyDir, ".syntropy_test_write")
 	file, err := os.Create(testFile)
 	if err != nil {
