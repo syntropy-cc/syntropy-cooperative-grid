@@ -1,6 +1,8 @@
 package node
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +10,12 @@ import (
 	"time"
 
 	"node-component/src/internal/types"
+)
+
+// Constantes para o Keyring (mesmas do SetupManager)
+const (
+	KeyringService = "syntropy-grid"
+	KeyringUser    = "grid-token"
 )
 
 // SetupAdapter adapts Setup Component interfaces to Node Component
@@ -24,13 +32,26 @@ func NewSetupAdapter(logger types.Logger) *SetupAdapter {
 
 // SetupTokenManagerAdapter adapts Setup TokenManager to Node TokenIntegration interface
 type SetupTokenManagerAdapter struct {
-	adapter *SetupAdapter
+	adapter          *SetupAdapter
+	keyringAvailable bool
+	tokensDir        string
 }
 
 // NewSetupTokenManagerAdapter creates a new token manager adapter
 func NewSetupTokenManagerAdapter(adapter *SetupAdapter) *SetupTokenManagerAdapter {
+	// Criar diretório de tokens se necessário
+	homeDir, _ := os.UserHomeDir()
+	tokensDir := filepath.Join(homeDir, ".syntropy", "tokens")
+
+	// Garantir que o diretório seja criado com permissões corretas
+	if err := os.MkdirAll(tokensDir, 0700); err != nil {
+		adapter.logger.Warn("Failed to create tokens directory", "error", err, "path", tokensDir)
+	}
+
 	return &SetupTokenManagerAdapter{
-		adapter: adapter,
+		adapter:          adapter,
+		keyringAvailable: false, // Simplificado: usar apenas arquivo
+		tokensDir:        tokensDir,
 	}
 }
 
@@ -50,42 +71,9 @@ func (stma *SetupTokenManagerAdapter) SaveToken(token string) error {
 
 // LoadToken loads the token from Setup Component storage
 func (stma *SetupTokenManagerAdapter) LoadToken() (string, error) {
-	// Check if setup was run by looking for token in keyring or file
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	// Try to load from keyring first (preferred method)
-	token, err := stma.loadTokenFromKeyring()
-	if err == nil && token != "" {
-		return token, nil
-	}
-
-	// Fallback: ler grid-token.json (formato do Setup)
-	tokenFile := filepath.Join(homeDir, ".syntropy", "tokens", "grid-token.json")
-	if _, err := os.Stat(tokenFile); err == nil {
-		tokenBytes, err := os.ReadFile(tokenFile)
-		if err != nil {
-			return "", fmt.Errorf("failed to read token file: %w", err)
-		}
-
-		// Parse JSON estrutura TokenBackup
-		var backup struct {
-			Token     string    `json:"token"`
-			CreatedAt time.Time `json:"created_at"`
-			Version   string    `json:"version"`
-			Checksum  string    `json:"checksum"`
-		}
-
-		if err := json.Unmarshal(tokenBytes, &backup); err != nil {
-			return "", fmt.Errorf("failed to parse token file: %w", err)
-		}
-
-		return backup.Token, nil
-	}
-
-	return "", fmt.Errorf("grid token not found - please run 'syntropy setup' first")
+	// Para simplificar e evitar dependências externas, usar apenas fallback de arquivo
+	// O SetupManager já gerencia o keyring, então o NodeManager pode usar apenas o arquivo
+	return stma.loadTokenFromFile()
 }
 
 // DeleteToken deletes the token (delegates to Setup Component)
@@ -96,27 +84,9 @@ func (stma *SetupTokenManagerAdapter) DeleteToken() error {
 
 // TokenExists checks if token exists (delegates to Setup Component)
 func (stma *SetupTokenManagerAdapter) TokenExists() (bool, error) {
-	// Check if token exists by looking for the token file directly
-	// This is more reliable than calling LoadToken() which might fail for other reasons
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return false, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	// Check if token file exists
-	tokenFile := filepath.Join(homeDir, ".syntropy", "tokens", "grid-token.json")
-	if _, err := os.Stat(tokenFile); err == nil {
-		return true, nil
-	}
-
-	// Also check keyring (even though it's not implemented yet)
-	// This ensures consistency with the Setup Component's approach
-	_, err = stma.loadTokenFromKeyring()
-	if err == nil {
-		return true, nil
-	}
-
-	return false, nil
+	// Para simplificar e evitar dependências externas, verificar apenas arquivo
+	// O SetupManager já gerencia o keyring, então o NodeManager pode usar apenas o arquivo
+	return stma.tokenExistsInFile()
 }
 
 // RotateToken rotates the token (delegates to Setup Component)
@@ -152,24 +122,53 @@ func (stma *SetupTokenManagerAdapter) ValidateToken(token string) error {
 	return nil
 }
 
-// loadTokenFromKeyring attempts to load token from system keyring
-func (stma *SetupTokenManagerAdapter) loadTokenFromKeyring() (string, error) {
-	// Import the keyring library for actual keyring access
-	// For now, we'll implement a basic keyring check using the same approach as the Setup Component
-	// This should use the same keyring service and user as defined in the Setup Component
+// loadTokenFromFile carrega token de arquivo como fallback (mesma lógica do SetupManager)
+func (stma *SetupTokenManagerAdapter) loadTokenFromFile() (string, error) {
+	backupPath := filepath.Join(stma.tokensDir, "grid-token.json")
 
-	// Check if keyring is available by trying to access it
-	// We'll use the same constants as the Setup Component
-	const (
-		KeyringService = "syntropy-grid"
-		KeyringUser    = "grid-token"
-	)
+	// Verificar se arquivo existe
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("token not found in keyring or file")
+	}
 
-	// Try to load from keyring using the same approach as Setup Component
-	// For now, we'll return an error to fallback to file-based storage
-	// In a production implementation, this would use github.com/zalando/go-keyring
-	// like: return keyring.Get(KeyringService, KeyringUser)
-	return "", fmt.Errorf("keyring not available - using file fallback")
+	// Ler arquivo
+	data, err := os.ReadFile(backupPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read token backup: %w", err)
+	}
+
+	// Deserializar backup
+	var backup struct {
+		Token     string    `json:"token"`
+		CreatedAt time.Time `json:"created_at"`
+		Version   string    `json:"version"`
+		Checksum  string    `json:"checksum"`
+	}
+
+	if err := json.Unmarshal(data, &backup); err != nil {
+		return "", fmt.Errorf("failed to unmarshal token backup: %w", err)
+	}
+
+	// Validar checksum (mesma lógica do SetupManager)
+	expectedChecksum := stma.calculateChecksum(backup.Token)
+	if backup.Checksum != expectedChecksum {
+		return "", fmt.Errorf("token backup checksum validation failed")
+	}
+
+	return backup.Token, nil
+}
+
+// tokenExistsInFile verifica se token existe em arquivo (mesma lógica do SetupManager)
+func (stma *SetupTokenManagerAdapter) tokenExistsInFile() (bool, error) {
+	backupPath := filepath.Join(stma.tokensDir, "grid-token.json")
+	_, err := os.Stat(backupPath)
+	return !os.IsNotExist(err), nil
+}
+
+// calculateChecksum calcula checksum SHA256 do token (mesma lógica do SetupManager)
+func (stma *SetupTokenManagerAdapter) calculateChecksum(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
 
 // CreateTokenIntegration creates a TokenIntegration instance using the Setup Component

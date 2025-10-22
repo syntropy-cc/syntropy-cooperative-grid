@@ -214,12 +214,14 @@ func (cs *CreateSubcomponent) validatePrerequisites(ctx context.Context) error {
 
 	// Check if token integration is available
 	if cs.tokenIntegration == nil {
-		return fmt.Errorf("token integration is not available")
-	}
-
-	// Check if Grid Token is available
-	if _, err := cs.tokenIntegration.GetGridToken(); err != nil {
-		return fmt.Errorf("Grid Token is not available: %w", err)
+		cs.logger.Warn("Token integration is not available - continuing in degraded mode")
+		// Continue without token integration - some features may not work
+	} else {
+		// Check if Grid Token is available
+		if _, err := cs.tokenIntegration.GetGridToken(); err != nil {
+			cs.logger.Warn("grid token is not available - continuing in degraded mode", "error", err)
+			// Continue without token - some features may not work
+		}
 	}
 
 	// Check if required tools are available

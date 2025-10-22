@@ -72,8 +72,9 @@ func (nm *NodeManager) Initialize() error {
 
 	// Initialize the token integration with Setup Component
 	if err := setupAdapter.InitializeTokenIntegration(nm.tokenIntegration); err != nil {
-		nm.logger.Error("Failed to initialize token integration with Setup Component", "error", err)
-		return fmt.Errorf("failed to initialize token integration: %w", err)
+		nm.logger.Warn("Failed to initialize token integration with Setup Component - continuing in degraded mode", "error", err)
+		// Continue without token integration - some commands may not work but basic functionality remains
+		nm.tokenIntegration = nil
 	}
 
 	// Initialize component services

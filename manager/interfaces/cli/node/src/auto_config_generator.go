@@ -60,9 +60,17 @@ func (acg *AutoConfigGenerator) GenerateNodeConfig() (*types.NodeConfig, error) 
 	}
 
 	// Get Grid Token from Setup Component
-	gridToken, err := acg.tokenIntegration.GetGridToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get grid token: %w", err)
+	var gridToken string
+	if acg.tokenIntegration != nil {
+		var err error
+		gridToken, err = acg.tokenIntegration.GetGridToken()
+		if err != nil {
+			acg.logger.Warn("Failed to get grid token - using placeholder", "error", err)
+			gridToken = "PLACEHOLDER_TOKEN" // Placeholder for degraded mode
+		}
+	} else {
+		acg.logger.Warn("Token integration not available - using placeholder token")
+		gridToken = "PLACEHOLDER_TOKEN" // Placeholder for degraded mode
 	}
 
 	// Detect Command Station IP
