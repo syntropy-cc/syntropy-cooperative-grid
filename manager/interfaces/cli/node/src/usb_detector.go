@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/constants"
+	"node-component/src/internal/types"
 )
 
 // USBDetector defines the interface for USB device detection

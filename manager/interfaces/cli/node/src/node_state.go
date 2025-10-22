@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/constants"
+	"node-component/src/internal/helpers"
+	"node-component/src/internal/types"
 )
 
 // NodeStateManager manages the state of nodes in the system

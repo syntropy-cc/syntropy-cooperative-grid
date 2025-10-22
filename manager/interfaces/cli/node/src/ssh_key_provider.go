@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/types"
 )
 
 // SSHKeyProvider provides SSH key management for Node Component

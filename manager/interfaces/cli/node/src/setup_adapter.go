@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/types"
 )
 
 // SetupAdapter adapts Setup Component interfaces to Node Component

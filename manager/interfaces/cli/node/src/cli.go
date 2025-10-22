@@ -7,8 +7,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"node-component/src/internal/types"
+
 	"github.com/spf13/cobra"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
 )
 
 // CLICommands provides CLI commands for the node component
@@ -26,15 +27,8 @@ func NewCLICommands(nodeManager *NodeManager, logger types.Logger) *CLICommands 
 }
 
 // RegisterCommands registers all node CLI commands
-func (cli *CLICommands) RegisterCommands(rootCmd *cobra.Command) {
-	// Create node command group
-	nodeCmd := &cobra.Command{
-		Use:   "node",
-		Short: "Manage Syntropy nodes",
-		Long:  "Create, manage and monitor Syntropy nodes for the cooperative grid",
-	}
-
-	// Add subcommands
+func (cli *CLICommands) RegisterCommands(nodeCmd *cobra.Command) {
+	// Add subcommands to the existing node command
 	nodeCmd.AddCommand(cli.createNodeCmd())
 	nodeCmd.AddCommand(cli.listNodesCmd())
 	nodeCmd.AddCommand(cli.nodeStatusCmd())
@@ -42,9 +36,6 @@ func (cli *CLICommands) RegisterCommands(rootCmd *cobra.Command) {
 	nodeCmd.AddCommand(cli.removeNodeCmd())
 	nodeCmd.AddCommand(cli.startListenerCmd())
 	nodeCmd.AddCommand(cli.stopListenerCmd())
-
-	// Add to root command
-	rootCmd.AddCommand(nodeCmd)
 }
 
 // createNodeCmd creates the node create command

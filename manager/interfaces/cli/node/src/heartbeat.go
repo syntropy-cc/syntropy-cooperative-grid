@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/types"
 )
 
 // HeartbeatManager manages heartbeat communication with nodes

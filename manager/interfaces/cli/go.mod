@@ -5,10 +5,13 @@ go 1.24.7
 require (
 	github.com/spf13/cobra v1.10.1
 	golang.org/x/term v0.36.0
+	node-component v0.0.0
 	setup-component v0.0.0
 )
 
 replace setup-component => ./setup
+
+replace node-component => ./node
 
 require (
 	github.com/alessio/shellescape v1.4.1 // indirect

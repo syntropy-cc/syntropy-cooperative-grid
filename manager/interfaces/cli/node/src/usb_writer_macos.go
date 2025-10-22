@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/helpers"
+	"node-component/src/internal/types"
 )
 
 // USBWriterMacOS implements USB writing for macOS systems

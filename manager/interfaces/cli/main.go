@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	node "node-component/src"
 	setup "setup-component/src"
 
 	"github.com/spf13/cobra"
@@ -1146,26 +1147,15 @@ func init() {
 	// Setup validate flags
 	setupValidateCmd.Flags().String("config-path", "", "caminho personalizado do arquivo de configuração")
 
-	// Add placeholder node subcommands
-	nodeCmd.AddCommand(&cobra.Command{
-		Use:   "create",
-		Short: "Criar novo nó",
-		Long:  "Cria um novo nó na rede cooperativa",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("🖥️  Node component is not yet fully integrated.")
-			fmt.Println("This is a placeholder command for build testing.")
-			return nil
-		},
-	})
+	// Initialize node component
+	nodeManager := node.NewNodeManager()
+	if err := nodeManager.Initialize(); err != nil {
+		fmt.Printf("❌ Erro ao inicializar o componente node: %v\n", err)
+		return
+	}
 
-	nodeCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "Listar nós existentes",
-		Long:  "Lista todos os nós registrados na rede",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("🖥️  Node component is not yet fully integrated.")
-			fmt.Println("This is a placeholder command for build testing.")
-			return nil
-		},
-	})
+	// Create CLI commands for node component
+	nodeLogger := node.NewLogger()
+	nodeCLI := node.NewCLICommands(nodeManager, nodeLogger)
+	nodeCLI.RegisterCommands(nodeCmd)
 }

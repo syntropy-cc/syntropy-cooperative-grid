@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/types"
 )
 
 // CreateSubcomponent handles the complete node creation workflow
@@ -18,6 +18,7 @@ type CreateSubcomponent struct {
 	cloudInitGenerator types.CloudInitGenerator
 	usbWriter          USBWriter
 	tokenIntegration   types.TokenIntegration
+	nodeState          types.NodeStateManager
 	logger             types.Logger
 }
 
@@ -29,6 +30,7 @@ func NewCreateSubcomponent(
 	cloudInitGenerator types.CloudInitGenerator,
 	usbWriter USBWriter,
 	tokenIntegration types.TokenIntegration,
+	nodeState types.NodeStateManager,
 	logger types.Logger,
 ) *CreateSubcomponent {
 	return &CreateSubcomponent{
@@ -38,6 +40,7 @@ func NewCreateSubcomponent(
 		cloudInitGenerator: cloudInitGenerator,
 		usbWriter:          usbWriter,
 		tokenIntegration:   tokenIntegration,
+		nodeState:          nodeState,
 		logger:             logger,
 	}
 }
@@ -323,7 +326,12 @@ func (cs *CreateSubcomponent) writeISOToUSB(ctx context.Context, isoPath, device
 func (cs *CreateSubcomponent) saveNodeState(ctx context.Context, config *types.NodeConfig, result *CreateResult) error {
 	cs.logger.Debug("Saving node state", "node_id", config.NodeID)
 
-	// Create nodes directory
+	// Use NodeStateManager to save the node state
+	if err := cs.nodeState.CreateNode(config.NodeID, config); err != nil {
+		return fmt.Errorf("failed to create node in state manager: %w", err)
+	}
+
+	// Also save to disk for backward compatibility
 	nodesDir := filepath.Join(os.Getenv("HOME"), ".syntropy", "nodes")
 	if err := os.MkdirAll(nodesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create nodes directory: %w", err)

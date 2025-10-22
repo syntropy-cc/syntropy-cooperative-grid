@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/constants"
+	"node-component/src/internal/types"
 	// Import Setup Component interfaces - TODO: Fix import path when Setup Component is available
-	// setupTypes "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/srgithub.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	// setupTypes "github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/setup/srnode-component/src/internal/types"
 )
 
 // SetupTokenManager interface for integration with Setup Component

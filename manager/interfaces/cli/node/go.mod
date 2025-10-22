@@ -1,4 +1,4 @@
-module github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node
+module node-component
 
 go 1.24.0
 

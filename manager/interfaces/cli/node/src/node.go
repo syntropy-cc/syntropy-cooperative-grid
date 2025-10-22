@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/constants"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/helpers"
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/constants"
+	"node-component/src/internal/helpers"
+	"node-component/src/internal/types"
 )
 
 // Type aliases for compatibility - using types from types package
@@ -93,6 +93,7 @@ func (nm *NodeManager) Initialize() error {
 		nm.cloudInitGenerator,
 		nm.usbWriter,
 		nm.tokenIntegration,
+		nm.nodeState,
 		nm.logger,
 	)
 
@@ -143,18 +144,7 @@ func (nm *NodeManager) CreateNode(options *CreateOptions) (*CreateResult, error)
 		return nil, fmt.Errorf("node creation failed: %w", err)
 	}
 
-	// Update node state (if we have the config)
-	if result.CloudInitConfig != nil {
-		// Convert cloud-init config to node config for state management
-		nodeConfig := &types.NodeConfig{
-			NodeID: result.NodeID,
-			// Add other fields as needed
-		}
-		if err := nm.nodeState.CreateNode(result.NodeID, nodeConfig); err != nil {
-			nm.logger.Error("Failed to update node state", "nodeID", result.NodeID, "error", err)
-			// Don't fail the entire operation, just log the error
-		}
-	}
+	// Node state is already saved by the CreateSubcomponent
 
 	// Publish event
 	nm.eventBus.Publish(types.Event{

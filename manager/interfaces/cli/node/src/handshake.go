@@ -9,7 +9,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/syntropy-cc/syntropy-cooperative-grid/manager/interfaces/cli/node/src/internal/types"
+	"node-component/src/internal/types"
 )
 
 // HandshakeManager manages the secure handshake protocol for node registration
