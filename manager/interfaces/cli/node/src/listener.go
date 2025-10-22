@@ -205,7 +205,7 @@ func (l *Listener) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Set connection timeout
-	conn.SetDeadline(time.Now().Add(30 * time.Minute))
+	conn.SetDeadline(time.Now().Add(60 * time.Minute))
 
 	// Process handshake
 	if err := l.processHandshake(connection); err != nil {

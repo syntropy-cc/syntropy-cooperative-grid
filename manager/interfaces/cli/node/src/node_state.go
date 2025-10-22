@@ -337,14 +337,14 @@ func (nsm *NodeStateManager) AddPendingNode(nodeConfig *types.NodeConfig, sshKey
 	pendingNode := &PendingNode{
 		NodeID:          nodeConfig.NodeID,
 		CreatedAt:       time.Now(),
-		ExpectedAt:      time.Now().Add(30 * time.Minute), // Expect connection within 30 minutes
+		ExpectedAt:      time.Now().Add(60 * time.Minute), // Expect connection within 30 minutes
 		Config:          nodeConfig,
 		SSHKeys:         sshKeys,
 		CloudInitConfig: cloudInitConfig,
 		USBDevice:       usbDevice,
 		ISOPath:         isoPath,
 		Status:          "waiting",
-		TimeoutDuration: 30 * time.Minute,
+		TimeoutDuration: 60 * time.Minute,
 		LastChecked:     time.Now(),
 		RetryCount:      0,
 		MaxRetries:      3,

@@ -21,7 +21,7 @@ const (
 
 	// Configuration
 	DefaultConfigDir          = "~/.syntropy"
-	DefaultISODownloadTimeout = 30 * time.Minute
+	DefaultISODownloadTimeout = 60 * time.Minute
 
 	// Registration
 	DefaultRegistrationPort    = 51000

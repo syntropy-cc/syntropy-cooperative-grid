@@ -167,7 +167,7 @@ func (hm *HandshakeManager) validateHandshakeRequest(request *HandshakeRequest) 
 	}
 
 	// Validate timestamp (should not be too old)
-	if time.Since(request.Timestamp) > 30*time.Minute {
+	if time.Since(request.Timestamp) > 60*time.Minute {
 		return fmt.Errorf("handshake request is too old: %v", request.Timestamp)
 	}
 
