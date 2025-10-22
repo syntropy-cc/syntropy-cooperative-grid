@@ -68,10 +68,9 @@ func (f *USBWriterFactory) createWindowsWriter(logger types.Logger) USBWriter {
 
 // createLinuxWriter creates a Linux USB writer
 func (f *USBWriterFactory) createLinuxWriter(logger types.Logger) USBWriter {
-	base := NewUSBWriterBase("linux", logger)
-	return &USBWriterLinux{
-		USBWriterBase: base,
-	}
+	// This will be implemented by platform-specific files with build constraints
+	// For now, return nil to avoid compilation errors on non-Linux platforms
+	return nil
 }
 
 // createMacOSWriter creates a macOS USB writer

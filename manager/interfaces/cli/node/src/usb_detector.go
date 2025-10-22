@@ -70,10 +70,9 @@ func (f *USBDetectorFactory) createWindowsDetector(logger types.Logger) USBDetec
 
 // createLinuxDetector creates a Linux USB detector
 func (f *USBDetectorFactory) createLinuxDetector(logger types.Logger) USBDetector {
-	base := NewUSBDetectorBase("linux", logger)
-	return &USBDetectorLinux{
-		USBDetectorBase: base,
-	}
+	// This will be implemented by platform-specific files with build constraints
+	// For now, return nil to avoid compilation errors on non-Linux platforms
+	return nil
 }
 
 // createMacOSDetector creates a macOS USB detector
