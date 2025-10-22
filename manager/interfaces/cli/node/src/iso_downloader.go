@@ -50,8 +50,16 @@ type ISODownloaderImpl struct {
 
 // NewISODownloader creates a new ISO downloader
 func NewISODownloader(logger types.Logger) *ISODownloaderImpl {
+	// Get home directory using cross-platform method
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("Failed to get home directory", "error", err)
+		// Fallback to temp directory
+		homeDir = os.TempDir()
+	}
+
 	// Create cache directory
-	cacheDir := filepath.Join(os.Getenv("HOME"), ".syntropy", "cache", "isos")
+	cacheDir := filepath.Join(homeDir, ".syntropy", "cache", "isos")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		logger.Error("Failed to create cache directory", "error", err)
 	}

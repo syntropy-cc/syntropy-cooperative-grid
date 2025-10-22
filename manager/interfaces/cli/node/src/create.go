@@ -334,7 +334,11 @@ func (cs *CreateSubcomponent) saveNodeState(ctx context.Context, config *types.N
 	}
 
 	// Also save to disk for backward compatibility
-	nodesDir := filepath.Join(os.Getenv("HOME"), ".syntropy", "nodes")
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	nodesDir := filepath.Join(homeDir, ".syntropy", "nodes")
 	if err := os.MkdirAll(nodesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create nodes directory: %w", err)
 	}
@@ -387,21 +391,28 @@ func (cs *CreateSubcomponent) checkRequiredTools() error {
 func (cs *CreateSubcomponent) checkWritePermissions() error {
 	cs.logger.Debug("Checking write permissions")
 
-	// Check if we can write to the home directory
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		return fmt.Errorf("HOME environment variable is not set")
+	// Get home directory using cross-platform method
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Ensure .syntropy directory exists
+	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	if err := os.MkdirAll(syntropyDir, 0755); err != nil {
+		return fmt.Errorf("cannot create .syntropy directory: %w", err)
 	}
 
 	// Try to create a temporary file
-	testFile := filepath.Join(homeDir, ".syntropy_test_write")
+	testFile := filepath.Join(syntropyDir, ".syntropy_test_write")
 	file, err := os.Create(testFile)
 	if err != nil {
-		return fmt.Errorf("cannot write to home directory: %w", err)
+		return fmt.Errorf("cannot write to .syntropy directory: %w", err)
 	}
 	file.Close()
 	os.Remove(testFile)
 
+	cs.logger.Debug("Write permissions check passed")
 	return nil
 }
 
