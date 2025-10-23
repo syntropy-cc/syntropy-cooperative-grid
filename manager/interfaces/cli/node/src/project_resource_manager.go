@@ -192,3 +192,4 @@ func (prm *ProjectResourceManager) ValidateInfrastructureStructure() error {
 	prm.logger.Debug("Infrastructure structure validated successfully")
 	return nil
 }
+

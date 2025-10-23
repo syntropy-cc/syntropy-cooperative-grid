@@ -40,6 +40,11 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devic
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
+	// Check required tools before starting
+	if err := uww.checkRequiredTools(ctx); err != nil {
+		return nil, fmt.Errorf("required tools check failed: %w", err)
+	}
+
 	// Get ISO file size
 	isoFile, err := os.Open(isoPath)
 	if err != nil {
@@ -58,8 +63,8 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devic
 	// Write ISO to device using dd or diskpart
 	actualISOPath := isoPath
 
-	// Write ISO to device using dd or diskpart
-	if err := uww.writeISOWithDD(ctx, actualISOPath, devicePath, progressTracker); err != nil {
+	// Write ISO to device using multiple fallback methods
+	if err := uww.writeISOWithFallback(ctx, actualISOPath, devicePath, progressTracker); err != nil {
 		return &types.WriteResult{
 			DevicePath:   devicePath,
 			ISOPath:      isoPath,
@@ -127,8 +132,13 @@ online disk
 
 	// Execute diskpart
 	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
-	if err := cmd.Run(); err != nil {
-		uww.logger.Warn("Failed to unmount device with diskpart", "device", devicePath, "error", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Parse diskpart error for better user experience
+		errorMsg := uww.parseDiskpartError(err, string(output), "unmount")
+		uww.logger.Warn("Failed to unmount device with diskpart", "device", devicePath, "error", errorMsg)
+		fmt.Printf("⚠️  Aviso: Falha ao desmontar dispositivo com diskpart: %s\n", errorMsg)
+		fmt.Println("   ℹ️  Continuando com a operação...")
 		// Continue even if unmount fails
 	}
 
@@ -199,6 +209,41 @@ func (uww *USBWriterWindows) validateInputs(isoPath string, devicePath string) e
 	return nil
 }
 
+// writeISOWithFallback writes ISO using multiple fallback methods
+func (uww *USBWriterWindows) writeISOWithFallback(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with fallback methods", "iso", isoPath, "device", devicePath)
+
+	// Method 1: Try dd first (fastest if available)
+	fmt.Println("   🔄 Método 1: Tentando com dd...")
+	if err := uww.writeISOWithDD(ctx, isoPath, devicePath, progressTracker); err == nil {
+		fmt.Println("   ✅ Sucesso com dd!")
+		return nil
+	}
+
+	// Method 2: Try PowerShell with robocopy
+	fmt.Println("   🔄 Método 2: Tentando com PowerShell + robocopy...")
+	if err := uww.writeISOWithPowerShell(ctx, isoPath, devicePath, progressTracker); err == nil {
+		fmt.Println("   ✅ Sucesso com PowerShell!")
+		return nil
+	}
+
+	// Method 3: Try PowerShell with direct copy
+	fmt.Println("   🔄 Método 3: Tentando com PowerShell + copy...")
+	if err := uww.writeISOWithPowerShellCopy(ctx, isoPath, devicePath, progressTracker); err == nil {
+		fmt.Println("   ✅ Sucesso com PowerShell copy!")
+		return nil
+	}
+
+	// Method 4: Try diskpart + copy
+	fmt.Println("   🔄 Método 4: Tentando com diskpart + copy...")
+	if err := uww.writeISOWithDiskpart(ctx, isoPath, devicePath, progressTracker); err == nil {
+		fmt.Println("   ✅ Sucesso com diskpart!")
+		return nil
+	}
+
+	return fmt.Errorf("todos os métodos de escrita falharam - verifique permissões e conectividade do dispositivo")
+}
+
 // writeISOWithDD writes ISO to device using dd command (if available) or alternative method
 func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
 	uww.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", devicePath)
@@ -232,8 +277,14 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 		"status=progress",
 		"conv=fsync")
 
-	if err := cmd.Run(); err != nil {
-		uww.logger.Warn("dd command failed, trying alternative method", "error", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Parse dd error for better user experience
+		errorMsg := uww.parseDDError(err, string(output))
+		uww.logger.Warn("dd command failed, trying alternative method", "error", errorMsg)
+		fmt.Printf("⚠️  Aviso: Comando dd falhou: %s\n", errorMsg)
+		fmt.Println("   🔄 Tentando método alternativo com PowerShell...")
+		fmt.Println()
 
 		// Fallback to PowerShell method
 		return uww.writeISOWithPowerShell(ctx, isoPath, devicePath, progressTracker)
@@ -241,6 +292,75 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 
 	uww.logger.Debug("dd command completed successfully")
 	return nil
+}
+
+// writeISOWithPowerShellCopy writes ISO using PowerShell with direct copy
+func (uww *USBWriterWindows) writeISOWithPowerShellCopy(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with PowerShell copy", "iso", isoPath, "device", devicePath)
+
+	// PowerShell script to write ISO using direct copy
+	psScript := fmt.Sprintf(`
+$isoPath = "%s"
+$devicePath = "%s"
+
+try {
+    # Mount ISO
+    $isoMount = Mount-DiskImage -ImagePath $isoPath -PassThru
+    $isoDrive = ($isoMount | Get-Volume).DriveLetter + ":"
+    
+    # Copy ISO contents to USB device using Copy-Item
+    Copy-Item -Path "$isoDrive\*" -Destination $devicePath -Recurse -Force
+    
+    # Dismount ISO
+    Dismount-DiskImage -ImagePath $isoPath
+    
+    Write-Output "ISO copy completed successfully"
+} catch {
+    Write-Error "Failed to copy ISO: $_"
+    exit 1
+}
+`, isoPath, devicePath)
+
+	// Execute PowerShell script
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("PowerShell copy failed: %w - %s", err, string(output))
+	}
+
+	uww.logger.Debug("PowerShell copy completed successfully")
+	return nil
+}
+
+// writeISOWithDiskpart writes ISO using diskpart and copy
+func (uww *USBWriterWindows) writeISOWithDiskpart(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with diskpart", "iso", isoPath, "device", devicePath)
+
+	// First, format the device with diskpart
+	diskpartScript := fmt.Sprintf(`
+select disk %s
+clean
+create partition primary
+active
+format fs=fat32 quick
+assign
+`, strings.TrimSuffix(devicePath, ":"))
+
+	// Create temporary script file
+	scriptPath := filepath.Join(os.TempDir(), "syntropy-format.txt")
+	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
+		return fmt.Errorf("failed to create diskpart script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	// Execute diskpart
+	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("diskpart format failed: %w", err)
+	}
+
+	// Then use PowerShell to copy ISO contents
+	return uww.writeISOWithPowerShellCopy(ctx, isoPath, devicePath, progressTracker)
 }
 
 // writeISOWithPowerShell writes ISO using PowerShell as fallback
@@ -334,6 +454,101 @@ func (uww *USBWriterWindows) ValidateDevice(ctx context.Context, devicePath stri
 
 	uww.logger.Debug("Device validation passed", "device", devicePath)
 	return nil
+}
+
+// checkRequiredTools checks if required tools are available for USB writing
+func (uww *USBWriterWindows) checkRequiredTools(ctx context.Context) error {
+	uww.logger.Debug("Checking required tools for Windows USB writing")
+
+	// Check if PowerShell is available (always available on Windows)
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", "Get-Host")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("PowerShell não está disponível - necessário para escrita USB")
+	}
+
+	// Check if diskpart is available
+	cmd = exec.CommandContext(ctx, "diskpart")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("diskpart não está disponível - necessário para gerenciamento de discos")
+	}
+
+	// Check if dd is available (optional, will fallback to PowerShell)
+	cmd = exec.CommandContext(ctx, "dd", "--version")
+	ddAvailable := cmd.Run() == nil
+
+	if !ddAvailable {
+		uww.logger.Info("dd command not available, will use PowerShell fallback")
+		fmt.Println("ℹ️  Comando dd não encontrado - usando PowerShell como método alternativo")
+	}
+
+	uww.logger.Debug("Required tools check completed", "dd_available", ddAvailable)
+	return nil
+}
+
+// parseDDError parses dd error output for better user experience
+func (uww *USBWriterWindows) parseDDError(err error, output string) string {
+	// Check for common dd error patterns
+	if strings.Contains(strings.ToLower(output), "executable file not found") {
+		return "Comando dd não encontrado - instale WSL, Git Bash ou use PowerShell"
+	}
+	if strings.Contains(strings.ToLower(output), "permission denied") {
+		return "Permissão negada - execute como administrador"
+	}
+	if strings.Contains(strings.ToLower(output), "no such file or directory") {
+		return "Arquivo ou diretório não encontrado - verifique o caminho do dispositivo"
+	}
+	if strings.Contains(strings.ToLower(output), "device or resource busy") {
+		return "Dispositivo está sendo usado - feche outros programas que possam estar acessando o USB"
+	}
+	if strings.Contains(strings.ToLower(output), "read-only file system") {
+		return "Sistema de arquivos somente leitura - dispositivo pode estar protegido"
+	}
+	if strings.Contains(strings.ToLower(output), "no space left on device") {
+		return "Sem espaço no dispositivo - verifique se o USB tem espaço suficiente"
+	}
+	if strings.Contains(strings.ToLower(output), "invalid argument") {
+		return "Argumento inválido - dispositivo pode não suportar escrita direta"
+	}
+
+	// Return generic error with context
+	return fmt.Sprintf("Erro do dd: %v", err)
+}
+
+// parseDiskpartError parses diskpart error output for better user experience
+func (uww *USBWriterWindows) parseDiskpartError(err error, output, operation string) string {
+	// Common diskpart error codes and their meanings
+	errorMap := map[string]string{
+		"0x80070057": "Parâmetro inválido - dispositivo pode estar em uso ou protegido",
+		"0x80070005": "Acesso negado - execute como administrador",
+		"0x8007001F": "Dispositivo não está pronto",
+		"0x80070032": "Dispositivo não suporta o comando",
+		"0x80070015": "Dispositivo não encontrado",
+		"0x80070020": "Dispositivo está sendo usado por outro processo",
+	}
+
+	// Check for specific error codes in output
+	for code, message := range errorMap {
+		if strings.Contains(output, code) {
+			return fmt.Sprintf("%s (Código: %s)", message, code)
+		}
+	}
+
+	// Check for common error patterns
+	if strings.Contains(strings.ToLower(output), "access denied") {
+		return "Acesso negado - execute o comando como administrador"
+	}
+	if strings.Contains(strings.ToLower(output), "device not ready") {
+		return "Dispositivo não está pronto - verifique se está conectado corretamente"
+	}
+	if strings.Contains(strings.ToLower(output), "device in use") {
+		return "Dispositivo está sendo usado por outro processo - feche outros programas"
+	}
+	if strings.Contains(strings.ToLower(output), "invalid parameter") {
+		return "Parâmetro inválido - dispositivo pode estar protegido ou em uso"
+	}
+
+	// Return generic error with operation context
+	return fmt.Sprintf("Erro durante %s: %v", operation, err)
 }
 
 // hasAdminPrivileges checks if the current process has admin privileges

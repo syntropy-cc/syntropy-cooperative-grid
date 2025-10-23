@@ -144,6 +144,12 @@ func (cs *CreateSubcomponent) CreateNode(ctx context.Context, options CreateOpti
 
 	// Step 6: Write ISO to USB device
 	if !options.SkipUSBWrite {
+		fmt.Println("💾 Etapa 6/6: Escrevendo ISO no dispositivo USB...")
+		fmt.Printf("   📁 ISO: %s\n", filepath.Base(isoPath))
+		fmt.Printf("   🔌 Dispositivo: %s\n", result.DevicePath)
+		fmt.Println("   ⏳ Isso pode levar alguns minutos...")
+		fmt.Println()
+
 		writeResult, err := cs.writeISOToUSB(ctx, isoPath, result.DevicePath, cloudInitConfig)
 		if err != nil {
 			result.StepsFailed = append(result.StepsFailed, "write_iso_to_usb")
@@ -156,6 +162,8 @@ func (cs *CreateSubcomponent) CreateNode(ctx context.Context, options CreateOpti
 			return result, fmt.Errorf("USB write failed: %s", writeResult.ErrorMessage)
 		}
 		result.StepsCompleted = append(result.StepsCompleted, "write_iso_to_usb")
+		fmt.Println("   ✅ ISO escrita com sucesso no dispositivo USB")
+		fmt.Println()
 	}
 
 	// Step 7: Save node state
@@ -320,12 +328,69 @@ func (cs *CreateSubcomponent) detectUSBDevice(ctx context.Context) (string, erro
 		return "", fmt.Errorf("no suitable USB devices found")
 	}
 
-	// For now, return the first suitable device
-	// In interactive mode, we would show a list for user selection
-	device := devices[0]
+	// Use interactive selection if multiple devices found
+	selectedDevice, err := cs.selectUSBDeviceFromDetected(devices)
+	if err != nil {
+		return "", fmt.Errorf("device selection failed: %w", err)
+	}
 
-	cs.logger.Debug("USB device detected", "device", device.Path, "capacity", device.Capacity)
-	return device.Path, nil
+	cs.logger.Debug("USB device detected", "device", selectedDevice.Path, "capacity", selectedDevice.Capacity)
+	return selectedDevice.Path, nil
+}
+
+// selectUSBDeviceFromDetected allows user to select a USB device from detected devices
+func (cs *CreateSubcomponent) selectUSBDeviceFromDetected(devices []types.USBDevice) (*types.USBDevice, error) {
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("no devices available for selection")
+	}
+
+	// Se há apenas um dispositivo, usar automaticamente
+	if len(devices) == 1 {
+		fmt.Printf("\n🔌 Dispositivo USB encontrado:\n")
+		fmt.Printf("   Caminho: %s\n", devices[0].Path)
+		fmt.Printf("   Capacidade: %.2f GB\n", float64(devices[0].Capacity)/(1024*1024*1024))
+		if devices[0].Vendor != "" {
+			fmt.Printf("   Fabricante: %s\n", devices[0].Vendor)
+		}
+		if devices[0].Model != "" {
+			fmt.Printf("   Modelo: %s\n", devices[0].Model)
+		}
+		fmt.Printf("   Removível: %t\n", devices[0].IsRemovable)
+		fmt.Printf("\n✅ Usando dispositivo automaticamente\n\n")
+		return &devices[0], nil
+	}
+
+	// Se há múltiplos dispositivos, mostrar lista para seleção
+	fmt.Printf("\n🔌 Múltiplos dispositivos USB encontrados:\n\n")
+
+	for i, device := range devices {
+		fmt.Printf("  %d. %s\n", i+1, device.Path)
+		fmt.Printf("     Capacidade: %.2f GB\n", float64(device.Capacity)/(1024*1024*1024))
+		if device.Vendor != "" {
+			fmt.Printf("     Fabricante: %s\n", device.Vendor)
+		}
+		if device.Model != "" {
+			fmt.Printf("     Modelo: %s\n", device.Model)
+		}
+		fmt.Printf("     Removível: %t\n", device.IsRemovable)
+		fmt.Printf("\n")
+	}
+
+	fmt.Printf("❓ Selecione um dispositivo (1-%d): ", len(devices))
+
+	var choice int
+	_, err := fmt.Scanln(&choice)
+	if err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if choice < 1 || choice > len(devices) {
+		return nil, fmt.Errorf("invalid choice: %d", choice)
+	}
+
+	selectedDevice := devices[choice-1]
+	fmt.Printf("✅ Dispositivo selecionado: %s (%.2f GB)\n\n", selectedDevice.Path, float64(selectedDevice.Capacity)/(1024*1024*1024))
+	return &selectedDevice, nil
 }
 
 // downloadUbuntuISO downloads the Ubuntu ISO
