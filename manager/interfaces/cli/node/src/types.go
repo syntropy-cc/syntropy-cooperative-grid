@@ -1,6 +1,9 @@
 package node
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"node-component/src/internal/types"
 	"time"
 )
 
@@ -27,6 +30,44 @@ type USBDevice struct {
 	Serial      string `json:"serial"`
 	IsSystem    bool   `json:"is_system"`
 	IsRemovable bool   `json:"is_removable"`
+}
+
+// SelectedUSBDevice represents a USB device that has been validated and selected by the user
+type SelectedUSBDevice struct {
+	Device          types.USBDevice `json:"device"`
+	SelectedAt      time.Time       `json:"selected_at"`
+	ValidationToken string          `json:"validation_token"` // Unique token to ensure it's the same device
+	Platform        string          `json:"platform"`
+}
+
+// NewSelectedUSBDevice creates a selected device after validations
+func NewSelectedUSBDevice(device types.USBDevice, platform string) *SelectedUSBDevice {
+	// Generate unique token based on device characteristics
+	token := generateDeviceToken(device)
+	return &SelectedUSBDevice{
+		Device:          device,
+		SelectedAt:      time.Now(),
+		ValidationToken: token,
+		Platform:        platform,
+	}
+}
+
+// Validate verifies if the device is still valid and is the same
+func (s *SelectedUSBDevice) Validate(currentDevice types.USBDevice) error {
+	currentToken := generateDeviceToken(currentDevice)
+	if currentToken != s.ValidationToken {
+		return fmt.Errorf("device mismatch: expected token %s, got %s",
+			s.ValidationToken, currentToken)
+	}
+	return nil
+}
+
+// generateDeviceToken generates unique token based on device characteristics
+func generateDeviceToken(device types.USBDevice) string {
+	data := fmt.Sprintf("%s-%s-%s-%d",
+		device.Path, device.Model, device.Serial, device.Capacity)
+	hash := sha256.Sum256([]byte(data))
+	return fmt.Sprintf("%x", hash[:8])
 }
 
 // NodeStatus represents the current status of a node

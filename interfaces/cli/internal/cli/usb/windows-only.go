@@ -274,6 +274,8 @@ func listWindowsOnlyDevices() ([]WindowsOnlyUSBDevice, error) {
 
 // createWindowsOnlyUSB cria USB bootável específico para Windows
 func createWindowsOnlyUSB(devicePath string, config *WindowsOnlyConfig) error {
+	fmt.Printf("🔒 Iniciando validações de segurança para %s\n", devicePath)
+
 	if err := validateWindowsEnvironment(); err != nil {
 		return err
 	}
@@ -283,11 +285,14 @@ func createWindowsOnlyUSB(devicePath string, config *WindowsOnlyConfig) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("   📍 Disco identificado: %d\n", diskNum)
 
-	// Validar dispositivo
+	// Validar dispositivo (validação dupla)
+	fmt.Printf("   🔍 Executando validação dupla de segurança...\n")
 	if err := validateWindowsOnlyDevice(diskNum); err != nil {
 		return err
 	}
+	fmt.Printf("   ✅ Validação de segurança aprovada\n\n")
 
 	// Configurar diretórios
 	if err := setupWindowsOnlyDirectories(config); err != nil {
@@ -302,7 +307,8 @@ func createWindowsOnlyUSB(devicePath string, config *WindowsOnlyConfig) error {
 
 	fmt.Printf("🚀 Criando USB Syntropy (Windows Only)\n")
 	fmt.Printf("📍 Nó: %s\n", config.NodeName)
-	fmt.Printf("💾 Dispositivo: %s (nº %d)\n", devicePath, diskNum)
+	fmt.Printf("💾 Dispositivo: %s (Disco nº %d)\n", devicePath, diskNum)
+	fmt.Printf("🔐 Dispositivo validado e rastreado durante todo o processo\n")
 	fmt.Printf("📀 ISO: %s\n", isoPath)
 	fmt.Printf("📂 Diretório temporário: %s\n\n", config.TempDir)
 
@@ -618,7 +624,7 @@ func executeWindowsOnlyUSBCreation(diskNum int, isoPath string, config *WindowsO
 			throw "Arquivo ISO nao encontrado: %s"
 		}
 		
-		Write-Host "[OK] ISO verificada: $(Get-Item \"%s\").Length bytes" -ForegroundColor Green
+		Write-Host "[OK] ISO verificada: $(Get-Item \"%%s\").Length bytes" -ForegroundColor Green
 		
 		# Colocar disco offline
 		Write-Host "[OFFLINE] Colocando disco offline..." -ForegroundColor Yellow
@@ -757,8 +763,8 @@ echo "[OK] USB criado com sucesso usando estrategia NoCloud!"
 		$workDirWSL = wsl wslpath -u "%s"
 		
 		# Substituir caminhos no script
-		$wslScript = $wslScript -replace "%s", $isoWSL
-		$wslScript = $wslScript -replace "%s/cloud-init", "$workDirWSL/cloud-init"
+		$wslScript = $wslScript -replace "%%s", $isoWSL
+		$wslScript = $wslScript -replace "%%s/cloud-init", "$workDirWSL/cloud-init"
 		
 		# Executar script no WSL
 		$wslResult = wsl bash -lc $wslScript 2>&1
@@ -804,7 +810,7 @@ echo "[OK] USB criado com sucesso usando estrategia NoCloud!"
 	Write-Host "   - Descricao: %s" -ForegroundColor White
 	Write-Host "   - Criado por: %s" -ForegroundColor White
 	Write-Host "   - Data: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
-	`, config.NodeName, diskNum, isoPath, diskNum, diskNum, isoPath, isoPath, diskNum, diskNum, diskNum, diskNum, isoPath, config.TempDir, isoPath, config.TempDir, diskNum, diskNum, config.NodeName, config.NodeDescription, config.CreatedBy)
+	`, config.NodeName, diskNum, isoPath, diskNum, diskNum, isoPath, isoPath, diskNum, diskNum, isoPath, config.TempDir, isoPath, config.TempDir, diskNum, diskNum, config.NodeName, config.NodeDescription, config.CreatedBy)
 
 	// Salvar script PowerShell
 	scriptPath := filepath.Join(config.TempDir, "create_usb_windows_only.ps1")
@@ -880,7 +886,7 @@ func formatWindowsOnlyUSB(devicePath, label string) error {
 		Write-Host "❌ ERRO: $($_.Exception.Message)" -ForegroundColor Red
 		throw
 	}
-	`, devicePath, diskNum, label, diskNum, diskNum, diskNum, diskNum, diskNum, diskNum, label)
+	`, devicePath, diskNum, label, diskNum, diskNum, diskNum, diskNum, diskNum, label)
 
 	// Salvar e executar script
 	tempDir := filepath.Join(os.TempDir(), "syntropy-format")

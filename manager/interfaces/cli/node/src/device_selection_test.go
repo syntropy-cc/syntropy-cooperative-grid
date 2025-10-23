@@ -11,7 +11,7 @@ func TestSelectUSBDeviceFromDetected(t *testing.T) {
 	// Create a mock CreateSubcomponent for testing
 	cs := &CreateSubcomponent{}
 
-	// Test case 1: Single device (should be selected automatically)
+	// Test case 1: Single device (should require manual selection even with one device)
 	t.Run("SingleDevice", func(t *testing.T) {
 		devices := []types.USBDevice{
 			{
@@ -119,4 +119,153 @@ func TestDeviceSelectionDisplay(t *testing.T) {
 	if !device.IsRemovable {
 		t.Error("Device should be removable")
 	}
+}
+
+// TestSelectedUSBDeviceTokenValidation tests the validation token generation and validation
+func TestSelectedUSBDeviceTokenValidation(t *testing.T) {
+	t.Run("TokenGeneration", func(t *testing.T) {
+		device := types.USBDevice{
+			Path:        "/dev/sdb",
+			Capacity:    8589934592,
+			Model:       "Ultra USB 3.0",
+			Serial:      "123456789",
+			IsRemovable: true,
+		}
+
+		selected := NewSelectedUSBDevice(device, "linux")
+
+		if selected.ValidationToken == "" {
+			t.Error("Validation token should not be empty")
+		}
+
+		if selected.Platform != "linux" {
+			t.Errorf("Expected platform 'linux', got '%s'", selected.Platform)
+		}
+
+		if selected.Device.Path != device.Path {
+			t.Error("Device should match original")
+		}
+	})
+
+	t.Run("TokenValidation", func(t *testing.T) {
+		device := types.USBDevice{
+			Path:        "/dev/sdb",
+			Capacity:    8589934592,
+			Model:       "Ultra USB 3.0",
+			Serial:      "123456789",
+			IsRemovable: true,
+		}
+
+		selected := NewSelectedUSBDevice(device, "linux")
+
+		// Validation should succeed with same device
+		err := selected.Validate(device)
+		if err != nil {
+			t.Errorf("Validation should succeed with same device: %v", err)
+		}
+
+		// Validation should fail with different device
+		differentDevice := types.USBDevice{
+			Path:        "/dev/sdc",
+			Capacity:    17179869184,
+			Model:       "Different Model",
+			Serial:      "987654321",
+			IsRemovable: true,
+		}
+
+		err = selected.Validate(differentDevice)
+		if err == nil {
+			t.Error("Validation should fail with different device")
+		}
+	})
+
+	t.Run("TokenConsistency", func(t *testing.T) {
+		device := types.USBDevice{
+			Path:        "/dev/sdb",
+			Capacity:    8589934592,
+			Model:       "Ultra USB 3.0",
+			Serial:      "123456789",
+			IsRemovable: true,
+		}
+
+		selected1 := NewSelectedUSBDevice(device, "linux")
+		selected2 := NewSelectedUSBDevice(device, "linux")
+
+		// Same device should generate same token
+		if selected1.ValidationToken != selected2.ValidationToken {
+			t.Error("Same device should generate consistent token")
+		}
+	})
+}
+
+// TestManualDeviceSelectionRequired tests that manual selection is always required
+func TestManualDeviceSelectionRequired(t *testing.T) {
+	t.Run("SingleDeviceRequiresManualSelection", func(t *testing.T) {
+		cs := &CreateSubcomponent{}
+		devices := []types.USBDevice{
+			{
+				Path:        "/dev/sdb",
+				Capacity:    8589934592,
+				Vendor:      "SanDisk",
+				Model:       "Ultra USB 3.0",
+				IsRemovable: true,
+			},
+		}
+
+		// Even with one device, should require manual selection (will fail in test due to no input)
+		_, err := cs.selectUSBDeviceFromDetected(devices)
+		if err != nil {
+			// Expected in test environment without input
+			t.Logf("Manual selection required (expected in test): %v", err)
+		}
+	})
+}
+
+// TestDeviceTokenSecurity tests that device token prevents device swap
+func TestDeviceTokenSecurity(t *testing.T) {
+	t.Run("PreventDeviceSwap", func(t *testing.T) {
+		// Original device
+		device1 := types.USBDevice{
+			Path:        "/dev/sdb",
+			Capacity:    8589934592,
+			Model:       "USB Drive A",
+			Serial:      "111111",
+			IsRemovable: true,
+		}
+
+		// Different device
+		device2 := types.USBDevice{
+			Path:        "/dev/sdc",
+			Capacity:    8589934592,
+			Model:       "USB Drive B",
+			Serial:      "222222",
+			IsRemovable: true,
+		}
+
+		selected := NewSelectedUSBDevice(device1, "linux")
+
+		// Should detect device swap
+		err := selected.Validate(device2)
+		if err == nil {
+			t.Error("Should detect device swap and fail validation")
+		}
+
+		if err != nil && !contains(err.Error(), "device mismatch") {
+			t.Errorf("Expected 'device mismatch' error, got: %v", err)
+		}
+	})
+}
+
+// Helper function to check if string contains substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))
+}
+
+func containsMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

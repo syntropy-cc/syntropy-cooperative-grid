@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"node-component/src/internal/types"
@@ -51,7 +52,6 @@ type CreateOptions struct {
 	DevicePath        string
 	ISOPath           string
 	ISOURL            string
-	SkipUSBDetection  bool
 	SkipISODownload   bool
 	SkipCloudInit     bool
 	SkipUSBWrite      bool
@@ -104,16 +104,26 @@ func (cs *CreateSubcomponent) CreateNode(ctx context.Context, options CreateOpti
 	result.NodeID = nodeConfig.NodeID
 	result.StepsCompleted = append(result.StepsCompleted, "generate_configuration")
 
-	// Step 3: Detect USB device (if not specified)
-	if !options.SkipUSBDetection && options.DevicePath == "" {
-		devicePath, err := cs.detectUSBDevice(ctx)
+	// Step 3: Detect and validate USB device (if not specified)
+	var selectedDevice *SelectedUSBDevice
+	if options.DevicePath == "" {
+		selected, err := cs.detectUSBDevice(ctx)
 		if err != nil {
 			result.StepsFailed = append(result.StepsFailed, "detect_usb_device")
 			result.ErrorMessage = err.Error()
 			return result, fmt.Errorf("USB device detection failed: %w", err)
 		}
-		result.DevicePath = devicePath
+		selectedDevice = selected
+		result.DevicePath = selected.Device.Path
 		result.StepsCompleted = append(result.StepsCompleted, "detect_usb_device")
+	} else if options.DevicePath != "" {
+		// Dispositivo especificado manualmente - validar também
+		device := types.USBDevice{Path: options.DevicePath}
+		if err := cs.usbDetector.ValidateDeviceDoubleCheck(ctx, device); err != nil {
+			return result, fmt.Errorf("manual device validation failed: %w", err)
+		}
+		selectedDevice = NewSelectedUSBDevice(device, runtime.GOOS)
+		result.DevicePath = options.DevicePath
 	}
 
 	// Step 4: Download Ubuntu ISO
@@ -142,15 +152,16 @@ func (cs *CreateSubcomponent) CreateNode(ctx context.Context, options CreateOpti
 		result.StepsCompleted = append(result.StepsCompleted, "generate_cloud_init")
 	}
 
-	// Step 6: Write ISO to USB device
+	// Step 6: Write ISO to USB device (passar selectedDevice ao invés de string)
 	if !options.SkipUSBWrite {
 		fmt.Println("💾 Etapa 6/6: Escrevendo ISO no dispositivo USB...")
 		fmt.Printf("   📁 ISO: %s\n", filepath.Base(isoPath))
-		fmt.Printf("   🔌 Dispositivo: %s\n", result.DevicePath)
+		fmt.Printf("   🔌 Dispositivo: %s\n", selectedDevice.Device.Path)
+		fmt.Printf("   🔐 Token: %s\n", selectedDevice.ValidationToken)
 		fmt.Println("   ⏳ Isso pode levar alguns minutos...")
 		fmt.Println()
 
-		writeResult, err := cs.writeISOToUSB(ctx, isoPath, result.DevicePath, cloudInitConfig)
+		writeResult, err := cs.writeISOToUSBWithValidation(ctx, isoPath, selectedDevice, cloudInitConfig)
 		if err != nil {
 			result.StepsFailed = append(result.StepsFailed, "write_iso_to_usb")
 			result.ErrorMessage = err.Error()
@@ -314,69 +325,76 @@ func (cs *CreateSubcomponent) generateNodeConfiguration(ctx context.Context) (*t
 	return config, nil
 }
 
-// detectUSBDevice detects a suitable USB device
-func (cs *CreateSubcomponent) detectUSBDevice(ctx context.Context) (string, error) {
-	cs.logger.Debug("Detecting USB device")
+// detectUSBDevice detects and validates a USB device with double validation
+func (cs *CreateSubcomponent) detectUSBDevice(ctx context.Context) (*SelectedUSBDevice, error) {
+	cs.logger.Debug("Detecting USB device with double validation")
 
-	// Get suitable devices
+	// Get removable devices
 	devices, err := cs.usbDetector.DetectRemovableDevices(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to detect USB devices: %w", err)
+		return nil, fmt.Errorf("failed to detect USB devices: %w", err)
 	}
 
 	if len(devices) == 0 {
-		return "", fmt.Errorf("no suitable USB devices found")
+		return nil, fmt.Errorf("no suitable USB devices found")
 	}
 
-	// Use interactive selection if multiple devices found
+	// Manual selection is always required
 	selectedDevice, err := cs.selectUSBDeviceFromDetected(devices)
 	if err != nil {
-		return "", fmt.Errorf("device selection failed: %w", err)
+		return nil, fmt.Errorf("device selection failed: %w", err)
 	}
 
-	cs.logger.Debug("USB device detected", "device", selectedDevice.Path, "capacity", selectedDevice.Capacity)
-	return selectedDevice.Path, nil
+	cs.logger.Info("Device selected by user", "device", selectedDevice.Path)
+
+	// Double security validation
+	fmt.Println("\n🔒 Executando validações de segurança...")
+	if err := cs.usbDetector.ValidateDeviceDoubleCheck(ctx, *selectedDevice); err != nil {
+		return nil, fmt.Errorf("SECURITY VALIDATION FAILED: %w", err)
+	}
+	fmt.Println("✅ Validações de segurança aprovadas")
+
+	// Create selected device with token
+	selected := NewSelectedUSBDevice(*selectedDevice, runtime.GOOS)
+
+	cs.logger.Info("Device validated and selected",
+		"device", selected.Device.Path,
+		"token", selected.ValidationToken)
+
+	return selected, nil
 }
 
-// selectUSBDeviceFromDetected allows user to select a USB device from detected devices
+// selectUSBDeviceFromDetected allows user to manually select a USB device from detected devices
 func (cs *CreateSubcomponent) selectUSBDeviceFromDetected(devices []types.USBDevice) (*types.USBDevice, error) {
 	if len(devices) == 0 {
 		return nil, fmt.Errorf("no devices available for selection")
 	}
 
-	// Se há apenas um dispositivo, usar automaticamente
-	if len(devices) == 1 {
-		fmt.Printf("\n🔌 Dispositivo USB encontrado:\n")
-		fmt.Printf("   Caminho: %s\n", devices[0].Path)
-		fmt.Printf("   Capacidade: %.2f GB\n", float64(devices[0].Capacity)/(1024*1024*1024))
-		if devices[0].Vendor != "" {
-			fmt.Printf("   Fabricante: %s\n", devices[0].Vendor)
-		}
-		if devices[0].Model != "" {
-			fmt.Printf("   Modelo: %s\n", devices[0].Model)
-		}
-		fmt.Printf("   Removível: %t\n", devices[0].IsRemovable)
-		fmt.Printf("\n✅ Usando dispositivo automaticamente\n\n")
-		return &devices[0], nil
-	}
-
-	// Se há múltiplos dispositivos, mostrar lista para seleção
-	fmt.Printf("\n🔌 Múltiplos dispositivos USB encontrados:\n\n")
+	// ALWAYS show list for manual selection, even with only one device
+	fmt.Printf("\n⚠️  SELEÇÃO MANUAL DE DISPOSITIVO USB OBRIGATÓRIA\n")
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	fmt.Printf("🔌 Dispositivos USB detectados: %d\n\n", len(devices))
 
 	for i, device := range devices {
-		fmt.Printf("  %d. %s\n", i+1, device.Path)
-		fmt.Printf("     Capacidade: %.2f GB\n", float64(device.Capacity)/(1024*1024*1024))
+		fmt.Printf("  [%d] %s\n", i+1, device.Path)
+		fmt.Printf("      Capacidade: %.2f GB\n", float64(device.Capacity)/(1024*1024*1024))
 		if device.Vendor != "" {
-			fmt.Printf("     Fabricante: %s\n", device.Vendor)
+			fmt.Printf("      Fabricante: %s\n", device.Vendor)
 		}
 		if device.Model != "" {
-			fmt.Printf("     Modelo: %s\n", device.Model)
+			fmt.Printf("      Modelo: %s\n", device.Model)
 		}
-		fmt.Printf("     Removível: %t\n", device.IsRemovable)
+		if device.Serial != "" {
+			fmt.Printf("      Serial: %s\n", device.Serial)
+		}
+		fmt.Printf("      Removível: %t\n", device.IsRemovable)
+		fmt.Printf("      Sistema: %t\n", device.IsSystem)
 		fmt.Printf("\n")
 	}
 
-	fmt.Printf("❓ Selecione um dispositivo (1-%d): ", len(devices))
+	fmt.Printf("⚠️  ATENÇÃO: O dispositivo selecionado será COMPLETAMENTE FORMATADO\n")
+	fmt.Printf("⚠️  TODOS os dados serão PERDIDOS permanentemente\n\n")
+	fmt.Printf("❓ Digite o número do dispositivo desejado (1-%d): ", len(devices))
 
 	var choice int
 	_, err := fmt.Scanln(&choice)
@@ -385,11 +403,18 @@ func (cs *CreateSubcomponent) selectUSBDeviceFromDetected(devices []types.USBDev
 	}
 
 	if choice < 1 || choice > len(devices) {
-		return nil, fmt.Errorf("invalid choice: %d", choice)
+		return nil, fmt.Errorf("invalid choice: %d (must be between 1 and %d)", choice, len(devices))
 	}
 
 	selectedDevice := devices[choice-1]
-	fmt.Printf("✅ Dispositivo selecionado: %s (%.2f GB)\n\n", selectedDevice.Path, float64(selectedDevice.Capacity)/(1024*1024*1024))
+
+	// Show selected device and ask for confirmation
+	fmt.Printf("\n📌 Dispositivo selecionado:\n")
+	fmt.Printf("   Caminho: %s\n", selectedDevice.Path)
+	fmt.Printf("   Capacidade: %.2f GB\n", float64(selectedDevice.Capacity)/(1024*1024*1024))
+	fmt.Printf("   Modelo: %s\n", selectedDevice.Model)
+	fmt.Printf("\n")
+
 	return &selectedDevice, nil
 }
 
@@ -437,21 +462,58 @@ func (cs *CreateSubcomponent) generateCloudInit(ctx context.Context, config *typ
 	return cloudInitConfig, nil
 }
 
-// writeISOToUSB writes the ISO to the USB device
-func (cs *CreateSubcomponent) writeISOToUSB(ctx context.Context, isoPath, devicePath string, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
-	cs.logger.Debug("Writing ISO to USB device", "iso", isoPath, "device", devicePath)
+// writeISOToUSBWithValidation escreve ISO com validação contínua do dispositivo
+func (cs *CreateSubcomponent) writeISOToUSBWithValidation(
+	ctx context.Context,
+	isoPath string,
+	selectedDevice *SelectedUSBDevice,
+	cloudInitConfig *types.CloudInitConfig,
+) (*types.WriteResult, error) {
+	cs.logger.Info("Writing ISO with continuous validation",
+		"iso", isoPath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken)
 
-	// Create USB writer manager
-	writerManager := NewUSBWriterManager(cs.usbWriter, cs.logger)
-
-	// Write ISO with cloud-init injection
-	writeResult, err := writerManager.WriteUbuntuISO(ctx, isoPath, devicePath, cloudInitConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write ISO to USB: %w", err)
+	// Validar novamente antes de escrever
+	fmt.Println("🔒 Revalidando dispositivo antes da gravação...")
+	if err := cs.usbDetector.ValidateDeviceDoubleCheck(ctx, selectedDevice.Device); err != nil {
+		return nil, fmt.Errorf("pre-write validation failed: %w", err)
 	}
 
-	cs.logger.Debug("ISO written to USB device", "device", devicePath, "bytes_written", writeResult.BytesWritten)
-	return writeResult, nil
+	// Verificar que o token ainda é válido
+	currentDevices, err := cs.usbDetector.DetectRemovableDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-detect devices: %w", err)
+	}
+
+	var foundDevice *types.USBDevice
+	for _, dev := range currentDevices {
+		if dev.Path == selectedDevice.Device.Path {
+			foundDevice = &dev
+			break
+		}
+	}
+
+	if foundDevice == nil {
+		return nil, fmt.Errorf("SECURITY: selected device %s no longer available", selectedDevice.Device.Path)
+	}
+
+	if err := selectedDevice.Validate(*foundDevice); err != nil {
+		return nil, fmt.Errorf("SECURITY: device validation failed: %w", err)
+	}
+
+	fmt.Println("✅ Dispositivo revalidado com sucesso")
+
+	// Escrever ISO
+	result, err := cs.usbWriter.WriteISO(ctx, isoPath, selectedDevice, cloudInitConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validar uma última vez após escrita
+	cs.logger.Info("Write completed, performing final validation")
+
+	return result, nil
 }
 
 // saveNodeState saves the node state for later reference

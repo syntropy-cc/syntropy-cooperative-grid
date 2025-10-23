@@ -50,7 +50,6 @@ func (cli *CLICommands) createNodeCmd() *cobra.Command {
 		isoPath           string
 		isoURL            string
 		nodeID            string
-		skipUSBDetection  bool
 		skipISODownload   bool
 		skipCloudInit     bool
 		skipUSBWrite      bool
@@ -68,17 +67,24 @@ func (cli *CLICommands) createNodeCmd() *cobra.Command {
 
 This command will:
 1. Generate node configuration (NodeID, SSH keys, certificates)
-2. Detect and prepare USB device
-3. Download Ubuntu Server ISO (if needed)
-4. Generate cloud-init configuration
-5. Create bootable USB with auto-registration
-6. Start listener for node registration
+2. Detect available USB devices and require manual selection
+3. Perform double security validation on selected device
+4. Download Ubuntu Server ISO (if needed)
+5. Generate cloud-init configuration
+6. Create bootable USB with auto-registration
+7. Start listener for node registration
+
+SECURITY FEATURES:
+- Manual device selection is ALWAYS required (no auto-selection)
+- Double validation using independent methods
+- Continuous device tracking with validation tokens
+- Detailed logging of device being used at each step
 
 Examples:
-  syntropy node create                           # Interactive mode
+  syntropy node create                           # Interactive mode with manual device selection
   syntropy node create --list-devices            # List available USB devices
   syntropy node create --ubuntu-version 24.04    # Specify Ubuntu version
-  syntropy node create --device /dev/sdb         # Specify USB device
+  syntropy node create --device /dev/sdb         # Specify USB device (still requires validation)
   syntropy node create --auto-start              # Auto-start listener`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If --list-devices flag is set, only list devices without creating node
@@ -92,7 +98,6 @@ Examples:
 				ISOPath:           isoPath,
 				ISOURL:            isoURL,
 				NodeID:            nodeID,
-				SkipUSBDetection:  skipUSBDetection,
 				SkipISODownload:   skipISODownload,
 				SkipCloudInit:     skipCloudInit,
 				SkipUSBWrite:      skipUSBWrite,
@@ -110,7 +115,6 @@ Examples:
 	cmd.Flags().StringVar(&isoPath, "iso", "", "Path to local Ubuntu ISO file")
 	cmd.Flags().StringVar(&isoURL, "iso-url", "", "Custom ISO download URL")
 	cmd.Flags().StringVar(&nodeID, "node-id", "", "Pre-defined node ID (auto-generated if not specified)")
-	cmd.Flags().BoolVar(&skipUSBDetection, "skip-usb-detection", false, "Skip USB device detection")
 	cmd.Flags().BoolVar(&skipISODownload, "skip-iso-download", false, "Skip ISO download")
 	cmd.Flags().BoolVar(&skipCloudInit, "skip-cloud-init", false, "Skip cloud-init generation")
 	cmd.Flags().BoolVar(&skipUSBWrite, "skip-usb-write", false, "Skip USB writing")
@@ -351,7 +355,6 @@ type CreateNodeOptions struct {
 	ISOPath           string
 	ISOURL            string
 	NodeID            string
-	SkipUSBDetection  bool
 	SkipISODownload   bool
 	SkipCloudInit     bool
 	SkipUSBWrite      bool
@@ -411,7 +414,6 @@ func (cli *CLICommands) handleCreateNode(ctx context.Context, options *CreateNod
 		DevicePath:        options.DevicePath,
 		ISOPath:           options.ISOPath,
 		ISOURL:            options.ISOURL,
-		SkipUSBDetection:  options.SkipUSBDetection,
 		SkipISODownload:   options.SkipISODownload,
 		SkipCloudInit:     options.SkipCloudInit,
 		SkipUSBWrite:      options.SkipUSBWrite,

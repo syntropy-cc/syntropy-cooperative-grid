@@ -62,6 +62,93 @@ func (udm *USBDetectorMacOS) DetectRemovableDevices(ctx context.Context) ([]type
 	return removable, nil
 }
 
+// platformSpecificValidation executes additional macOS-specific validation
+func (udm *USBDetectorMacOS) platformSpecificValidation(ctx context.Context, device types.USBDevice) error {
+	udm.logger.Debug("macOS-specific validation", "device", device.Path)
+
+	// Extract disk identifier from path (e.g., /dev/disk2 -> disk2)
+	diskID := strings.TrimPrefix(device.Path, "/dev/")
+	if diskID == device.Path {
+		return fmt.Errorf("invalid macOS device path: %s", device.Path)
+	}
+
+	// Check if device is the startup disk
+	cmd := exec.CommandContext(ctx, "diskutil", "info", diskID)
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get disk info: %w", err)
+	}
+
+	diskInfo := string(output)
+
+	// Check if it's the startup disk
+	if strings.Contains(diskInfo, "Startup Disk: Yes") {
+		return fmt.Errorf("device is the startup disk")
+	}
+
+	// Check if it contains system partitions
+	if strings.Contains(diskInfo, "System Volume: Yes") {
+		return fmt.Errorf("device contains system volume")
+	}
+
+	if strings.Contains(diskInfo, "Data Volume: Yes") {
+		return fmt.Errorf("device contains data volume")
+	}
+
+	// Check if it's mounted as root filesystem
+	cmd = exec.CommandContext(ctx, "mount")
+	output, err = cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check mount points: %w", err)
+	}
+
+	mountOutput := string(output)
+	if strings.Contains(mountOutput, device.Path+" on / ") {
+		return fmt.Errorf("device is mounted as root filesystem")
+	}
+
+	// Check if device contains critical system partitions
+	cmd = exec.CommandContext(ctx, "diskutil", "list", diskID)
+	output, err = cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list disk partitions: %w", err)
+	}
+
+	partitionList := string(output)
+
+	// Check for system-related partition types
+	systemPartitionTypes := []string{
+		"Apple_HFS",      // macOS system
+		"Apple_APFS",     // macOS system (newer)
+		"EFI",            // EFI system partition
+		"Apple_Boot",     // Boot partition
+		"Apple_Recovery", // Recovery partition
+	}
+
+	for _, partType := range systemPartitionTypes {
+		if strings.Contains(partitionList, partType) {
+			// Additional check: see if this partition is mounted as system
+			cmd = exec.CommandContext(ctx, "mount")
+			output, err = cmd.Output()
+			if err == nil {
+				mountOutput := string(output)
+				if strings.Contains(mountOutput, partType) &&
+					(strings.Contains(mountOutput, " on / ") ||
+						strings.Contains(mountOutput, " on /System ")) {
+					return fmt.Errorf("device contains system partition of type %s", partType)
+				}
+			}
+		}
+	}
+
+	// Check if it's disk0 (usually the main system disk)
+	if diskID == "disk0" {
+		return fmt.Errorf("device is the main system disk (disk0)")
+	}
+
+	return nil
+}
+
 // GetDeviceInfo gets detailed information about a specific device
 func (udm *USBDetectorMacOS) GetDeviceInfo(ctx context.Context, devicePath string) (*types.USBDevice, error) {
 	// Get basic device info using diskutil

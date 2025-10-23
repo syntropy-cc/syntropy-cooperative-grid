@@ -70,6 +70,86 @@ func (udl *USBDetectorLinux) DetectRemovableDevices(ctx context.Context) ([]type
 	return removable, nil
 }
 
+// platformSpecificValidation executes additional Linux-specific validation
+func (udl *USBDetectorLinux) platformSpecificValidation(ctx context.Context, device types.USBDevice) error {
+	udl.logger.Debug("Linux-specific validation", "device", device.Path)
+
+	// Check if device is mounted as root filesystem
+	cmd := exec.CommandContext(ctx, "mount")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check mount points: %w", err)
+	}
+
+	mountOutput := string(output)
+	if strings.Contains(mountOutput, device.Path+" on / ") {
+		return fmt.Errorf("device is mounted as root filesystem")
+	}
+
+	// Check if device contains critical system partitions
+	cmd = exec.CommandContext(ctx, "lsblk", "-n", "-o", "MOUNTPOINT", device.Path)
+	output, err = cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check device mount points: %w", err)
+	}
+
+	mountpoints := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, mp := range mountpoints {
+		if mp == "/" || mp == "/boot" || mp == "/home" || mp == "/var" {
+			return fmt.Errorf("device contains critical system partition: %s", mp)
+		}
+	}
+
+	// Check if device is in /dev/sda (usually system disk)
+	if strings.Contains(device.Path, "/dev/sda") {
+		// Additional check: see if it has system partitions
+		cmd = exec.CommandContext(ctx, "lsblk", "-n", "-o", "NAME", device.Path)
+		output, err = cmd.Output()
+		if err == nil {
+			partitions := strings.Split(strings.TrimSpace(string(output)), "\n")
+			if len(partitions) > 1 {
+				// Check if any partition is mounted as system
+				for _, part := range partitions[1:] { // Skip the main device
+					partPath := "/dev/" + strings.TrimSpace(part)
+					cmd = exec.CommandContext(ctx, "lsblk", "-n", "-o", "MOUNTPOINT", partPath)
+					output, err = cmd.Output()
+					if err == nil {
+						mp := strings.TrimSpace(string(output))
+						if mp == "/" || mp == "/boot" {
+							return fmt.Errorf("device %s contains system partition %s mounted at %s", device.Path, partPath, mp)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check if device is in /dev/nvme0n1 (usually system disk on NVMe)
+	if strings.Contains(device.Path, "/dev/nvme0n1") {
+		// Similar check for NVMe
+		cmd = exec.CommandContext(ctx, "lsblk", "-n", "-o", "NAME", device.Path)
+		output, err = cmd.Output()
+		if err == nil {
+			partitions := strings.Split(strings.TrimSpace(string(output)), "\n")
+			if len(partitions) > 1 {
+				for _, part := range partitions[1:] {
+					partPath := "/dev/" + strings.TrimSpace(part)
+					cmd = exec.CommandContext(ctx, "lsblk", "-n", "-o", "MOUNTPOINT", partPath)
+					output, err = cmd.Output()
+					if err == nil {
+						mp := strings.TrimSpace(string(output))
+						if mp == "/" || mp == "/boot" {
+							return fmt.Errorf("device %s contains system partition %s mounted at %s", device.Path, partPath, mp)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // GetDeviceInfo gets detailed information about a specific device
 func (udl *USBDetectorLinux) GetDeviceInfo(ctx context.Context, devicePath string) (*types.USBDevice, error) {
 	// Get basic device info

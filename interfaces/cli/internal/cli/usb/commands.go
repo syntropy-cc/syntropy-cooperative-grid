@@ -68,7 +68,6 @@ func newUSBCreateCommand() *cobra.Command {
 		nodeDescription string
 		coordinates     string
 		ownerKeyFile    string
-		autoDetect      bool
 		label           string
 		workDir         string
 		cacheDir        string
@@ -83,9 +82,12 @@ func newUSBCreateCommand() *cobra.Command {
 		Long: `Cria um USB com boot contendo Ubuntu Server e configuração automática
 para um nó da Syntropy Cooperative Grid.
 
+SEGURANÇA: Seleção manual de dispositivo é sempre obrigatória para evitar
+formatação acidental de discos do sistema.
+
 Exemplos:
-  # Criar USB com auto-detecção
-  syntropy usb create --auto-detect --node-name "node-01"
+  # Criar USB com seleção interativa
+  syntropy usb create --node-name "node-01"
 
   # Criar USB especificando dispositivo (Linux)
   syntropy usb create /dev/sdb --node-name "node-01"
@@ -94,22 +96,25 @@ Exemplos:
   syntropy usb create PHYSICALDRIVE1 --node-name "node-01"
 
   # Criar USB com ISO personalizada
-  syntropy usb create --auto-detect --node-name "node-01" --iso /path/to/ubuntu.iso
+  syntropy usb create --node-name "node-01" --iso /path/to/ubuntu.iso
 `,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var devicePath string
 
-			if autoDetect {
-				device, err := SelectDevice()
-				if err != nil {
-					return fmt.Errorf("falha na auto-detecção: %w", err)
-				}
-				devicePath = device.Path
-			} else if len(args) > 0 {
+			if len(args) > 0 {
+				// Dispositivo especificado manualmente
 				devicePath = args[0]
 			} else {
-				return fmt.Errorf("especifique um dispositivo ou use --auto-detect")
+				// Seleção interativa obrigatória
+				fmt.Println("⚠️  SELEÇÃO MANUAL DE DISPOSITIVO USB OBRIGATÓRIA")
+				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+				fmt.Println()
+				device, err := SelectDevice()
+				if err != nil {
+					return fmt.Errorf("falha na seleção de dispositivo: %w", err)
+				}
+				devicePath = device.Path
 			}
 
 			// Configurar usuário atual se não especificado
@@ -139,7 +144,6 @@ Exemplos:
 	cmd.Flags().StringVar(&nodeDescription, "description", "", "Descrição do nó")
 	cmd.Flags().StringVar(&coordinates, "coordinates", "", "Coordenadas geográficas (lat,lon)")
 	cmd.Flags().StringVar(&ownerKeyFile, "owner-key", "", "Arquivo de chave de proprietário existente")
-	cmd.Flags().BoolVar(&autoDetect, "auto-detect", false, "Detectar automaticamente dispositivo USB")
 	cmd.Flags().StringVar(&label, "label", "SYNTROPY", "Rótulo do sistema de arquivos")
 	cmd.Flags().StringVar(&workDir, "work-dir", "", "Diretório de trabalho (padrão: ~/.syntropy/work)")
 	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", "Diretório de cache (padrão: ~/.syntropy/cache)")

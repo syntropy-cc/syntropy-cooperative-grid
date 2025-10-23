@@ -27,6 +27,9 @@ type USBDetector interface {
 	// ValidateDevice validates if a device is suitable for node creation
 	ValidateDevice(ctx context.Context, device types.USBDevice) error
 
+	// ValidateDeviceDoubleCheck executes double validation using two independent methods
+	ValidateDeviceDoubleCheck(ctx context.Context, device types.USBDevice) error
+
 	// GetSystemDevices returns all system devices (to avoid writing to them)
 	GetSystemDevices(ctx context.Context) ([]string, error)
 
@@ -116,6 +119,49 @@ func (udb *USBDetectorBase) ValidateDevice(ctx context.Context, device types.USB
 
 	udb.logger.Debug("Device validation passed", "device", device.Path, "capacity", device.Capacity)
 	return nil
+}
+
+// ValidateDeviceDoubleCheck executes double validation using two independent methods
+func (udb *USBDetectorBase) ValidateDeviceDoubleCheck(ctx context.Context, device types.USBDevice) error {
+	udb.logger.Info("Starting double validation check", "device", device.Path)
+
+	// Validation 1: Check system flags
+	if device.IsSystem {
+		return fmt.Errorf("SECURITY: device %s is marked as system device", device.Path)
+	}
+
+	// Validation 2: Check if not removable
+	if !device.IsRemovable {
+		return fmt.Errorf("SECURITY: device %s is not removable", device.Path)
+	}
+
+	// Validation 3: Check suspicious capacity (system disks are usually > 100GB)
+	minCapacity := int64(512 * 1024 * 1024)             // 512 MB
+	maxCapacity := int64(2 * 1024 * 1024 * 1024 * 1024) // 2 TB
+
+	if device.Capacity < minCapacity {
+		return fmt.Errorf("SECURITY: device %s is too small (%d bytes)", device.Path, device.Capacity)
+	}
+
+	if device.Capacity > maxCapacity {
+		return fmt.Errorf("SECURITY: device %s is suspiciously large (%d bytes)", device.Path, device.Capacity)
+	}
+
+	udb.logger.Info("First validation passed", "device", device.Path)
+
+	// Independent validation via platform-specific alternative method
+	if err := udb.platformSpecificValidation(ctx, device); err != nil {
+		return fmt.Errorf("SECURITY: platform-specific validation failed: %w", err)
+	}
+
+	udb.logger.Info("Double validation check passed", "device", device.Path)
+	return nil
+}
+
+// platformSpecificValidation will be implemented in each platform-specific file
+func (udb *USBDetectorBase) platformSpecificValidation(ctx context.Context, device types.USBDevice) error {
+	// Will be overridden by specific implementations
+	return fmt.Errorf("platform-specific validation not implemented")
 }
 
 // StartMonitoring starts monitoring for USB device changes

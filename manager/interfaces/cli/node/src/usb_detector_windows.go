@@ -65,6 +65,77 @@ func (udw *USBDetectorWindows) DetectRemovableDevices(ctx context.Context) ([]ty
 	return removable, nil
 }
 
+// platformSpecificValidation executes additional Windows-specific validation
+func (udw *USBDetectorWindows) platformSpecificValidation(ctx context.Context, device types.USBDevice) error {
+	udw.logger.Debug("Windows-specific validation", "device", device.Path)
+
+	// Extract disk number from path
+	var diskNum int
+	if strings.Contains(device.Path, "PHYSICALDRIVE") {
+		fmt.Sscanf(device.Path, "\\\\.\\PHYSICALDRIVE%d", &diskNum)
+	} else {
+		return fmt.Errorf("invalid Windows device path: %s", device.Path)
+	}
+
+	// PowerShell script for independent validation
+	psScript := fmt.Sprintf(`
+	$disk = Get-Disk -Number %d -ErrorAction SilentlyContinue
+	if (-not $disk) { exit 1 }
+	
+	# Critical checks
+	if ($disk.IsSystem) { exit 2 }
+	if ($disk.IsBoot) { exit 3 }
+	if ($disk.IsOffline) { exit 4 }
+	
+	# Check partitions
+	$partitions = Get-Partition -DiskNumber %d -ErrorAction SilentlyContinue
+	foreach ($part in $partitions) {
+		if ($part.DriveLetter -eq "C") { exit 5 }
+		if ($part.IsSystem) { exit 6 }
+		if ($part.IsBoot) { exit 7 }
+	}
+	
+	# Check if has Windows installed
+	$volumes = Get-Volume | Where-Object { $_.DriveLetter -ne $null }
+	foreach ($vol in $volumes) {
+		$partition = Get-Partition -DriveLetter $vol.DriveLetter -ErrorAction SilentlyContinue
+		if ($partition -and $partition.DiskNumber -eq %d) {
+			$winDir = $vol.DriveLetter + ":\Windows"
+			if (Test-Path $winDir) { exit 8 }
+		}
+	}
+	
+	exit 0
+	`, diskNum, diskNum, diskNum)
+
+	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		exitCode := cmd.ProcessState.ExitCode()
+		switch exitCode {
+		case 2:
+			return fmt.Errorf("device is system disk")
+		case 3:
+			return fmt.Errorf("device is boot disk")
+		case 4:
+			return fmt.Errorf("device is offline")
+		case 5:
+			return fmt.Errorf("device contains C: drive")
+		case 6:
+			return fmt.Errorf("device contains system partition")
+		case 7:
+			return fmt.Errorf("device contains boot partition")
+		case 8:
+			return fmt.Errorf("device contains Windows installation")
+		default:
+			return fmt.Errorf("validation failed: %s", string(output))
+		}
+	}
+
+	return nil
+}
+
 // GetDeviceInfo gets detailed information about a specific device
 func (udw *USBDetectorWindows) GetDeviceInfo(ctx context.Context, devicePath string) (*types.USBDevice, error) {
 	// Get basic device info using PowerShell

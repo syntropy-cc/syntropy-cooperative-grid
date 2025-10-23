@@ -30,13 +30,24 @@ func NewUSBWriterLinux(logger types.Logger) *USBWriterLinux {
 }
 
 // WriteISO writes an ISO to a USB device with cloud-init injection
-func (uwl *USBWriterLinux) WriteISO(ctx context.Context, isoPath string, devicePath string, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
-	uwl.logger.Info("Writing ISO to USB device", "iso", isoPath, "device", devicePath)
+func (uwl *USBWriterLinux) WriteISO(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
+	uwl.logger.Info("Writing ISO to USB device",
+		"iso", isoPath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken)
 
 	startTime := time.Now()
 
-	// Validate inputs
-	if err := uwl.validateInputs(isoPath, devicePath); err != nil {
+	// Log detailed device information
+	uwl.logger.Info("Device details",
+		"path", selectedDevice.Device.Path,
+		"capacity", selectedDevice.Device.Capacity,
+		"model", selectedDevice.Device.Model,
+		"serial", selectedDevice.Device.Serial,
+		"validation_token", selectedDevice.ValidationToken)
+
+	// Validate inputs using the selected device
+	if err := uwl.validateInputs(isoPath, selectedDevice.Device.Path); err != nil {
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
@@ -59,9 +70,9 @@ func (uwl *USBWriterLinux) WriteISO(ctx context.Context, isoPath string, deviceP
 	actualISOPath := isoPath
 
 	// Write ISO to device using dd
-	if err := uwl.writeISOWithDD(ctx, actualISOPath, devicePath, progressTracker); err != nil {
+	if err := uwl.writeISOWithDD(ctx, actualISOPath, selectedDevice, progressTracker); err != nil {
 		return &types.WriteResult{
-			DevicePath:   devicePath,
+			DevicePath:   selectedDevice.Device.Path,
 			ISOPath:      isoPath,
 			BytesWritten: 0,
 			Duration:     time.Since(startTime),
@@ -71,15 +82,15 @@ func (uwl *USBWriterLinux) WriteISO(ctx context.Context, isoPath string, deviceP
 	}
 
 	// Sync to ensure data is written to disk
-	if err := uwl.syncDevice(devicePath); err != nil {
-		uwl.logger.Warn("Failed to sync device", "device", devicePath, "error", err)
+	if err := uwl.syncDevice(selectedDevice.Device.Path); err != nil {
+		uwl.logger.Warn("Failed to sync device", "device", selectedDevice.Device.Path, "error", err)
 	}
 
 	// Create NoCloud partition for cloud-init if provided
 	if cloudInitConfig != nil {
 		uwl.logger.Info("Creating NoCloud partition for cloud-init")
 		cloudInitInjector := NewCloudInitInjector(uwl.logger)
-		if err := cloudInitInjector.CreateNoCloudPartition(devicePath, cloudInitConfig); err != nil {
+		if err := cloudInitInjector.CreateNoCloudPartition(selectedDevice.Device.Path, cloudInitConfig); err != nil {
 			uwl.logger.Error("Failed to create NoCloud partition", "error", err)
 			return nil, fmt.Errorf("failed to create cloud-init partition: %w", err)
 		}
@@ -92,12 +103,12 @@ func (uwl *USBWriterLinux) WriteISO(ctx context.Context, isoPath string, deviceP
 
 	duration := time.Since(startTime)
 	uwl.logger.Info("ISO write completed successfully",
-		"device", devicePath,
+		"device", selectedDevice.Device.Path,
 		"duration", duration,
 		"bytes_written", isoInfo.Size())
 
 	return &types.WriteResult{
-		DevicePath:        devicePath,
+		DevicePath:        selectedDevice.Device.Path,
 		ISOPath:           isoPath,
 		BytesWritten:      isoInfo.Size(),
 		Duration:          duration,
@@ -195,19 +206,19 @@ func (uwl *USBWriterLinux) validateInputs(isoPath string, devicePath string) err
 }
 
 // writeISOWithDD writes ISO to device using dd command
-func (uwl *USBWriterLinux) writeISOWithDD(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uwl.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", devicePath)
+func (uwl *USBWriterLinux) writeISOWithDD(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uwl.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", selectedDevice.Device.Path, "token", selectedDevice.ValidationToken)
 
 	// Create dd command with progress tracking
 	cmd := exec.CommandContext(ctx, "dd",
 		"if="+isoPath,
-		"of="+devicePath,
+		"of="+selectedDevice.Device.Path,
 		"bs=4M",
 		"status=progress",
 		"conv=fsync")
 
 	// Set up progress monitoring
-	go uwl.monitorDDProgress(ctx, devicePath, progressTracker)
+	go uwl.monitorDDProgress(ctx, selectedDevice.Device.Path, progressTracker)
 
 	// Execute dd command
 	if err := cmd.Run(); err != nil {

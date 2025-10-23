@@ -16,8 +16,8 @@ import (
 
 // USBWriter defines the interface for writing ISOs to USB devices
 type USBWriter interface {
-	// WriteISO writes an ISO to a USB device with cloud-init injection
-	WriteISO(ctx context.Context, isoPath string, devicePath string, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error)
+	// WriteISO writes an ISO to a validated selected device
+	WriteISO(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error)
 
 	// ValidateDevice validates if a device is suitable for writing
 	ValidateDevice(ctx context.Context, devicePath string) error
@@ -129,8 +129,11 @@ func NewUSBWriterManager(writer USBWriter, logger types.Logger) *USBWriterManage
 }
 
 // WriteUbuntuISO writes Ubuntu ISO to USB with cloud-init injection
-func (uwm *USBWriterManager) WriteUbuntuISO(ctx context.Context, isoPath string, devicePath string, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
-	uwm.logger.Info("Starting USB write operation", "iso", isoPath, "device", devicePath)
+func (uwm *USBWriterManager) WriteUbuntuISO(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
+	uwm.logger.Info("Starting USB write operation",
+		"iso", isoPath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken)
 
 	// Validate ISO file
 	if err := uwm.validateISOFile(isoPath); err != nil {
@@ -138,28 +141,29 @@ func (uwm *USBWriterManager) WriteUbuntuISO(ctx context.Context, isoPath string,
 	}
 
 	// Validate device
-	if err := uwm.writer.ValidateDevice(ctx, devicePath); err != nil {
+	if err := uwm.writer.ValidateDevice(ctx, selectedDevice.Device.Path); err != nil {
 		return nil, fmt.Errorf("device validation failed: %w", err)
 	}
 
 	// Unmount device before writing
-	if err := uwm.writer.UnmountDevice(ctx, devicePath); err != nil {
-		uwm.logger.Warn("Failed to unmount device", "device", devicePath, "error", err)
+	if err := uwm.writer.UnmountDevice(ctx, selectedDevice.Device.Path); err != nil {
+		uwm.logger.Warn("Failed to unmount device", "device", selectedDevice.Device.Path, "error", err)
 	}
 
 	// Write ISO with cloud-init injection
-	result, err := uwm.writer.WriteISO(ctx, isoPath, devicePath, cloudInitConfig)
+	result, err := uwm.writer.WriteISO(ctx, isoPath, selectedDevice, cloudInitConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write ISO: %w", err)
 	}
 
 	// Mount device after writing
-	if err := uwm.writer.MountDevice(ctx, devicePath); err != nil {
-		uwm.logger.Warn("Failed to mount device", "device", devicePath, "error", err)
+	if err := uwm.writer.MountDevice(ctx, selectedDevice.Device.Path); err != nil {
+		uwm.logger.Warn("Failed to mount device", "device", selectedDevice.Device.Path, "error", err)
 	}
 
 	uwm.logger.Info("USB write operation completed successfully",
-		"device", devicePath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken,
 		"duration", result.Duration,
 		"bytes_written", result.BytesWritten)
 

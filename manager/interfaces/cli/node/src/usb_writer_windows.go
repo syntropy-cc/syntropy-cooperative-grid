@@ -30,13 +30,24 @@ func NewUSBWriterWindows(logger types.Logger) *USBWriterWindows {
 }
 
 // WriteISO writes an ISO to a USB device with cloud-init injection
-func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devicePath string, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
-	uww.logger.Info("Writing ISO to USB device", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, cloudInitConfig *types.CloudInitConfig) (*types.WriteResult, error) {
+	uww.logger.Info("Writing ISO to USB device",
+		"iso", isoPath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken)
 
 	startTime := time.Now()
 
-	// Validate inputs
-	if err := uww.validateInputs(isoPath, devicePath); err != nil {
+	// Log detailed device information
+	uww.logger.Info("Device details",
+		"path", selectedDevice.Device.Path,
+		"capacity", selectedDevice.Device.Capacity,
+		"model", selectedDevice.Device.Model,
+		"serial", selectedDevice.Device.Serial,
+		"validation_token", selectedDevice.ValidationToken)
+
+	// Validate inputs using the selected device
+	if err := uww.validateInputs(isoPath, selectedDevice.Device.Path); err != nil {
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
@@ -64,9 +75,9 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devic
 	actualISOPath := isoPath
 
 	// Write ISO to device using multiple fallback methods
-	if err := uww.writeISOWithFallback(ctx, actualISOPath, devicePath, progressTracker); err != nil {
+	if err := uww.writeISOWithFallback(ctx, actualISOPath, selectedDevice, progressTracker); err != nil {
 		return &types.WriteResult{
-			DevicePath:   devicePath,
+			DevicePath:   selectedDevice.Device.Path,
 			ISOPath:      isoPath,
 			BytesWritten: 0,
 			Duration:     time.Since(startTime),
@@ -79,7 +90,7 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devic
 	if cloudInitConfig != nil {
 		uww.logger.Info("Creating NoCloud partition for cloud-init")
 		cloudInitInjector := NewCloudInitInjector(uww.logger)
-		if err := cloudInitInjector.CreateNoCloudPartition(devicePath, cloudInitConfig); err != nil {
+		if err := cloudInitInjector.CreateNoCloudPartition(selectedDevice.Device.Path, cloudInitConfig); err != nil {
 			uww.logger.Error("Failed to create NoCloud partition", "error", err)
 			return nil, fmt.Errorf("failed to create cloud-init partition: %w", err)
 		}
@@ -92,12 +103,12 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, devic
 
 	duration := time.Since(startTime)
 	uww.logger.Info("ISO write completed successfully",
-		"device", devicePath,
+		"device", selectedDevice.Device.Path,
 		"duration", duration,
 		"bytes_written", isoInfo.Size())
 
 	return &types.WriteResult{
-		DevicePath:        devicePath,
+		DevicePath:        selectedDevice.Device.Path,
 		ISOPath:           isoPath,
 		BytesWritten:      isoInfo.Size(),
 		Duration:          duration,
@@ -210,33 +221,36 @@ func (uww *USBWriterWindows) validateInputs(isoPath string, devicePath string) e
 }
 
 // writeISOWithFallback writes ISO using multiple fallback methods
-func (uww *USBWriterWindows) writeISOWithFallback(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uww.logger.Debug("Writing ISO with fallback methods", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) writeISOWithFallback(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with fallback methods",
+		"iso", isoPath,
+		"device", selectedDevice.Device.Path,
+		"token", selectedDevice.ValidationToken)
 
 	// Method 1: Try dd first (fastest if available)
-	fmt.Println("   🔄 Método 1: Tentando com dd...")
-	if err := uww.writeISOWithDD(ctx, isoPath, devicePath, progressTracker); err == nil {
+	fmt.Printf("   🔄 Método 1: dd (Device: %s, Token: %s)\n", selectedDevice.Device.Path, selectedDevice.ValidationToken[:8])
+	if err := uww.writeISOWithDD(ctx, isoPath, selectedDevice, progressTracker); err == nil {
 		fmt.Println("   ✅ Sucesso com dd!")
 		return nil
 	}
 
 	// Method 2: Try PowerShell with robocopy
-	fmt.Println("   🔄 Método 2: Tentando com PowerShell + robocopy...")
-	if err := uww.writeISOWithPowerShell(ctx, isoPath, devicePath, progressTracker); err == nil {
+	fmt.Printf("   🔄 Método 2: PowerShell + robocopy (Device: %s, Token: %s)\n", selectedDevice.Device.Path, selectedDevice.ValidationToken[:8])
+	if err := uww.writeISOWithPowerShell(ctx, isoPath, selectedDevice, progressTracker); err == nil {
 		fmt.Println("   ✅ Sucesso com PowerShell!")
 		return nil
 	}
 
 	// Method 3: Try PowerShell with direct copy
-	fmt.Println("   🔄 Método 3: Tentando com PowerShell + copy...")
-	if err := uww.writeISOWithPowerShellCopy(ctx, isoPath, devicePath, progressTracker); err == nil {
+	fmt.Printf("   🔄 Método 3: PowerShell + copy (Device: %s, Token: %s)\n", selectedDevice.Device.Path, selectedDevice.ValidationToken[:8])
+	if err := uww.writeISOWithPowerShellCopy(ctx, isoPath, selectedDevice, progressTracker); err == nil {
 		fmt.Println("   ✅ Sucesso com PowerShell copy!")
 		return nil
 	}
 
 	// Method 4: Try diskpart + copy
-	fmt.Println("   🔄 Método 4: Tentando com diskpart + copy...")
-	if err := uww.writeISOWithDiskpart(ctx, isoPath, devicePath, progressTracker); err == nil {
+	fmt.Printf("   🔄 Método 4: diskpart + copy (Device: %s, Token: %s)\n", selectedDevice.Device.Path, selectedDevice.ValidationToken[:8])
+	if err := uww.writeISOWithDiskpart(ctx, isoPath, selectedDevice, progressTracker); err == nil {
 		fmt.Println("   ✅ Sucesso com diskpart!")
 		return nil
 	}
@@ -245,12 +259,12 @@ func (uww *USBWriterWindows) writeISOWithFallback(ctx context.Context, isoPath s
 }
 
 // writeISOWithDD writes ISO to device using dd command (if available) or alternative method
-func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uww.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", selectedDevice.Device.Path, "token", selectedDevice.ValidationToken)
 
 	// Convert drive letter to PhysicalDrive if needed
-	actualDevicePath := devicePath
-	if strings.HasSuffix(devicePath, ":") && len(devicePath) == 2 {
+	actualDevicePath := selectedDevice.Device.Path
+	if strings.HasSuffix(selectedDevice.Device.Path, ":") && len(selectedDevice.Device.Path) == 2 {
 		factory := NewUSBDetectorFactory()
 		detector, err := factory.CreateUSBDetector(uww.logger)
 		if err != nil {
@@ -262,7 +276,7 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 			return fmt.Errorf("expected Windows detector")
 		}
 
-		physicalDrive, err := windowsDetector.GetPhysicalDriveFromLetter(ctx, devicePath)
+		physicalDrive, err := windowsDetector.GetPhysicalDriveFromLetter(ctx, selectedDevice.Device.Path)
 		if err != nil {
 			return fmt.Errorf("failed to get physical drive: %w", err)
 		}
@@ -287,7 +301,7 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 		fmt.Println()
 
 		// Fallback to PowerShell method
-		return uww.writeISOWithPowerShell(ctx, isoPath, devicePath, progressTracker)
+		return uww.writeISOWithPowerShell(ctx, isoPath, selectedDevice, progressTracker)
 	}
 
 	uww.logger.Debug("dd command completed successfully")
@@ -295,13 +309,13 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 }
 
 // writeISOWithPowerShellCopy writes ISO using PowerShell with direct copy
-func (uww *USBWriterWindows) writeISOWithPowerShellCopy(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uww.logger.Debug("Writing ISO with PowerShell copy", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) writeISOWithPowerShellCopy(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with PowerShell copy", "iso", isoPath, "device", selectedDevice.Device.Path)
 
 	// PowerShell script to write ISO using direct copy
 	psScript := fmt.Sprintf(`
 $isoPath = "%s"
-$devicePath = "%s"
+$selectedDevice.Device.Path = "%s"
 
 try {
     # Mount ISO
@@ -309,7 +323,7 @@ try {
     $isoDrive = ($isoMount | Get-Volume).DriveLetter + ":"
     
     # Copy ISO contents to USB device using Copy-Item
-    Copy-Item -Path "$isoDrive\*" -Destination $devicePath -Recurse -Force
+    Copy-Item -Path "$isoDrive\*" -Destination $selectedDevice.Device.Path -Recurse -Force
     
     # Dismount ISO
     Dismount-DiskImage -ImagePath $isoPath
@@ -319,7 +333,7 @@ try {
     Write-Error "Failed to copy ISO: $_"
     exit 1
 }
-`, isoPath, devicePath)
+`, isoPath, selectedDevice.Device.Path)
 
 	// Execute PowerShell script
 	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
@@ -333,8 +347,8 @@ try {
 }
 
 // writeISOWithDiskpart writes ISO using diskpart and copy
-func (uww *USBWriterWindows) writeISOWithDiskpart(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uww.logger.Debug("Writing ISO with diskpart", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) writeISOWithDiskpart(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with diskpart", "iso", isoPath, "device", selectedDevice.Device.Path)
 
 	// First, format the device with diskpart
 	diskpartScript := fmt.Sprintf(`
@@ -344,7 +358,7 @@ create partition primary
 active
 format fs=fat32 quick
 assign
-`, strings.TrimSuffix(devicePath, ":"))
+`, strings.TrimSuffix(selectedDevice.Device.Path, ":"))
 
 	// Create temporary script file
 	scriptPath := filepath.Join(os.TempDir(), "syntropy-format.txt")
@@ -360,17 +374,17 @@ assign
 	}
 
 	// Then use PowerShell to copy ISO contents
-	return uww.writeISOWithPowerShellCopy(ctx, isoPath, devicePath, progressTracker)
+	return uww.writeISOWithPowerShellCopy(ctx, isoPath, selectedDevice, progressTracker)
 }
 
 // writeISOWithPowerShell writes ISO using PowerShell as fallback
-func (uww *USBWriterWindows) writeISOWithPowerShell(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
-	uww.logger.Debug("Writing ISO with PowerShell", "iso", isoPath, "device", devicePath)
+func (uww *USBWriterWindows) writeISOWithPowerShell(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
+	uww.logger.Debug("Writing ISO with PowerShell", "iso", isoPath, "device", selectedDevice.Device.Path)
 
 	// PowerShell script to write ISO to USB
 	psScript := fmt.Sprintf(`
 $isoPath = "%s"
-$devicePath = "%s"
+$selectedDevice.Device.Path = "%s"
 
 try {
     # Mount ISO
@@ -378,7 +392,7 @@ try {
     $isoDrive = ($isoMount | Get-Volume).DriveLetter + ":"
     
     # Copy ISO contents to USB device
-    robocopy $isoDrive $devicePath /E /COPY:DAT /R:3 /W:1
+    robocopy $isoDrive $selectedDevice.Device.Path /E /COPY:DAT /R:3 /W:1
     
     # Dismount ISO
     Dismount-DiskImage -ImagePath $isoPath
@@ -388,7 +402,7 @@ try {
     Write-Error "Failed to write ISO: $_"
     exit 1
 }
-`, isoPath, devicePath)
+`, isoPath, selectedDevice.Device.Path)
 
 	// Execute PowerShell script
 	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
