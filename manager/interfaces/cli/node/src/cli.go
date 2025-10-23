@@ -45,19 +45,20 @@ func (cli *CLICommands) RegisterCommands(nodeCmd *cobra.Command) {
 // createNodeCmd creates the node create command
 func (cli *CLICommands) createNodeCmd() *cobra.Command {
 	var (
-		ubuntuVersion    string
-		devicePath       string
-		isoPath          string
-		isoURL           string
-		nodeID           string
-		skipUSBDetection bool
-		skipISODownload  bool
-		skipCloudInit    bool
-		skipUSBWrite     bool
-		forceOverwrite   bool
-		autoStart        bool
-		interactive      bool
-		listDevices      bool
+		ubuntuVersion     string
+		devicePath        string
+		isoPath           string
+		isoURL            string
+		nodeID            string
+		skipUSBDetection  bool
+		skipISODownload   bool
+		skipCloudInit     bool
+		skipUSBWrite      bool
+		forceOverwrite    bool
+		autoStart         bool
+		interactive       bool
+		listDevices       bool
+		skipISOValidation bool
 	)
 
 	cmd := &cobra.Command{
@@ -86,18 +87,19 @@ Examples:
 			}
 
 			return cli.handleCreateNode(cmd.Context(), &CreateNodeOptions{
-				UbuntuVersion:    ubuntuVersion,
-				DevicePath:       devicePath,
-				ISOPath:          isoPath,
-				ISOURL:           isoURL,
-				NodeID:           nodeID,
-				SkipUSBDetection: skipUSBDetection,
-				SkipISODownload:  skipISODownload,
-				SkipCloudInit:    skipCloudInit,
-				SkipUSBWrite:     skipUSBWrite,
-				ForceOverwrite:   forceOverwrite,
-				AutoStart:        autoStart,
-				Interactive:      interactive,
+				UbuntuVersion:     ubuntuVersion,
+				DevicePath:        devicePath,
+				ISOPath:           isoPath,
+				ISOURL:            isoURL,
+				NodeID:            nodeID,
+				SkipUSBDetection:  skipUSBDetection,
+				SkipISODownload:   skipISODownload,
+				SkipCloudInit:     skipCloudInit,
+				SkipUSBWrite:      skipUSBWrite,
+				ForceOverwrite:    forceOverwrite,
+				AutoStart:         autoStart,
+				Interactive:       interactive,
+				SkipISOValidation: skipISOValidation,
 			})
 		},
 	}
@@ -116,6 +118,7 @@ Examples:
 	cmd.Flags().BoolVar(&autoStart, "auto-start", true, "Auto-start listener after creation")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Interactive mode with prompts")
 	cmd.Flags().BoolVar(&listDevices, "list-devices", false, "List available USB devices without creating node")
+	cmd.Flags().BoolVar(&skipISOValidation, "skip-iso-validation", false, "Skip ISO SHA256 validation (temporary feature)")
 
 	return cmd
 }
@@ -343,18 +346,19 @@ func (cli *CLICommands) listenerStatusCmd() *cobra.Command {
 
 // CreateNodeOptions represents options for creating a node
 type CreateNodeOptions struct {
-	UbuntuVersion    string
-	DevicePath       string
-	ISOPath          string
-	ISOURL           string
-	NodeID           string
-	SkipUSBDetection bool
-	SkipISODownload  bool
-	SkipCloudInit    bool
-	SkipUSBWrite     bool
-	ForceOverwrite   bool
-	AutoStart        bool
-	Interactive      bool
+	UbuntuVersion     string
+	DevicePath        string
+	ISOPath           string
+	ISOURL            string
+	NodeID            string
+	SkipUSBDetection  bool
+	SkipISODownload   bool
+	SkipCloudInit     bool
+	SkipUSBWrite      bool
+	ForceOverwrite    bool
+	AutoStart         bool
+	Interactive       bool
+	SkipISOValidation bool
 }
 
 // ListNodeOptions represents options for listing nodes
@@ -403,14 +407,17 @@ func (cli *CLICommands) handleCreateNode(ctx context.Context, options *CreateNod
 
 	// Create node
 	result, err := cli.nodeManager.CreateNode(&CreateOptions{
-		UbuntuVersion:    options.UbuntuVersion,
-		DevicePath:       options.DevicePath,
-		SkipUSBDetection: options.SkipUSBDetection,
-		SkipISODownload:  options.SkipISODownload,
-		SkipCloudInit:    options.SkipCloudInit,
-		SkipUSBWrite:     options.SkipUSBWrite,
-		ForceOverwrite:   options.ForceOverwrite,
-		AutoStart:        options.AutoStart,
+		UbuntuVersion:     options.UbuntuVersion,
+		DevicePath:        options.DevicePath,
+		ISOPath:           options.ISOPath,
+		ISOURL:            options.ISOURL,
+		SkipUSBDetection:  options.SkipUSBDetection,
+		SkipISODownload:   options.SkipISODownload,
+		SkipCloudInit:     options.SkipCloudInit,
+		SkipUSBWrite:      options.SkipUSBWrite,
+		ForceOverwrite:    options.ForceOverwrite,
+		AutoStart:         options.AutoStart,
+		SkipISOValidation: options.SkipISOValidation,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create node: %w", err)

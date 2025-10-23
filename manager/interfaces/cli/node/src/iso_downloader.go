@@ -146,6 +146,7 @@ func (id *ISODownloaderImpl) getDefaultISOConfig() *types.ISODownloadConfig {
 		EnableAutoFallback: true,
 		MaxRetries:         3,
 		Timeout:            30 * time.Minute,
+		SkipValidation:     false,
 	}
 }
 
@@ -245,11 +246,11 @@ func (id *ISODownloaderImpl) SetProgressCallback(callback func(downloaded, total
 
 // DownloadISO downloads Ubuntu Server ISO with progress tracking
 func (id *ISODownloaderImpl) DownloadISO(ctx context.Context, version string) (*types.ISOInfo, error) {
-	return id.DownloadISOWithOptions(ctx, version, "")
+	return id.DownloadISOWithOptions(ctx, version, "", false)
 }
 
 // DownloadISOWithOptions downloads Ubuntu Server ISO with custom URL support
-func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version string, customURL string) (*types.ISOInfo, error) {
+func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version string, customURL string, skipValidation bool) (*types.ISOInfo, error) {
 	id.logger.Info("Starting ISO download with fallback system", "version", version, "custom_url", customURL)
 
 	// Verificar cache primeiro
@@ -295,6 +296,7 @@ func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version
 		}
 
 		fmt.Printf("   ✅ URL disponível, iniciando download...\n")
+		fmt.Printf("📥 Baixando ubuntu-%s-live-server-amd64.iso\n", version)
 
 		// Tentar download
 		isoPath := filepath.Join(id.cacheDir, fmt.Sprintf("ubuntu-%s-live-server-amd64.iso", version))
@@ -322,9 +324,7 @@ func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version
 			continue
 		}
 
-		fmt.Printf("   ✅ Download concluído, validando integridade...\n")
-
-		// Validar ISO
+		// Obter informações do ISO (necessário para criar ISOInfo)
 		isoVersion, err := id.GetISOInfo(version)
 		if err != nil {
 			attempt.Success = false
@@ -335,17 +335,25 @@ func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version
 			continue
 		}
 
-		if err := id.ValidateISO(isoPath, isoVersion.SHA256); err != nil {
-			attempt.Success = false
-			attempt.ErrorMessage = fmt.Sprintf("Validation failed: %v", err)
-			attempt.Duration = time.Since(attemptStart)
-			attempts = append(attempts, attempt)
+		// Verificar se deve pular validação
+		if skipValidation {
+			fmt.Printf("   ⚠️  Download concluído, pulando validação SHA256...\n")
+			id.logger.Warn("ISO validation skipped - this is a temporary feature that will be re-enabled when the software matures")
+		} else {
+			fmt.Printf("   ✅ Download concluído, validando integridade...\n")
 
-			id.logger.Warn("ISO validation failed", "url", url, "error", err)
-			fmt.Printf("   ❌ Validação falhou: %v\n", err)
-			os.Remove(isoPath)
-			lastErr = err
-			continue
+			if err := id.ValidateISO(isoPath, isoVersion.SHA256); err != nil {
+				attempt.Success = false
+				attempt.ErrorMessage = fmt.Sprintf("Validation failed: %v", err)
+				attempt.Duration = time.Since(attemptStart)
+				attempts = append(attempts, attempt)
+
+				id.logger.Warn("ISO validation failed", "url", url, "error", err)
+				fmt.Printf("   ❌ Validação falhou: %v\n", err)
+				os.Remove(isoPath)
+				lastErr = err
+				continue
+			}
 		}
 
 		// Sucesso!
@@ -754,15 +762,17 @@ func (id *ISODownloaderImpl) downloadFile(ctx context.Context, url string, fileP
 
 // ISOProgressTracker tracks download progress
 type ISOProgressTracker struct {
-	logger types.Logger
-	start  time.Time
+	logger     types.Logger
+	start      time.Time
+	lastUpdate time.Time
 }
 
 // NewISOProgressTracker creates a new progress tracker
 func NewISOProgressTracker(logger types.Logger) *ISOProgressTracker {
 	return &ISOProgressTracker{
-		logger: logger,
-		start:  time.Now(),
+		logger:     logger,
+		start:      time.Now(),
+		lastUpdate: time.Now(),
 	}
 }
 
@@ -771,6 +781,13 @@ func (ipt *ISOProgressTracker) TrackProgress(downloaded, total int64) {
 	if total <= 0 {
 		return
 	}
+
+	now := time.Now()
+	// Update progress bar every 0.5 seconds to avoid too frequent updates
+	if now.Sub(ipt.lastUpdate) < 500*time.Millisecond && downloaded < total {
+		return
+	}
+	ipt.lastUpdate = now
 
 	percentage := float64(downloaded) / float64(total) * 100
 	elapsed := time.Since(ipt.start)
@@ -792,14 +809,40 @@ func (ipt *ISOProgressTracker) TrackProgress(downloaded, total int64) {
 	downloadedMB := float64(downloaded) / 1024 / 1024
 	totalMB := float64(total) / 1024 / 1024
 
-	// Log progress every 5%
-	if int(percentage)%5 == 0 {
-		ipt.logger.Info("Download progress",
-			"progress", fmt.Sprintf("%.1f%%", percentage),
-			"downloaded", fmt.Sprintf("%.1fMB", downloadedMB),
-			"total", fmt.Sprintf("%.1fMB", totalMB),
+	// Create progress bar
+	barWidth := 30
+	filled := int(float64(barWidth) * percentage / 100)
+	bar := ""
+	for i := 0; i < barWidth; i++ {
+		if i < filled {
+			bar += "█"
+		} else {
+			bar += "░"
+		}
+	}
+
+	// Format ETA
+	etaStr := "∞"
+	if eta > 0 {
+		etaStr = eta.Truncate(time.Second).String()
+	}
+
+	// Display progress bar with \r to overwrite the same line
+	progressLine := fmt.Sprintf("\r📥 Baixando ISO: [%s] %.1f%% (%.1fGB/%.1fGB) %.1fMB/s ETA: %s",
+		bar, percentage, downloadedMB/1024, totalMB/1024, speed, etaStr)
+
+	// Print to stdout (not logger) for real-time display
+	fmt.Print(progressLine)
+
+	// If download is complete, add newline and log final status
+	if downloaded >= total {
+		fmt.Println() // Add newline after progress bar
+		ipt.logger.Info("Download completed",
+			"progress", "100.0%",
+			"downloaded", fmt.Sprintf("%.1fGB", downloadedMB/1024),
+			"total", fmt.Sprintf("%.1fGB", totalMB/1024),
 			"speed", fmt.Sprintf("%.1fMB/s", speed),
-			"eta", eta.Truncate(time.Second))
+			"duration", elapsed.Truncate(time.Second))
 	}
 }
 

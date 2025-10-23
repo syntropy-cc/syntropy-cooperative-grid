@@ -484,6 +484,7 @@ type ISODownloadConfig struct {
 	EnableAutoFallback bool          `yaml:"enable_auto_fallback"`
 	MaxRetries         int           `yaml:"max_retries"`
 	Timeout            time.Duration `yaml:"timeout"`
+	SkipValidation     bool          `yaml:"skip_validation"`
 }
 
 // ISODownloadAttempt representa uma tentativa de download
