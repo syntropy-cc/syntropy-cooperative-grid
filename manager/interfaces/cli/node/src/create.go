@@ -49,6 +49,8 @@ func NewCreateSubcomponent(
 type CreateOptions struct {
 	UbuntuVersion    string
 	DevicePath       string
+	ISOPath          string
+	ISOURL           string
 	SkipUSBDetection bool
 	SkipISODownload  bool
 	SkipCloudInit    bool
@@ -116,7 +118,7 @@ func (cs *CreateSubcomponent) CreateNode(ctx context.Context, options CreateOpti
 	// Step 4: Download Ubuntu ISO
 	var isoPath string
 	if !options.SkipISODownload {
-		isoPath, err = cs.downloadUbuntuISO(ctx, options.UbuntuVersion)
+		isoPath, err = cs.downloadUbuntuISOWithURL(ctx, options.UbuntuVersion, options.ISOURL)
 		if err != nil {
 			result.StepsFailed = append(result.StepsFailed, "download_iso")
 			result.ErrorMessage = err.Error()
@@ -327,20 +329,31 @@ func (cs *CreateSubcomponent) detectUSBDevice(ctx context.Context) (string, erro
 
 // downloadUbuntuISO downloads the Ubuntu ISO
 func (cs *CreateSubcomponent) downloadUbuntuISO(ctx context.Context, version string) (string, error) {
-	cs.logger.Debug("Downloading Ubuntu ISO", "version", version)
+	return cs.downloadUbuntuISOWithURL(ctx, version, "")
+}
+
+// downloadUbuntuISOWithURL downloads the Ubuntu ISO with custom URL support
+func (cs *CreateSubcomponent) downloadUbuntuISOWithURL(ctx context.Context, version string, customURL string) (string, error) {
+	cs.logger.Info("Downloading Ubuntu ISO", "version", version, "custom_url", customURL)
 
 	// Use default version if not specified
 	if version == "" {
 		version = "24.04"
 	}
 
-	// Download ISO
-	isoInfo, err := cs.isoDownloader.DownloadISO(ctx, version)
+	// Download ISO using the ISO downloader with custom URL support
+	isoDownloader := cs.isoDownloader.(*ISODownloaderImpl)
+	isoInfo, err := isoDownloader.DownloadISOWithOptions(ctx, version, customURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to download ISO: %w", err)
+		return "", fmt.Errorf("failed to download Ubuntu ISO: %w", err)
 	}
 
-	cs.logger.Debug("Ubuntu ISO downloaded", "version", version, "path", isoInfo.FilePath)
+	cs.logger.Info("Ubuntu ISO downloaded successfully",
+		"version", version,
+		"path", isoInfo.FilePath,
+		"size", isoInfo.Size,
+		"source", isoInfo.DownloadURL)
+
 	return isoInfo.FilePath, nil
 }
 

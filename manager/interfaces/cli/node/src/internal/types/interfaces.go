@@ -477,6 +477,31 @@ type ISOCacheStats struct {
 	NewestFile time.Time `json:"newest_file"`
 }
 
+// ISODownloadConfig representa a configuração de download de ISOs
+type ISODownloadConfig struct {
+	CustomURLs         []string      `yaml:"custom_urls"`
+	PreferredMirrors   []string      `yaml:"preferred_mirrors"`
+	EnableAutoFallback bool          `yaml:"enable_auto_fallback"`
+	MaxRetries         int           `yaml:"max_retries"`
+	Timeout            time.Duration `yaml:"timeout"`
+}
+
+// ISODownloadAttempt representa uma tentativa de download
+type ISODownloadAttempt struct {
+	URL          string
+	Success      bool
+	ErrorMessage string
+	Duration     time.Duration
+}
+
+// ISODownloadResult representa o resultado completo do download
+type ISODownloadResult struct {
+	ISOInfo    *ISOInfo
+	Attempts   []ISODownloadAttempt
+	TotalTime  time.Duration
+	SourceUsed string
+}
+
 // WriteResult represents the result of a write operation
 type WriteResult struct {
 	DevicePath        string        `json:"device_path"`

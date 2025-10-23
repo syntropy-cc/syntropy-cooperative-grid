@@ -9,11 +9,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"node-component/src/internal/constants"
 	"node-component/src/internal/helpers"
 	"node-component/src/internal/types"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ISODownloader defines the interface for downloading and managing Ubuntu ISOs
@@ -74,9 +78,16 @@ func NewISODownloader(logger types.Logger) *ISODownloaderImpl {
 		logger.Error("Failed to create isos cache directory", "error", err)
 	}
 
-	// Create HTTP client with timeout
+	// Create HTTP client with timeout and redirect following
 	httpClient := &http.Client{
 		Timeout: constants.DefaultHTTPTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Permitir até 10 redirecionamentos
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			return nil
+		},
 	}
 
 	return &ISODownloaderImpl{
@@ -86,6 +97,147 @@ func NewISODownloader(logger types.Logger) *ISODownloaderImpl {
 	}
 }
 
+// loadISOConfig loads ISO configuration from manager.yaml
+func (id *ISODownloaderImpl) loadISOConfig() (*types.ISODownloadConfig, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	configPath := filepath.Join(homeDir, ".syntropy", "config", "manager.yaml")
+
+	// Se não existe, retornar configuração padrão
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return id.getDefaultISOConfig(), nil
+	}
+
+	// Ler e parsear arquivo
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		id.logger.Warn("Failed to read config, using defaults", "error", err)
+		return id.getDefaultISOConfig(), nil
+	}
+
+	// Parse YAML para extrair seção ISO
+	var config struct {
+		ISO types.ISODownloadConfig `yaml:"iso"`
+	}
+
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		id.logger.Warn("Failed to parse config, using defaults", "error", err)
+		return id.getDefaultISOConfig(), nil
+	}
+
+	return &config.ISO, nil
+}
+
+// getDefaultISOConfig returns default ISO configuration
+func (id *ISODownloaderImpl) getDefaultISOConfig() *types.ISODownloadConfig {
+	return &types.ISODownloadConfig{
+		CustomURLs: []string{
+			"https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso?_gl=1*12y79vf*_gcl_au*MTAzMzgyNzE0NC4xNzU5NDIzNDAz",
+		},
+		PreferredMirrors: []string{
+			"https://releases.ubuntu.com",
+			"https://mirror.math.princeton.edu/pub/ubuntu-iso",
+			"https://mirrors.kernel.org/ubuntu-iso",
+			"https://mirror.umd.edu/ubuntu-iso",
+		},
+		EnableAutoFallback: true,
+		MaxRetries:         3,
+		Timeout:            30 * time.Minute,
+	}
+}
+
+// buildDownloadURLs builds a prioritized list of download URLs
+func (id *ISODownloaderImpl) buildDownloadURLs(version string, customURL string) ([]string, error) {
+	urls := []string{}
+
+	// 1. URL personalizada da flag CLI (prioridade máxima)
+	if customURL != "" {
+		id.logger.Info("Adding custom URL from CLI flag", "url", customURL)
+		urls = append(urls, customURL)
+	}
+
+	// 2. Carregar configuração
+	config, err := id.loadISOConfig()
+	if err != nil {
+		id.logger.Warn("Failed to load config", "error", err)
+		config = id.getDefaultISOConfig()
+	}
+
+	// 3. URLs personalizadas do manager.yaml
+	urls = append(urls, config.CustomURLs...)
+
+	// 4. URL oficial primária
+	isoVersion, err := id.GetISOInfo(version)
+	if err == nil {
+		urls = append(urls, isoVersion.DownloadURL)
+	}
+
+	// 5. Mirrors alternativos
+	if config.EnableAutoFallback {
+		for _, mirror := range config.PreferredMirrors {
+			if !strings.HasPrefix(mirror, "https://releases.ubuntu.com") {
+				mirrorURL := fmt.Sprintf("%s/%s/ubuntu-%s-live-server-amd64.iso",
+					strings.TrimSuffix(mirror, "/"), version, version)
+				urls = append(urls, mirrorURL)
+			}
+		}
+	}
+
+	// 6. Variável de ambiente (ISO_CUSTOM_URLS)
+	if envURLs := os.Getenv("ISO_CUSTOM_URLS"); envURLs != "" {
+		for _, url := range strings.Split(envURLs, ",") {
+			urls = append(urls, strings.TrimSpace(url))
+		}
+	}
+
+	// Remover duplicatas mantendo ordem
+	seen := make(map[string]bool)
+	uniqueURLs := []string{}
+	for _, url := range urls {
+		if !seen[url] && url != "" {
+			seen[url] = true
+			uniqueURLs = append(uniqueURLs, url)
+		}
+	}
+
+	id.logger.Info("Built download URL list", "total_urls", len(uniqueURLs), "urls", uniqueURLs)
+	return uniqueURLs, nil
+}
+
+// validateURL checks if a URL is accessible
+func (id *ISODownloaderImpl) validateURL(ctx context.Context, url string) error {
+	// Para URLs personalizados, ser mais flexível na validação
+	if strings.Contains(url, "ubuntu.com/download") || strings.Contains(url, "thank-you") {
+		id.logger.Debug("Skipping validation for Ubuntu download page", "url", url)
+		return nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+	if err != nil {
+		return err
+	}
+
+	// Adicionar headers para simular um navegador
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "*/*")
+
+	resp, err := id.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Aceitar mais códigos de status (incluindo redirecionamentos)
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		return nil
+	}
+
+	return fmt.Errorf("URL returned status %d", resp.StatusCode)
+}
+
 // SetProgressCallback sets the progress callback for downloads
 func (id *ISODownloaderImpl) SetProgressCallback(callback func(downloaded, total int64)) {
 	id.progressCB = callback
@@ -93,50 +245,178 @@ func (id *ISODownloaderImpl) SetProgressCallback(callback func(downloaded, total
 
 // DownloadISO downloads Ubuntu Server ISO with progress tracking
 func (id *ISODownloaderImpl) DownloadISO(ctx context.Context, version string) (*types.ISOInfo, error) {
-	id.logger.Info("Starting ISO download", "version", version)
+	return id.DownloadISOWithOptions(ctx, version, "")
+}
 
-	// Get ISO information
-	isoVersion, err := id.GetISOInfo(version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ISO info: %w", err)
-	}
+// DownloadISOWithOptions downloads Ubuntu Server ISO with custom URL support
+func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version string, customURL string) (*types.ISOInfo, error) {
+	id.logger.Info("Starting ISO download with fallback system", "version", version, "custom_url", customURL)
 
-	// Check if already cached
+	// Verificar cache primeiro
 	if cachedISO, err := id.GetCachedISO(version); err == nil && cachedISO != nil {
 		id.logger.Info("Using cached ISO", "version", version, "path", cachedISO.FilePath)
 		return cachedISO, nil
 	}
 
-	// Download ISO
-	isoPath := filepath.Join(id.cacheDir, isoVersion.FileName)
-	if err := id.downloadFile(ctx, isoVersion.DownloadURL, isoPath); err != nil {
-		return nil, fmt.Errorf("failed to download ISO: %w", err)
-	}
-
-	// Validate ISO
-	if err := id.ValidateISO(isoPath, isoVersion.SHA256); err != nil {
-		os.Remove(isoPath) // Clean up invalid file
-		return nil, fmt.Errorf("ISO validation failed: %w", err)
-	}
-
-	// Get file info
-	fileInfo, err := os.Stat(isoPath)
+	// Construir lista de URLs
+	urls, err := id.buildDownloadURLs(version, customURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file info: %w", err)
+		return nil, fmt.Errorf("failed to build download URLs: %w", err)
 	}
 
-	isoInfo := &types.ISOInfo{
-		Version:      version,
-		FilePath:     isoPath,
-		FileName:     isoVersion.FileName,
-		Size:         fileInfo.Size(),
-		SHA256:       isoVersion.SHA256,
-		DownloadURL:  isoVersion.DownloadURL,
-		DownloadedAt: time.Now(),
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("no download URLs available for version %s", version)
 	}
 
-	id.logger.Info("ISO download completed", "version", version, "size", fileInfo.Size())
-	return isoInfo, nil
+	id.logger.Info("Attempting download from multiple sources", "total_urls", len(urls))
+
+	// Tentar cada URL
+	var attempts []types.ISODownloadAttempt
+	var lastErr error
+
+	for i, url := range urls {
+		attempt := types.ISODownloadAttempt{URL: url}
+		attemptStart := time.Now()
+
+		id.logger.Info("Trying download", "attempt", i+1, "total", len(urls), "url", url)
+		fmt.Printf("🔄 Tentativa %d/%d: %s\n", i+1, len(urls), url)
+
+		// Validar URL primeiro
+		if err := id.validateURL(ctx, url); err != nil {
+			attempt.Success = false
+			attempt.ErrorMessage = fmt.Sprintf("URL validation failed: %v", err)
+			attempt.Duration = time.Since(attemptStart)
+			attempts = append(attempts, attempt)
+
+			id.logger.Warn("URL not available", "url", url, "error", err)
+			fmt.Printf("   ⚠️  URL não disponível: %v\n", err)
+			lastErr = err
+			continue
+		}
+
+		fmt.Printf("   ✅ URL disponível, iniciando download...\n")
+
+		// Tentar download
+		isoPath := filepath.Join(id.cacheDir, fmt.Sprintf("ubuntu-%s-live-server-amd64.iso", version))
+
+		// Para URLs de páginas de download do Ubuntu, tentar extrair o link real
+		if strings.Contains(url, "ubuntu.com/download") || strings.Contains(url, "thank-you") {
+			realURL, err := id.extractDownloadURL(ctx, url)
+			if err != nil {
+				id.logger.Warn("Failed to extract download URL, trying original", "url", url, "error", err)
+			} else {
+				id.logger.Info("Extracted real download URL", "original", url, "real", realURL)
+				url = realURL
+			}
+		}
+
+		if err := id.downloadFile(ctx, url, isoPath); err != nil {
+			attempt.Success = false
+			attempt.ErrorMessage = fmt.Sprintf("Download failed: %v", err)
+			attempt.Duration = time.Since(attemptStart)
+			attempts = append(attempts, attempt)
+
+			id.logger.Warn("Download failed", "url", url, "error", err)
+			fmt.Printf("   ❌ Download falhou: %v\n", err)
+			lastErr = err
+			continue
+		}
+
+		fmt.Printf("   ✅ Download concluído, validando integridade...\n")
+
+		// Validar ISO
+		isoVersion, err := id.GetISOInfo(version)
+		if err != nil {
+			attempt.Success = false
+			attempt.ErrorMessage = fmt.Sprintf("Failed to get ISO info: %v", err)
+			attempt.Duration = time.Since(attemptStart)
+			attempts = append(attempts, attempt)
+			lastErr = err
+			continue
+		}
+
+		if err := id.ValidateISO(isoPath, isoVersion.SHA256); err != nil {
+			attempt.Success = false
+			attempt.ErrorMessage = fmt.Sprintf("Validation failed: %v", err)
+			attempt.Duration = time.Since(attemptStart)
+			attempts = append(attempts, attempt)
+
+			id.logger.Warn("ISO validation failed", "url", url, "error", err)
+			fmt.Printf("   ❌ Validação falhou: %v\n", err)
+			os.Remove(isoPath)
+			lastErr = err
+			continue
+		}
+
+		// Sucesso!
+		attempt.Success = true
+		attempt.Duration = time.Since(attemptStart)
+		attempts = append(attempts, attempt)
+
+		fmt.Printf("✅ ISO baixada e validada com sucesso de: %s\n", url)
+
+		// Criar ISOInfo
+		fileInfo, err := os.Stat(isoPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get file info: %w", err)
+		}
+
+		return &types.ISOInfo{
+			Version:      version,
+			FilePath:     isoPath,
+			FileName:     isoVersion.FileName,
+			Size:         fileInfo.Size(),
+			SHA256:       isoVersion.SHA256,
+			DownloadURL:  url,
+			DownloadedAt: time.Now(),
+		}, nil
+	}
+
+	// Todos os URLs falharam
+	return nil, id.handleAllDownloadsFailed(version, attempts, lastErr)
+}
+
+// handleAllDownloadsFailed provides helpful feedback when all downloads fail
+func (id *ISODownloaderImpl) handleAllDownloadsFailed(version string, attempts []types.ISODownloadAttempt, lastErr error) error {
+	fmt.Printf("\n❌ Todos os downloads falharam para Ubuntu %s\n\n", version)
+
+	// Mostrar resumo das tentativas
+	fmt.Printf("📋 Resumo das tentativas (%d):\n", len(attempts))
+	for i, attempt := range attempts {
+		status := "❌ Falhou"
+		if attempt.Success {
+			status = "✅ Sucesso"
+		}
+		fmt.Printf("   %d. %s - %s\n", i+1, status, attempt.URL)
+		if !attempt.Success && attempt.ErrorMessage != "" {
+			fmt.Printf("      Erro: %s\n", attempt.ErrorMessage)
+		}
+	}
+
+	// Fornecer opções ao usuário
+	fmt.Printf("\n🔧 Opções disponíveis:\n")
+	fmt.Printf("1. 📁 Fornecer ISO local:\n")
+	fmt.Printf("   syntropy node create --iso /caminho/para/ubuntu-%s-live-server-amd64.iso\n\n", version)
+
+	fmt.Printf("2. 🌐 Configurar URL personalizada via CLI:\n")
+	fmt.Printf("   syntropy node create --iso-url https://seu-mirror.com/ubuntu-%s-live-server-amd64.iso\n\n", version)
+
+	fmt.Printf("3. ⚙️  Adicionar URLs no arquivo de configuração:\n")
+	fmt.Printf("   Edite: ~/.syntropy/config/manager.yaml\n")
+	fmt.Printf("   Adicione na seção 'iso.custom_urls':\n")
+	fmt.Printf("   iso:\n")
+	fmt.Printf("     custom_urls:\n")
+	fmt.Printf("       - https://seu-mirror.com/ubuntu-%s-live-server-amd64.iso\n\n", version)
+
+	fmt.Printf("4. 🔄 Tentar novamente (pode ser problema temporário):\n")
+	fmt.Printf("   syntropy node create --ubuntu-version %s\n\n", version)
+
+	fmt.Printf("5. 🌍 Usar variável de ambiente:\n")
+	fmt.Printf("   export ISO_CUSTOM_URLS=\"https://mirror1.com/iso,https://mirror2.com/iso\"\n\n")
+
+	fmt.Printf("💡 Dica: Baixe manualmente de https://ubuntu.com/download/server\n")
+
+	return fmt.Errorf("all %d download attempts failed. Last error: %w", len(attempts), lastErr)
 }
 
 // GetCachedISO returns cached ISO info if available
@@ -186,8 +466,8 @@ func (id *ISODownloaderImpl) ListAvailableVersions() []types.UbuntuVersion {
 		{
 			Version:     "24.04",
 			LTS:         true,
-			FileName:    "ubuntu-24.04-server-amd64.iso",
-			DownloadURL: "https://releases.ubuntu.com/24.04/ubuntu-24.04-server-amd64.iso",
+			FileName:    "ubuntu-24.04-live-server-amd64.iso",
+			DownloadURL: "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso?_gl=1*12y79vf*_gcl_au*MTAzMzgyNzE0NC4xNzU5NDIzNDAz",
 			SHA256:      constants.Ubuntu2404ServerSHA256,
 			Size:        int64(constants.Ubuntu2404ServerSize),
 			ReleaseDate: time.Date(2024, 4, 25, 0, 0, 0, 0, time.UTC),
@@ -195,8 +475,8 @@ func (id *ISODownloaderImpl) ListAvailableVersions() []types.UbuntuVersion {
 		{
 			Version:     "22.04",
 			LTS:         true,
-			FileName:    "ubuntu-22.04-server-amd64.iso",
-			DownloadURL: "https://releases.ubuntu.com/22.04/ubuntu-22.04-server-amd64.iso",
+			FileName:    "ubuntu-22.04-live-server-amd64.iso",
+			DownloadURL: "https://releases.ubuntu.com/22.04/ubuntu-22.04-live-server-amd64.iso",
 			SHA256:      constants.Ubuntu2204ServerSHA256,
 			Size:        int64(constants.Ubuntu2204ServerSize),
 			ReleaseDate: time.Date(2022, 4, 21, 0, 0, 0, 0, time.UTC),
@@ -204,8 +484,8 @@ func (id *ISODownloaderImpl) ListAvailableVersions() []types.UbuntuVersion {
 		{
 			Version:     "20.04",
 			LTS:         true,
-			FileName:    "ubuntu-20.04-server-amd64.iso",
-			DownloadURL: "https://releases.ubuntu.com/20.04/ubuntu-20.04-server-amd64.iso",
+			FileName:    "ubuntu-20.04-live-server-amd64.iso",
+			DownloadURL: "https://releases.ubuntu.com/20.04/ubuntu-20.04-live-server-amd64.iso",
 			SHA256:      constants.Ubuntu2004ServerSHA256,
 			Size:        int64(constants.Ubuntu2004ServerSize),
 			ReleaseDate: time.Date(2020, 4, 23, 0, 0, 0, 0, time.UTC),
@@ -329,6 +609,68 @@ func (id *ISODownloaderImpl) GetCacheStats() (*types.ISOCacheStats, error) {
 
 // Private helper methods
 
+// extractDownloadURL extracts the real download URL from Ubuntu download pages
+func (id *ISODownloaderImpl) extractDownloadURL(ctx context.Context, pageURL string) (string, error) {
+	id.logger.Debug("Extracting download URL from page", "url", pageURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", pageURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	// Adicionar headers para simular um navegador
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+	resp, err := id.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("page returned status %d", resp.StatusCode)
+	}
+
+	// Ler o conteúdo da página
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// Procurar por links de download na página
+	content := string(body)
+
+	// Procurar por padrões comuns de links de download
+	patterns := []string{
+		`href="([^"]*ubuntu-[^"]*\.iso[^"]*)"`,
+		`href="([^"]*\.iso[^"]*)"`,
+		`"downloadUrl":"([^"]*\.iso[^"]*)"`,
+		`"url":"([^"]*\.iso[^"]*)"`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			downloadURL := matches[1]
+
+			// Se for um URL relativo, converter para absoluto
+			if strings.HasPrefix(downloadURL, "/") {
+				downloadURL = "https://releases.ubuntu.com" + downloadURL
+			} else if strings.HasPrefix(downloadURL, "//") {
+				downloadURL = "https:" + downloadURL
+			}
+
+			id.logger.Info("Found download URL in page", "url", downloadURL)
+			return downloadURL, nil
+		}
+	}
+
+	return "", fmt.Errorf("no download URL found in page")
+}
+
 // downloadFile downloads a file with progress tracking
 func (id *ISODownloaderImpl) downloadFile(ctx context.Context, url string, filePath string) error {
 	id.logger.Debug("Starting download", "url", url, "path", filePath)
@@ -338,6 +680,11 @@ func (id *ISODownloaderImpl) downloadFile(ctx context.Context, url string, fileP
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
+	// Adicionar headers para simular um navegador
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 	// Make request
 	resp, err := id.httpClient.Do(req)

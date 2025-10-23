@@ -39,6 +39,7 @@ func (cli *CLICommands) RegisterCommands(nodeCmd *cobra.Command) {
 	nodeCmd.AddCommand(cli.nodeLogsCmd())
 	nodeCmd.AddCommand(cli.removeNodeCmd())
 	nodeCmd.AddCommand(cli.listenerCmd())
+	nodeCmd.AddCommand(cli.isoCmd())
 }
 
 // createNodeCmd creates the node create command
@@ -47,6 +48,7 @@ func (cli *CLICommands) createNodeCmd() *cobra.Command {
 		ubuntuVersion    string
 		devicePath       string
 		isoPath          string
+		isoURL           string
 		nodeID           string
 		skipUSBDetection bool
 		skipISODownload  bool
@@ -87,6 +89,7 @@ Examples:
 				UbuntuVersion:    ubuntuVersion,
 				DevicePath:       devicePath,
 				ISOPath:          isoPath,
+				ISOURL:           isoURL,
 				NodeID:           nodeID,
 				SkipUSBDetection: skipUSBDetection,
 				SkipISODownload:  skipISODownload,
@@ -103,6 +106,7 @@ Examples:
 	cmd.Flags().StringVar(&ubuntuVersion, "ubuntu-version", "24.04", "Ubuntu Server version (e.g., 24.04, 22.04)")
 	cmd.Flags().StringVar(&devicePath, "device", "", "USB device path (e.g., /dev/sdb on Linux, D: on Windows)")
 	cmd.Flags().StringVar(&isoPath, "iso", "", "Path to local Ubuntu ISO file")
+	cmd.Flags().StringVar(&isoURL, "iso-url", "", "Custom ISO download URL")
 	cmd.Flags().StringVar(&nodeID, "node-id", "", "Pre-defined node ID (auto-generated if not specified)")
 	cmd.Flags().BoolVar(&skipUSBDetection, "skip-usb-detection", false, "Skip USB device detection")
 	cmd.Flags().BoolVar(&skipISODownload, "skip-iso-download", false, "Skip ISO download")
@@ -342,6 +346,7 @@ type CreateNodeOptions struct {
 	UbuntuVersion    string
 	DevicePath       string
 	ISOPath          string
+	ISOURL           string
 	NodeID           string
 	SkipUSBDetection bool
 	SkipISODownload  bool
@@ -817,5 +822,199 @@ func (cli *CLICommands) outputUSBDevicesTable(devices []types.USBDevice) error {
 	}
 
 	fmt.Println("\nRecommendation: Use devices with status 'Ready' for node creation.")
+	return nil
+}
+
+// isoCmd creates the ISO management command
+func (cli *CLICommands) isoCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "iso",
+		Short: "Manage ISO downloads and configuration",
+		Long:  `Manage Ubuntu Server ISO downloads, test URLs, and configure sources.`,
+	}
+
+	cmd.AddCommand(cli.isoTestURLsCmd())
+	cmd.AddCommand(cli.isoListSourcesCmd())
+	cmd.AddCommand(cli.isoConfigCmd())
+	cmd.AddCommand(cli.isoTestSingleURLCmd())
+
+	return cmd
+}
+
+// isoTestURLsCmd tests all configured ISO URLs
+func (cli *CLICommands) isoTestURLsCmd() *cobra.Command {
+	var version string
+
+	cmd := &cobra.Command{
+		Use:   "test-urls",
+		Short: "Test all configured ISO download URLs",
+		Long:  `Test accessibility of all configured ISO download URLs for a specific version.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleTestISOURLs(cmd.Context(), version)
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", "24.04", "Ubuntu version to test")
+	return cmd
+}
+
+// isoListSourcesCmd lists all ISO sources
+func (cli *CLICommands) isoListSourcesCmd() *cobra.Command {
+	var version string
+
+	cmd := &cobra.Command{
+		Use:   "list-sources",
+		Short: "List all configured ISO download sources",
+		Long:  `Display all configured ISO download sources in priority order.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleListISOSources(cmd.Context(), version)
+		},
+	}
+
+	cmd.Flags().StringVar(&version, "version", "24.04", "Ubuntu version")
+	return cmd
+}
+
+// isoConfigCmd shows ISO configuration
+func (cli *CLICommands) isoConfigCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Show ISO download configuration",
+		Long:  `Display current ISO download configuration from manager.yaml.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleShowISOConfig(cmd.Context())
+		},
+	}
+
+	return cmd
+}
+
+// isoTestSingleURLCmd tests a specific URL
+func (cli *CLICommands) isoTestSingleURLCmd() *cobra.Command {
+	var url string
+
+	cmd := &cobra.Command{
+		Use:   "test-url",
+		Short: "Test a specific ISO download URL",
+		Long:  `Test accessibility and extract download URL from a specific URL.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleTestSingleURL(cmd.Context(), url)
+		},
+	}
+
+	cmd.Flags().StringVar(&url, "url", "", "URL to test (required)")
+	cmd.MarkFlagRequired("url")
+	return cmd
+}
+
+// handleTestISOURLs tests all ISO URLs
+func (cli *CLICommands) handleTestISOURLs(ctx context.Context, version string) error {
+	fmt.Printf("🔍 Testando URLs para Ubuntu %s...\n\n", version)
+
+	// Criar downloader temporário
+	isoDownloader := NewISODownloader(cli.logger)
+	urls, err := isoDownloader.buildDownloadURLs(version, "")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Total de URLs a testar: %d\n\n", len(urls))
+
+	for i, url := range urls {
+		fmt.Printf("%d. Testando: %s\n", i+1, url)
+		if err := isoDownloader.validateURL(ctx, url); err != nil {
+			fmt.Printf("   ❌ Não disponível: %v\n\n", err)
+		} else {
+			fmt.Printf("   ✅ Disponível\n\n")
+		}
+	}
+
+	return nil
+}
+
+// handleListISOSources lists all ISO sources
+func (cli *CLICommands) handleListISOSources(ctx context.Context, version string) error {
+	isoDownloader := NewISODownloader(cli.logger)
+	urls, err := isoDownloader.buildDownloadURLs(version, "")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("📋 Fontes de ISO configuradas para Ubuntu %s\n\n", version)
+	fmt.Printf("Ordem de prioridade:\n")
+	for i, url := range urls {
+		fmt.Printf("  %d. %s\n", i+1, url)
+	}
+
+	fmt.Printf("\n💡 URLs são tentadas nesta ordem até encontrar uma disponível\n")
+	return nil
+}
+
+// handleTestSingleURL tests a specific URL
+func (cli *CLICommands) handleTestSingleURL(ctx context.Context, url string) error {
+	fmt.Printf("🔍 Testando URL específico: %s\n\n", url)
+
+	// Criar downloader temporário
+	isoDownloader := NewISODownloader(cli.logger)
+
+	// Testar validação básica
+	fmt.Printf("1. Testando acessibilidade básica...\n")
+	if err := isoDownloader.validateURL(ctx, url); err != nil {
+		fmt.Printf("   ❌ URL não acessível: %v\n", err)
+	} else {
+		fmt.Printf("   ✅ URL acessível\n")
+	}
+
+	// Se for uma página de download do Ubuntu, tentar extrair o link real
+	if strings.Contains(url, "ubuntu.com/download") || strings.Contains(url, "thank-you") {
+		fmt.Printf("\n2. Tentando extrair URL de download real...\n")
+		realURL, err := isoDownloader.extractDownloadURL(ctx, url)
+		if err != nil {
+			fmt.Printf("   ❌ Falha ao extrair URL: %v\n", err)
+		} else {
+			fmt.Printf("   ✅ URL extraído: %s\n", realURL)
+
+			// Testar o URL extraído
+			fmt.Printf("\n3. Testando URL extraído...\n")
+			if err := isoDownloader.validateURL(ctx, realURL); err != nil {
+				fmt.Printf("   ❌ URL extraído não acessível: %v\n", err)
+			} else {
+				fmt.Printf("   ✅ URL extraído acessível\n")
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleShowISOConfig shows ISO configuration
+func (cli *CLICommands) handleShowISOConfig(ctx context.Context) error {
+	isoDownloader := NewISODownloader(cli.logger)
+	config, err := isoDownloader.loadISOConfig()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("⚙️  Configuração de Download de ISOs\n\n")
+	fmt.Printf("Arquivo: ~/.syntropy/config/manager.yaml\n\n")
+
+	fmt.Printf("URLs Personalizadas:\n")
+	if len(config.CustomURLs) == 0 {
+		fmt.Printf("  (nenhuma configurada)\n")
+	} else {
+		for _, url := range config.CustomURLs {
+			fmt.Printf("  - %s\n", url)
+		}
+	}
+
+	fmt.Printf("\nMirrors Preferidos:\n")
+	for _, mirror := range config.PreferredMirrors {
+		fmt.Printf("  - %s\n", mirror)
+	}
+
+	fmt.Printf("\nFallback Automático: %v\n", config.EnableAutoFallback)
+	fmt.Printf("Máximo de Tentativas: %d\n", config.MaxRetries)
+	fmt.Printf("Timeout: %v\n", config.Timeout)
+
 	return nil
 }

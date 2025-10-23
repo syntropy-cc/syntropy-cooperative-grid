@@ -35,3 +35,14 @@ logging:
     max_size: "100MB"
     max_age: "7d"
     max_backups: 10
+iso:
+  custom_urls:
+    - "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso?_gl=1*12y79vf*_gcl_au*MTAzMzgyNzE0NC4xNzU5NDIzNDAz"
+  preferred_mirrors:
+    - "https://releases.ubuntu.com"
+    - "https://mirror.math.princeton.edu/pub/ubuntu-iso"
+    - "https://mirrors.kernel.org/ubuntu-iso"
+    - "https://mirror.umd.edu/ubuntu-iso"
+  enable_auto_fallback: true
+  max_retries: 3
+  timeout: "30m"
