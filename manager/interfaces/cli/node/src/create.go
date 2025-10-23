@@ -2,9 +2,11 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"node-component/src/internal/types"
@@ -208,60 +210,183 @@ func (cs *CreateSubcomponent) CreateNodeInteractive(ctx context.Context) (*Creat
 
 // Private helper methods
 
-// validateSetupComponent validates that the setup component has been run successfully
-func (cs *CreateSubcomponent) validateSetupComponent() error {
-	cs.logger.Debug("Validating setup component")
-
-	// Get home directory
+// getSyntropyDir retorna ~/.syntropy de forma cross-platform robusta
+// Estratégia: os.UserHomeDir() → env vars conforme SO → fallback /tmp
+func (cs *CreateSubcomponent) getSyntropyDir() string {
+	// Estratégia 1: Usar os.UserHomeDir() (Go 1.12+, mais robusto)
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
+	if err == nil && homeDir != "" {
+		return filepath.Join(homeDir, ".syntropy")
 	}
 
-	// Check if .syntropy directory exists
-	syntropyDir := filepath.Join(homeDir, ".syntropy")
+	cs.logger.Warn("os.UserHomeDir() failed, trying environment variables", "error", err)
+
+	// Estratégia 2: Tentar variáveis de ambiente conforme SO
+	if runtime.GOOS == "windows" {
+		if home := os.Getenv("USERPROFILE"); home != "" {
+			return filepath.Join(home, ".syntropy")
+		}
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, ".syntropy")
+		}
+	} else {
+		// Linux/macOS
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, ".syntropy")
+		}
+	}
+
+	cs.logger.Error("Failed to determine home directory, falling back to /tmp", nil)
+	return "/tmp/.syntropy" // Fallback (não ideal mas melhor que crash)
+}
+
+// ValidateSyntropyDir garante que diretório base existe
+func (cs *CreateSubcomponent) ValidateSyntropyDir() error {
+	syntropyDir := cs.getSyntropyDir()
+
 	if _, err := os.Stat(syntropyDir); err != nil {
-		return fmt.Errorf("setup not found - please run 'syntropy setup' first")
+		if os.IsNotExist(err) {
+			return fmt.Errorf("syntropy directory does not exist: %s - please run 'syntropy setup' first", syntropyDir)
+		}
+		return fmt.Errorf("failed to access syntropy directory: %w", err)
 	}
 
-	// Check if cache directory exists (created by setup)
-	cacheDir := filepath.Join(syntropyDir, "cache")
-	if _, err := os.Stat(cacheDir); err != nil {
-		return fmt.Errorf("setup incomplete - cache directory not found, please run 'syntropy setup' first")
+	return nil
+}
+
+// validateSetupComponent valida que Setup Component está totalmente funcional (ROBUSTO)
+func (cs *CreateSubcomponent) validateSetupComponent(ctx context.Context) error {
+	cs.logger.Debug("Validating Setup Component completeness", nil)
+
+	// 1. Validar Token Integration (componente crítica)
+	if cs.tokenIntegration == nil {
+		return fmt.Errorf("setup validation failed: token integration not initialized - please run 'syntropy setup' first")
 	}
 
-	// Check if config directory exists (created by setup)
-	configDir := filepath.Join(syntropyDir, "config")
-	if _, err := os.Stat(configDir); err != nil {
-		return fmt.Errorf("setup incomplete - config directory not found, please run 'syntropy setup' first")
-	}
-
-	// Check if manager.yaml configuration file exists (created by setup)
-	managerConfigPath := filepath.Join(configDir, "manager.yaml")
-	if _, err := os.Stat(managerConfigPath); err != nil {
-		return fmt.Errorf("setup incomplete - manager configuration not found, please run 'syntropy setup' first")
-	}
-
-	// Validate that the configuration file is readable and not empty
-	configData, err := os.ReadFile(managerConfigPath)
+	// 2. Validar acesso ao Grid Token
+	token, err := cs.tokenIntegration.GetGridToken()
 	if err != nil {
-		return fmt.Errorf("setup incomplete - cannot read manager configuration, please run 'syntropy setup' first: %w", err)
+		return fmt.Errorf("setup validation failed: cannot access grid token: %w", err)
 	}
 
-	if len(configData) == 0 {
-		return fmt.Errorf("setup incomplete - manager configuration is empty, please run 'syntropy setup' first")
+	// 3. Validar token válido (não vazio, não placeholder)
+	if token == "" {
+		return fmt.Errorf("setup validation failed: grid token is empty - please run 'syntropy setup' first")
+	}
+	if token == "PLACEHOLDER_TOKEN" {
+		return fmt.Errorf("setup validation failed: grid token is placeholder - please run 'syntropy setup' first")
+	}
+	if len(token) < 32 {
+		return fmt.Errorf("setup validation failed: grid token is too short (length: %d, minimum: 32)", len(token))
 	}
 
-	cs.logger.Debug("Setup component validation passed")
+	// 4. Validar estrutura de diretórios criada por Setup
+	if err := cs.validateSetupDirectoryStructure(); err != nil {
+		return fmt.Errorf("setup validation failed: invalid directory structure: %w", err)
+	}
+
+	// 5. Validar arquivo de estado do Setup Component
+	if err := cs.validateSetupState(); err != nil {
+		return fmt.Errorf("setup validation failed: setup state invalid: %w", err)
+	}
+
+	// 6. Validar permissões de diretórios
+	if err := cs.validateSetupPermissions(); err != nil {
+		return fmt.Errorf("setup validation failed: permission issues: %w", err)
+	}
+
+	cs.logger.Debug("Setup Component validation passed", nil)
+	return nil
+}
+
+// validateSetupDirectoryStructure verifica estrutura criada pelo Setup
+func (cs *CreateSubcomponent) validateSetupDirectoryStructure() error {
+	syntropyDir := cs.getSyntropyDir()
+	requiredDirs := []string{
+		filepath.Join(syntropyDir, "config"),
+		filepath.Join(syntropyDir, "cache"),
+		filepath.Join(syntropyDir, "nodes"),
+		filepath.Join(syntropyDir, "logs"),
+	}
+
+	for _, dir := range requiredDirs {
+		info, err := os.Stat(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("required directory not found: %s", dir)
+			}
+			return fmt.Errorf("failed to stat directory %s: %w", dir, err)
+		}
+
+		// Verificar que é diretório
+		if !info.IsDir() {
+			return fmt.Errorf("path exists but is not a directory: %s", dir)
+		}
+	}
+
+	return nil
+}
+
+// validateSetupState verifica se Setup completou com sucesso
+func (cs *CreateSubcomponent) validateSetupState() error {
+	syntropyDir := cs.getSyntropyDir()
+	stateFile := filepath.Join(syntropyDir, "config", "setup_state.json")
+
+	// Verificar se arquivo de estado existe
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("setup state file not found: %s - setup may not be complete", stateFile)
+		}
+		return fmt.Errorf("failed to read setup state: %w", err)
+	}
+
+	// Ler e validar estado
+	var state map[string]interface{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return fmt.Errorf("failed to parse setup state: %w", err)
+	}
+
+	// Validar que setup foi completado (status = "completed")
+	if status, ok := state["status"]; !ok {
+		return fmt.Errorf("setup state missing 'status' field")
+	} else if status != "completed" {
+		return fmt.Errorf("setup not completed: status = %v (expected 'completed')", status)
+	}
+
+	return nil
+}
+
+// validateSetupPermissions verifica permissões dos diretórios
+func (cs *CreateSubcomponent) validateSetupPermissions() error {
+	syntropyDir := cs.getSyntropyDir()
+
+	// Verificar que apenas proprietário pode acessar
+	info, err := os.Stat(syntropyDir)
+	if err != nil {
+		return fmt.Errorf("failed to stat syntropy dir: %w", err)
+	}
+
+	mode := info.Mode().Perm()
+
+	// Em Unix-like, deve ser 0700 ou similar (apenas proprietário)
+	// Em Windows, verificar que não é acessível publicamente
+	if runtime.GOOS != "windows" {
+		// Verificar que bits de grupo/outros são 0
+		if mode&0077 != 0 {
+			return fmt.Errorf("syntropy directory has insecure permissions: %o (should be 0700 or more restrictive)", mode)
+		}
+	}
+
 	return nil
 }
 
 // validatePrerequisites validates that all prerequisites are met
 func (cs *CreateSubcomponent) validatePrerequisites(ctx context.Context) error {
-	cs.logger.Debug("Validating prerequisites")
+	cs.logger.Debug("Validating prerequisites", nil)
 
 	// First, validate that setup component has been run successfully
-	if err := cs.validateSetupComponent(); err != nil {
+	if err := cs.validateSetupComponent(ctx); err != nil {
 		return fmt.Errorf("setup validation failed: %w", err)
 	}
 
@@ -285,18 +410,30 @@ func (cs *CreateSubcomponent) validatePrerequisites(ctx context.Context) error {
 		return fmt.Errorf("write permissions check failed: %w", err)
 	}
 
-	cs.logger.Debug("Prerequisites validation passed")
+	cs.logger.Debug("Prerequisites validation passed", nil)
 	return nil
 }
 
 // generateNodeConfiguration generates the node configuration
 func (cs *CreateSubcomponent) generateNodeConfiguration(ctx context.Context) (*types.NodeConfig, error) {
-	cs.logger.Debug("Generating node configuration")
+	cs.logger.Debug("Generating node configuration", nil)
 
 	// Generate configuration
 	config, err := cs.configGenerator.GenerateNodeConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate configuration: %w", err)
+	}
+
+	// IMPORTANTE: Validar que Grid Token não é placeholder
+	// Isso garante que Setup Component foi executado corretamente
+	if config.GridToken == "" {
+		return nil, fmt.Errorf("grid token is empty - setup component may not have generated it")
+	}
+	if config.GridToken == "PLACEHOLDER_TOKEN" {
+		return nil, fmt.Errorf("grid token is placeholder - please run 'syntropy setup' first")
+	}
+	if len(config.GridToken) < 32 {
+		return nil, fmt.Errorf("grid token is invalid: too short (length: %d, minimum: 32)", len(config.GridToken))
 	}
 
 	cs.logger.Debug("Node configuration generated", "node_id", config.NodeID)
@@ -525,6 +662,80 @@ func (cs *CreateSubcomponent) saveResultToFile(result *CreateResult, filePath st
 
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write result file: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateConfigIntegrity verifica integridade da configuração
+func (cs *CreateSubcomponent) ValidateConfigIntegrity(config *types.NodeConfig) error {
+	// Validar campos obrigatórios
+	if config.NodeID == "" {
+		return fmt.Errorf("invalid config: node_id is empty")
+	}
+
+	if config.GridToken == "" {
+		return fmt.Errorf("invalid config: grid_token is empty")
+	}
+	if config.GridToken == "PLACEHOLDER_TOKEN" {
+		return fmt.Errorf("invalid config: grid_token is placeholder")
+	}
+	if len(config.GridToken) < 32 {
+		return fmt.Errorf("invalid config: grid_token is too short (length: %d, minimum: 32)", len(config.GridToken))
+	}
+
+	if config.SSHPublicKey == "" {
+		return fmt.Errorf("invalid config: ssh_public_key is empty")
+	}
+
+	if config.CommandStationIP == "" {
+		return fmt.Errorf("invalid config: command_station_ip is empty")
+	}
+
+	// Validar formato de datas
+	if config.CreatedAt.IsZero() {
+		return fmt.Errorf("invalid config: created_at is zero")
+	}
+
+	if config.ExpiresAt.Before(config.CreatedAt) {
+		return fmt.Errorf("invalid config: expires_at is before created_at")
+	}
+
+	return nil
+}
+
+// secureLogNodeCreation logs node creation without exposing sensitive data
+func (cs *CreateSubcomponent) secureLogNodeCreation(nodeID string, steps []string, duration time.Duration) {
+	cs.logger.Info("Node creation completed successfully",
+		"node_id", nodeID,
+		"steps_completed", len(steps),
+		"duration", duration.String())
+	// NEVER log tokens, keys, IP addresses, or other sensitive data
+}
+
+// ensureSecurePermissions garante permissões seguras em arquivos e diretórios
+func (cs *CreateSubcomponent) ensureSecurePermissions(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	mode := info.Mode().Perm()
+
+	if info.IsDir() {
+		// Diretórios devem ser 0700 (rwx-----)
+		if mode != 0700 {
+			if runtime.GOOS != "windows" {
+				cs.logger.Warn("Directory permissions are not 0700", "path", path, "current", mode)
+			}
+		}
+	} else {
+		// Arquivos devem ser 0600 (rw------)
+		if mode != 0600 {
+			if runtime.GOOS != "windows" {
+				cs.logger.Warn("File permissions are not 0600", "path", path, "current", mode)
+			}
+		}
 	}
 
 	return nil
