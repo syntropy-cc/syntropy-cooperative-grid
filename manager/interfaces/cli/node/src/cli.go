@@ -844,6 +844,7 @@ func (cli *CLICommands) isoCmd() *cobra.Command {
 	cmd.AddCommand(cli.isoListSourcesCmd())
 	cmd.AddCommand(cli.isoConfigCmd())
 	cmd.AddCommand(cli.isoTestSingleURLCmd())
+	cmd.AddCommand(cli.isoListCacheCmd())
 
 	return cmd
 }
@@ -954,6 +955,72 @@ func (cli *CLICommands) handleListISOSources(ctx context.Context, version string
 	}
 
 	fmt.Printf("\n💡 URLs são tentadas nesta ordem até encontrar uma disponível\n")
+	return nil
+}
+
+// isoListCacheCmd lists cached ISOs
+func (cli *CLICommands) isoListCacheCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list-cache",
+		Short: "List all cached ISOs",
+		Long:  `Display all Ubuntu ISOs found in the cache directory (.syntropy/cache/isos).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cli.handleListISOCache(cmd.Context())
+		},
+	}
+
+	return cmd
+}
+
+// handleListISOCache lists all cached ISOs
+func (cli *CLICommands) handleListISOCache(ctx context.Context) error {
+	fmt.Printf("🔍 Verificando ISOs em cache...\n\n")
+
+	// Criar downloader temporário
+	isoDownloader := NewISODownloader(cli.logger)
+
+	// Listar ISOs em cache
+	cachedISOs, err := isoDownloader.ListCachedISOs()
+	if err != nil {
+		return fmt.Errorf("failed to list cached ISOs: %w", err)
+	}
+
+	if len(cachedISOs) == 0 {
+		fmt.Printf("📁 Nenhuma ISO encontrada no cache\n")
+		fmt.Printf("   Diretório: ~/.syntropy/cache/isos\n")
+		fmt.Printf("   💡 Execute 'syntropy node create' para baixar uma ISO\n")
+		return nil
+	}
+
+	fmt.Printf("📁 Encontradas %d ISO(s) no cache:\n\n", len(cachedISOs))
+
+	// Criar tabela
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer w.Flush()
+
+	// Cabeçalho
+	fmt.Fprintf(w, "VERSÃO\tARQUIVO\tTAMANHO\tDATA DE DOWNLOAD\tSTATUS\n")
+
+	// Listar ISOs
+	for _, iso := range cachedISOs {
+		sizeGB := float64(iso.Size) / (1024 * 1024 * 1024)
+		dateStr := iso.DownloadedAt.Format("2006-01-02 15:04")
+
+		// Status sempre válido já que não fazemos validação SHA256 por padrão
+		status := "✅ Disponível"
+
+		fmt.Fprintf(w, "%s\t%s\t%.2f GB\t%s\t%s\n",
+			iso.Version,
+			iso.FileName,
+			sizeGB,
+			dateStr,
+			status,
+		)
+	}
+
+	fmt.Printf("\n💡 Use 'syntropy node create' para usar uma dessas ISOs\n")
+	fmt.Printf("💡 O sistema detectará automaticamente ISOs disponíveis\n")
+
 	return nil
 }
 

@@ -28,6 +28,9 @@ type ISODownloader interface {
 	// GetCachedISO returns cached ISO info if available
 	GetCachedISO(version string) (*types.ISOInfo, error)
 
+	// ListCachedISOs returns all ISOs found in the cache directory
+	ListCachedISOs() ([]*types.ISOInfo, error)
+
 	// ListAvailableVersions returns list of available Ubuntu versions
 	ListAvailableVersions() []types.UbuntuVersion
 
@@ -253,7 +256,27 @@ func (id *ISODownloaderImpl) DownloadISO(ctx context.Context, version string) (*
 func (id *ISODownloaderImpl) DownloadISOWithOptions(ctx context.Context, version string, customURL string, skipValidation bool) (*types.ISOInfo, error) {
 	id.logger.Info("Starting ISO download with fallback system", "version", version, "custom_url", customURL)
 
-	// Verificar cache primeiro
+	// Primeiro, verificar se há ISOs no cache
+	cachedISOs, err := id.ListCachedISOs()
+	if err != nil {
+		id.logger.Warn("Failed to list cached ISOs", "error", err)
+	} else if len(cachedISOs) > 0 {
+		fmt.Printf("🔍 Encontradas %d ISO(s) no cache (.syntropy/cache/isos)\n", len(cachedISOs))
+
+		// Se há ISOs no cache, mostrar opções para o usuário
+		selectedISO, err := id.selectISOFromCache(cachedISOs, version)
+		if err != nil {
+			return nil, fmt.Errorf("ISO selection failed: %w", err)
+		}
+
+		if selectedISO != nil {
+			fmt.Printf("✅ Usando ISO do cache: %s\n", selectedISO.FileName)
+			id.logger.Info("Using cached ISO", "version", selectedISO.Version, "path", selectedISO.FilePath)
+			return selectedISO, nil
+		}
+	}
+
+	// Se não há ISOs no cache ou usuário escolheu não usar, verificar cache específico da versão
 	if cachedISO, err := id.GetCachedISO(version); err == nil && cachedISO != nil {
 		id.logger.Info("Using cached ISO", "version", version, "path", cachedISO.FilePath)
 		return cachedISO, nil
@@ -441,12 +464,9 @@ func (id *ISODownloaderImpl) GetCachedISO(version string) (*types.ISOInfo, error
 		return nil, fmt.Errorf("cached ISO not found: %s", isoPath)
 	}
 
-	// Validate cached ISO
-	if err := id.ValidateISO(isoPath, isoVersion.SHA256); err != nil {
-		id.logger.Warn("Cached ISO validation failed, will re-download", "version", version, "error", err)
-		os.Remove(isoPath) // Remove invalid cached file
-		return nil, fmt.Errorf("cached ISO validation failed: %w", err)
-	}
+	// Skip SHA256 validation by default - let user choose any ISO
+	// TODO: Add validation toggle in future versions
+	id.logger.Debug("Skipping SHA256 validation for cached ISO", "version", version, "path", isoPath)
 
 	// Get file info
 	fileInfo, err := os.Stat(isoPath)
@@ -466,6 +486,173 @@ func (id *ISODownloaderImpl) GetCachedISO(version string) (*types.ISOInfo, error
 
 	id.logger.Debug("Found cached ISO", "version", version, "path", isoPath)
 	return isoInfo, nil
+}
+
+// ListCachedISOs returns all ISOs found in the cache directory
+func (id *ISODownloaderImpl) ListCachedISOs() ([]*types.ISOInfo, error) {
+	id.logger.Debug("Listing cached ISOs", "cache_dir", id.cacheDir)
+
+	// Check if cache directory exists
+	if _, err := os.Stat(id.cacheDir); os.IsNotExist(err) {
+		return []*types.ISOInfo{}, nil
+	}
+
+	// Read directory contents
+	files, err := os.ReadDir(id.cacheDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache directory: %w", err)
+	}
+
+	var cachedISOs []*types.ISOInfo
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		// Check if it's an ISO file
+		if !strings.HasSuffix(strings.ToLower(file.Name()), ".iso") {
+			continue
+		}
+
+		filePath := filepath.Join(id.cacheDir, file.Name())
+		fileInfo, err := file.Info()
+		if err != nil {
+			id.logger.Warn("Failed to get file info", "file", file.Name(), "error", err)
+			continue
+		}
+
+		// Try to determine version from filename
+		version := id.extractVersionFromFilename(file.Name())
+		if version == "" {
+			// If we can't determine version, skip this file
+			id.logger.Debug("Could not determine version from filename", "file", file.Name())
+			continue
+		}
+
+		// Get ISO info for this version (if supported)
+		isoVersion, err := id.GetISOInfo(version)
+		var sha256, downloadURL string
+		if err != nil {
+			// Version not officially supported, but we can still use the ISO
+			id.logger.Debug("Version not officially supported, but ISO will be listed", "version", version, "file", file.Name())
+			sha256 = "unknown"
+			downloadURL = "unknown"
+		} else {
+			sha256 = isoVersion.SHA256
+			downloadURL = isoVersion.DownloadURL
+		}
+
+		// Skip SHA256 validation by default - let user choose any ISO
+		// TODO: Add validation toggle in future versions
+		id.logger.Debug("Skipping SHA256 validation for cached ISO", "file", file.Name(), "version", version)
+
+		isoInfo := &types.ISOInfo{
+			Version:      version,
+			FilePath:     filePath,
+			FileName:     file.Name(),
+			Size:         fileInfo.Size(),
+			SHA256:       sha256,
+			DownloadURL:  downloadURL,
+			DownloadedAt: fileInfo.ModTime(),
+		}
+
+		cachedISOs = append(cachedISOs, isoInfo)
+	}
+
+	id.logger.Debug("Found cached ISOs", "count", len(cachedISOs))
+	return cachedISOs, nil
+}
+
+// extractVersionFromFilename extracts Ubuntu version from ISO filename
+func (id *ISODownloaderImpl) extractVersionFromFilename(filename string) string {
+	// Common patterns for Ubuntu ISO filenames
+	patterns := []string{
+		`ubuntu-(\d+\.\d+)-.*\.iso`,
+		`ubuntu-(\d+\.\d+\.\d+)-.*\.iso`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(filename)
+		if len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	return ""
+}
+
+// selectISOFromCache allows user to select an ISO from cached ISOs
+func (id *ISODownloaderImpl) selectISOFromCache(cachedISOs []*types.ISOInfo, requestedVersion string) (*types.ISOInfo, error) {
+	if len(cachedISOs) == 0 {
+		return nil, nil
+	}
+
+	// Se há apenas uma ISO e é da versão solicitada, usar automaticamente
+	if len(cachedISOs) == 1 && cachedISOs[0].Version == requestedVersion {
+		return cachedISOs[0], nil
+	}
+
+	// Se há apenas uma ISO mas não é da versão solicitada, perguntar se quer usar
+	if len(cachedISOs) == 1 {
+		fmt.Printf("\n📁 ISO encontrada no cache:\n")
+		fmt.Printf("   Versão: %s (solicitada: %s)\n", cachedISOs[0].Version, requestedVersion)
+		fmt.Printf("   Arquivo: %s\n", cachedISOs[0].FileName)
+		fmt.Printf("   Tamanho: %.2f GB\n", float64(cachedISOs[0].Size)/(1024*1024*1024))
+		fmt.Printf("   Data: %s\n", cachedISOs[0].DownloadedAt.Format("2006-01-02 15:04:05"))
+
+		fmt.Printf("\n❓ Deseja usar esta ISO? (s/n): ")
+		var response string
+		fmt.Scanln(&response)
+
+		if strings.ToLower(response) == "s" || strings.ToLower(response) == "sim" || strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+			return cachedISOs[0], nil
+		}
+
+		fmt.Printf("⏭️  Pulando ISO do cache, prosseguindo para download...\n\n")
+		return nil, nil
+	}
+
+	// Se há múltiplas ISOs, mostrar lista para seleção
+	fmt.Printf("\n📁 Múltiplas ISOs encontradas no cache:\n\n")
+
+	for i, iso := range cachedISOs {
+		status := ""
+		if iso.Version == requestedVersion {
+			status = " (versão solicitada)"
+		}
+
+		fmt.Printf("  %d. Ubuntu %s%s\n", i+1, iso.Version, status)
+		fmt.Printf("     Arquivo: %s\n", iso.FileName)
+		fmt.Printf("     Tamanho: %.2f GB\n", float64(iso.Size)/(1024*1024*1024))
+		fmt.Printf("     Data: %s\n", iso.DownloadedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("\n")
+	}
+
+	fmt.Printf("  %d. Baixar nova ISO (versão %s)\n", len(cachedISOs)+1, requestedVersion)
+	fmt.Printf("\n❓ Selecione uma opção (1-%d): ", len(cachedISOs)+1)
+
+	var choice int
+	_, err := fmt.Scanln(&choice)
+	if err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if choice < 1 || choice > len(cachedISOs)+1 {
+		return nil, fmt.Errorf("invalid choice: %d", choice)
+	}
+
+	// Se escolheu baixar nova ISO
+	if choice == len(cachedISOs)+1 {
+		fmt.Printf("⏭️  Prosseguindo para download da versão %s...\n\n", requestedVersion)
+		return nil, nil
+	}
+
+	// Retornar ISO selecionada
+	selectedISO := cachedISOs[choice-1]
+	fmt.Printf("✅ ISO selecionada: Ubuntu %s (%s)\n\n", selectedISO.Version, selectedISO.FileName)
+	return selectedISO, nil
 }
 
 // ListAvailableVersions returns list of available Ubuntu versions
@@ -885,6 +1072,11 @@ func (im *ISOManager) DownloadUbuntuServer(ctx context.Context, version string) 
 // GetCachedUbuntuServer returns cached Ubuntu Server ISO
 func (im *ISOManager) GetCachedUbuntuServer(version string) (*types.ISOInfo, error) {
 	return im.downloader.GetCachedISO(version)
+}
+
+// ListCachedUbuntuISOs returns all cached Ubuntu ISOs
+func (im *ISOManager) ListCachedUbuntuISOs() ([]*types.ISOInfo, error) {
+	return im.downloader.ListCachedISOs()
 }
 
 // ListAvailableUbuntuVersions returns available Ubuntu versions

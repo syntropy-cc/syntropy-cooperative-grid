@@ -229,19 +229,15 @@ func (uwm *USBWriterManager) validateISOFile(isoPath string) error {
 	}
 	file.Close()
 
-	// Check file size (should be at least 100MB for Ubuntu ISO)
+	// Get file info for logging
 	fileInfo, err := os.Stat(isoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get ISO file info: %w", err)
 	}
 
-	minSize := int64(100 * 1024 * 1024) // 100MB
-	if fileInfo.Size() < minSize {
-		return fmt.Errorf("ISO file too small: %d bytes (minimum: %d bytes)",
-			fileInfo.Size(), minSize)
-	}
-
-	uwm.logger.Debug("ISO file validation passed", "path", isoPath, "size", fileInfo.Size())
+	// Skip size validation by default - let user choose any ISO
+	// TODO: Add size validation toggle in future versions
+	uwm.logger.Debug("Skipping ISO size validation", "path", isoPath, "size", fileInfo.Size())
 	return nil
 }
 
