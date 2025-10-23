@@ -258,4 +258,44 @@ func (uwl *USBWriterLinux) syncDevice(devicePath string) error {
 	return nil
 }
 
+// ValidateDevice validates if a device is suitable for writing (override base)
+func (uwl *USBWriterLinux) ValidateDevice(ctx context.Context, devicePath string) error {
+	uwl.logger.Debug("Validating Linux device", "device", devicePath)
+
+	// Check if device exists
+	if _, err := os.Stat(devicePath); err != nil {
+		return fmt.Errorf("device does not exist: %s", devicePath)
+	}
+
+	// Check if it's a block device (not a partition)
+	cmd := exec.CommandContext(ctx, "lsblk", "-n", "-o", "TYPE", devicePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check device type: %w", err)
+	}
+
+	deviceType := strings.TrimSpace(string(output))
+	if deviceType != "disk" {
+		return fmt.Errorf("device must be a disk, not a partition: %s (type: %s)", devicePath, deviceType)
+	}
+
+	// Check if we have write permissions
+	file, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
+	if err != nil {
+		if os.IsPermission(err) {
+			return fmt.Errorf("insufficient permissions to write to device: %s (try running with sudo)", devicePath)
+		}
+		return fmt.Errorf("device is not writable: %s", devicePath)
+	}
+	file.Close()
+
+	uwl.logger.Debug("Device validation passed", "device", devicePath)
+	return nil
+}
+
 // Linux-specific implementation will override the base method
+
+// NewPlatformUSBWriter creates the platform-specific USB writer
+func NewPlatformUSBWriter(logger types.Logger) USBWriter {
+	return NewUSBWriterLinux(logger)
+}

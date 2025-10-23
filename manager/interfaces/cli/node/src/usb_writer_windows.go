@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"node-component/src/internal/types"
@@ -202,10 +203,31 @@ func (uww *USBWriterWindows) validateInputs(isoPath string, devicePath string) e
 func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string, devicePath string, progressTracker *WriteProgressTracker) error {
 	uww.logger.Debug("Writing ISO with dd", "iso", isoPath, "device", devicePath)
 
+	// Convert drive letter to PhysicalDrive if needed
+	actualDevicePath := devicePath
+	if strings.HasSuffix(devicePath, ":") && len(devicePath) == 2 {
+		factory := NewUSBDetectorFactory()
+		detector, err := factory.CreateUSBDetector(uww.logger)
+		if err != nil {
+			return fmt.Errorf("failed to create detector: %w", err)
+		}
+
+		windowsDetector, ok := detector.(*USBDetectorWindows)
+		if !ok {
+			return fmt.Errorf("expected Windows detector")
+		}
+
+		physicalDrive, err := windowsDetector.GetPhysicalDriveFromLetter(ctx, devicePath)
+		if err != nil {
+			return fmt.Errorf("failed to get physical drive: %w", err)
+		}
+		actualDevicePath = physicalDrive
+	}
+
 	// Try to use dd if available (common in Windows with WSL or Git Bash)
 	cmd := exec.CommandContext(ctx, "dd",
 		"if="+isoPath,
-		"of="+devicePath,
+		"of="+actualDevicePath,
 		"bs=4M",
 		"status=progress",
 		"conv=fsync")
@@ -258,4 +280,74 @@ try {
 	return nil
 }
 
+// ValidateDevice validates if a device is suitable for writing (override base)
+func (uww *USBWriterWindows) ValidateDevice(ctx context.Context, devicePath string) error {
+	uww.logger.Debug("Validating Windows device", "device", devicePath)
+
+	// Convert drive letter to PhysicalDrive if needed
+	actualDevicePath := devicePath
+	if strings.HasSuffix(devicePath, ":") && len(devicePath) == 2 {
+		// This is a drive letter, convert to PhysicalDrive
+		factory := NewUSBDetectorFactory()
+		detector, err := factory.CreateUSBDetector(uww.logger)
+		if err != nil {
+			return fmt.Errorf("failed to create detector: %w", err)
+		}
+
+		windowsDetector, ok := detector.(*USBDetectorWindows)
+		if !ok {
+			return fmt.Errorf("expected Windows detector")
+		}
+
+		physicalDrive, err := windowsDetector.GetPhysicalDriveFromLetter(ctx, devicePath)
+		if err != nil {
+			return fmt.Errorf("failed to get physical drive: %w", err)
+		}
+		actualDevicePath = physicalDrive
+	}
+
+	// Validate physical drive format
+	if !strings.Contains(actualDevicePath, "PHYSICALDRIVE") {
+		return fmt.Errorf("invalid device path format: %s", actualDevicePath)
+	}
+
+	// Check if we have administrative privileges
+	if !uww.hasAdminPrivileges(ctx) {
+		return fmt.Errorf("administrative privileges required to write to USB device")
+	}
+
+	// Try to open the physical drive for writing
+	// Note: This requires admin privileges
+	handle, err := syscall.CreateFile(
+		syscall.StringToUTF16Ptr(actualDevicePath),
+		syscall.GENERIC_WRITE,
+		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE,
+		nil,
+		syscall.OPEN_EXISTING,
+		0,
+		0,
+	)
+	if err != nil {
+		return fmt.Errorf("device is not writable (admin required): %s", devicePath)
+	}
+	syscall.CloseHandle(handle)
+
+	uww.logger.Debug("Device validation passed", "device", devicePath)
+	return nil
+}
+
+// hasAdminPrivileges checks if the current process has admin privileges
+func (uww *USBWriterWindows) hasAdminPrivileges(ctx context.Context) bool {
+	cmd := exec.CommandContext(ctx, "net", "session")
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return true
+}
+
 // Windows-specific implementation will override the base method
+
+// NewPlatformUSBWriter creates the platform-specific USB writer
+func NewPlatformUSBWriter(logger types.Logger) USBWriter {
+	return NewUSBWriterWindows(logger)
+}

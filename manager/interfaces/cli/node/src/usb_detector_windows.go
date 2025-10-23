@@ -472,6 +472,35 @@ type USBDeviceInfo struct {
 	Speed  int
 }
 
+// GetPhysicalDriveFromLetter converts a drive letter to PhysicalDrive path
+func (udw *USBDetectorWindows) GetPhysicalDriveFromLetter(ctx context.Context, driveLetter string) (string, error) {
+	// PowerShell command to map drive letter to physical drive number
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf(`
+		$drive = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='%s'"
+		if ($drive) {
+			$partition = Get-WmiObject -Query "ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='%s'} WHERE AssocClass = Win32_LogicalDiskToPartition"
+			if ($partition) {
+				$disk = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass = Win32_DiskDriveToDiskPartition"
+				if ($disk) {
+					Write-Output $disk.DeviceID
+				}
+			}
+		}
+	`, driveLetter, driveLetter))
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to map drive letter to physical drive: %w", err)
+	}
+
+	physicalDrive := strings.TrimSpace(string(output))
+	if physicalDrive == "" {
+		return "", fmt.Errorf("could not map drive %s to physical drive", driveLetter)
+	}
+
+	return physicalDrive, nil
+}
+
 // NewPlatformUSBDetector creates the platform-specific USB detector
 func NewPlatformUSBDetector(logger types.Logger) USBDetector {
 	return NewUSBDetectorWindows(logger)

@@ -48,35 +48,11 @@ func NewUSBWriterFactory() *USBWriterFactory {
 
 // CreateUSBWriter creates a platform-specific USB writer
 func (f *USBWriterFactory) CreateUSBWriter(logger types.Logger) (USBWriter, error) {
-	switch runtime.GOOS {
-	case "windows":
-		return f.createWindowsWriter(logger), nil
-	case "linux":
-		return f.createLinuxWriter(logger), nil
-	case "darwin":
-		return f.createMacOSWriter(logger), nil
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	writer := NewPlatformUSBWriter(logger)
+	if writer == nil {
+		return nil, fmt.Errorf("failed to create USB writer for platform: %s", runtime.GOOS)
 	}
-}
-
-// createWindowsWriter creates a Windows USB writer
-func (f *USBWriterFactory) createWindowsWriter(logger types.Logger) USBWriter {
-	// This will be implemented by platform-specific files
-	return nil
-}
-
-// createLinuxWriter creates a Linux USB writer
-func (f *USBWriterFactory) createLinuxWriter(logger types.Logger) USBWriter {
-	// This will be implemented by platform-specific files with build constraints
-	// For now, return nil to avoid compilation errors on non-Linux platforms
-	return nil
-}
-
-// createMacOSWriter creates a macOS USB writer
-func (f *USBWriterFactory) createMacOSWriter(logger types.Logger) USBWriter {
-	// This will be implemented by platform-specific files
-	return nil
+	return writer, nil
 }
 
 // Platform-specific detector constructors will be implemented in separate files
@@ -124,20 +100,17 @@ func (uwb *USBWriterBase) CancelWrite() error {
 }
 
 // ValidateDevice validates if a device is suitable for writing
+// This is a fallback implementation - platform-specific implementations should override
 func (uwb *USBWriterBase) ValidateDevice(ctx context.Context, devicePath string) error {
-	// Check if device exists
-	if _, err := os.Stat(devicePath); err != nil {
-		return fmt.Errorf("device does not exist: %s", devicePath)
+	// Check if device path is not empty
+	if devicePath == "" {
+		return fmt.Errorf("device path is empty")
 	}
 
-	// Check if device is writable
-	file, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
-	if err != nil {
-		return fmt.Errorf("device is not writable: %s", devicePath)
-	}
-	file.Close()
+	uwb.logger.Debug("Using base device validation", "device", devicePath)
 
-	uwb.logger.Debug("Device validation passed", "device", devicePath)
+	// Note: Platform-specific implementations should override this method
+	// to provide proper validation for their platform
 	return nil
 }
 

@@ -250,4 +250,43 @@ func (uwm *USBWriterMacOS) syncDevice(devicePath string) error {
 	return nil
 }
 
+// ValidateDevice validates if a device is suitable for writing (override base)
+func (uwm *USBWriterMacOS) ValidateDevice(ctx context.Context, devicePath string) error {
+	uwm.logger.Debug("Validating macOS device", "device", devicePath)
+
+	// Check if device exists
+	if _, err := os.Stat(devicePath); err != nil {
+		return fmt.Errorf("device does not exist: %s", devicePath)
+	}
+
+	// Check if it's a disk (not a partition)
+	if !strings.HasPrefix(devicePath, "/dev/disk") {
+		return fmt.Errorf("invalid device path format: %s (expected /dev/diskN)", devicePath)
+	}
+
+	// macOS uses /dev/diskN for disks and /dev/diskNsM for partitions
+	// Ensure we're not writing to a partition
+	if strings.Contains(devicePath, "s") && len(devicePath) > len("/dev/diskN") {
+		return fmt.Errorf("device must be a disk, not a partition: %s", devicePath)
+	}
+
+	// Check if we have write permissions (requires sudo on macOS)
+	file, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
+	if err != nil {
+		if os.IsPermission(err) {
+			return fmt.Errorf("insufficient permissions to write to device: %s (requires sudo)", devicePath)
+		}
+		return fmt.Errorf("device is not writable: %s", devicePath)
+	}
+	file.Close()
+
+	uwm.logger.Debug("Device validation passed", "device", devicePath)
+	return nil
+}
+
 // macOS-specific implementation will override the base method
+
+// NewPlatformUSBWriter creates the platform-specific USB writer
+func NewPlatformUSBWriter(logger types.Logger) USBWriter {
+	return NewUSBWriterMacOS(logger)
+}
