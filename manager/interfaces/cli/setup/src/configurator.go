@@ -24,15 +24,13 @@ type Configurator struct {
 func NewConfigurator(logger *SetupLogger) *Configurator {
 	homeDir, _ := os.UserHomeDir()
 	configDir := filepath.Join(homeDir, ".syntropy", "config")
-	templatesDir := filepath.Join(homeDir, ".syntropy", "templates")
 
-	// Criar diretórios se não existirem
+	// Criar diretório se não existir
 	os.MkdirAll(configDir, 0755)
-	os.MkdirAll(templatesDir, 0755)
 
 	return &Configurator{
 		configDir:    configDir,
-		templatesDir: templatesDir,
+		templatesDir: "", // Não usado mais - templates vêm do projeto
 		logger:       logger,
 	}
 }
@@ -115,7 +113,6 @@ func (c *Configurator) CreateStructure() error {
 		filepath.Join(baseDir, "logs"),
 		filepath.Join(baseDir, "cache"),
 		filepath.Join(baseDir, "backups"),
-		filepath.Join(baseDir, "templates"),
 		filepath.Join(baseDir, "state"),
 		filepath.Join(baseDir, "tokens"),
 	}

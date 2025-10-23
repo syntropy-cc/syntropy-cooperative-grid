@@ -51,7 +51,7 @@ runcmd:
   
   # Config files (CRITICAL - credentials!)
   - echo '{{ .NodeID }}' > /opt/syntropy/config/node_id
-  - echo '{{ .GridToken }}' > /opt/syntropy/config/grid_token
+  - echo '{{ .GridTokenEncrypted }}' > /opt/syntropy/config/grid_token
   - echo '{{ .CommandStationIP }}' > /opt/syntropy/config/command_station_ip
   - echo '{{ .NodeCertificate }}' > /opt/syntropy/config/node_certificate.pem
   

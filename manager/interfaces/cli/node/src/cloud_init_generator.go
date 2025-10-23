@@ -16,14 +16,16 @@ import (
 	"node-component/src/internal/constants"
 	"node-component/src/internal/helpers"
 	"node-component/src/internal/types"
+
 	"golang.org/x/crypto/pbkdf2"
 )
 
 // CloudInitGenerator generates cloud-init configurations for nodes
 type CloudInitGenerator struct {
-	logger       types.Logger
-	templatesDir string
-	outputDir    string
+	logger          types.Logger
+	templatesDir    string
+	outputDir       string
+	resourceManager *ProjectResourceManager
 }
 
 // CloudInitTemplateData contains data for cloud-init templates
@@ -43,10 +45,19 @@ func NewCloudInitGenerator(logger types.Logger) types.CloudInitGenerator {
 	templatesDir := filepath.Join(constants.DefaultTemplatesDir, "cloud-init")
 	outputDir := constants.DefaultCloudInitOutputDir
 
+	// Criar ProjectResourceManager
+	resourceManager, err := NewProjectResourceManager(logger)
+	if err != nil {
+		logger.Error("Failed to create project resource manager", "error", err)
+		// Continuar sem resource manager para backward compatibility
+		resourceManager = nil
+	}
+
 	return &CloudInitGenerator{
-		logger:       logger,
-		templatesDir: templatesDir,
-		outputDir:    outputDir,
+		logger:          logger,
+		templatesDir:    templatesDir,
+		outputDir:       outputDir,
+		resourceManager: resourceManager,
 	}
 }
 
@@ -134,19 +145,29 @@ func (cig *CloudInitGenerator) GenerateCloudInit(config *types.NodeConfig) (*typ
 
 // generateUserData generates the user-data.yaml file
 func (cig *CloudInitGenerator) generateUserData(data *CloudInitTemplateData) (string, error) {
-	// Caminho para template
-	templatePath := filepath.Join("infrastructure", "cloud-init", "user-data-template.yaml")
+	var templateContent []byte
+	var err error
 
-	// Fallback para custom template
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		homeDir, _ := os.UserHomeDir()
-		templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "user-data.yaml")
-	}
+	// Usar ProjectResourceManager se disponível
+	if cig.resourceManager != nil {
+		templateContent, err = cig.resourceManager.ReadCloudInitTemplate("user-data-template.yaml")
+		if err != nil {
+			return "", fmt.Errorf("failed to read user-data template from project: %w", err)
+		}
+	} else {
+		// Fallback para método antigo
+		templatePath := filepath.Join("infrastructure", "cloud-init", "user-data-template.yaml")
 
-	// Ler template
-	templateContent, err := os.ReadFile(templatePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read user-data template: %w", err)
+		// Fallback para custom template
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			homeDir, _ := os.UserHomeDir()
+			templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "user-data.yaml")
+		}
+
+		templateContent, err = os.ReadFile(templatePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read user-data template: %w", err)
+		}
 	}
 
 	// Processar template
@@ -158,6 +179,17 @@ func (cig *CloudInitGenerator) generateUserData(data *CloudInitTemplateData) (st
 	var output strings.Builder
 	if err := tmpl.Execute(&output, data); err != nil {
 		return "", fmt.Errorf("failed to execute user-data template: %w", err)
+	}
+
+	// Embutir scripts se resource manager estiver disponível
+	if cig.resourceManager != nil {
+		userDataWithScripts, err := cig.embedScriptsInUserData(output.String())
+		if err != nil {
+			cig.logger.Warn("Failed to embed scripts in user-data", "error", err)
+			// Continuar sem scripts se houver erro
+		} else {
+			return userDataWithScripts, nil
+		}
 	}
 
 	return output.String(), nil
@@ -197,19 +229,29 @@ func (cig *CloudInitGenerator) encryptGridToken(token string, nodeID string) (*t
 
 // generateNetworkConfig generates the network-config.yaml file
 func (cig *CloudInitGenerator) generateNetworkConfig(data *CloudInitTemplateData) (string, error) {
-	// Caminho para template
-	templatePath := filepath.Join("infrastructure", "cloud-init", "network-config-template.yaml")
+	var templateContent []byte
+	var err error
 
-	// Fallback para custom template
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		homeDir, _ := os.UserHomeDir()
-		templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "network-config.yaml")
-	}
+	// Usar ProjectResourceManager se disponível
+	if cig.resourceManager != nil {
+		templateContent, err = cig.resourceManager.ReadCloudInitTemplate("network-config-template.yaml")
+		if err != nil {
+			return "", fmt.Errorf("failed to read network-config template from project: %w", err)
+		}
+	} else {
+		// Fallback para método antigo
+		templatePath := filepath.Join("infrastructure", "cloud-init", "network-config-template.yaml")
 
-	// Ler template
-	templateContent, err := os.ReadFile(templatePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read network-config template: %w", err)
+		// Fallback para custom template
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			homeDir, _ := os.UserHomeDir()
+			templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "network-config.yaml")
+		}
+
+		templateContent, err = os.ReadFile(templatePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read network-config template: %w", err)
+		}
 	}
 
 	// Processar template
@@ -228,19 +270,29 @@ func (cig *CloudInitGenerator) generateNetworkConfig(data *CloudInitTemplateData
 
 // generateMetaData generates the meta-data.yaml file
 func (cig *CloudInitGenerator) generateMetaData(data *CloudInitTemplateData) (string, error) {
-	// Caminho para template
-	templatePath := filepath.Join("infrastructure", "cloud-init", "meta-data-template.yaml")
+	var templateContent []byte
+	var err error
 
-	// Fallback para custom template
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		homeDir, _ := os.UserHomeDir()
-		templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "meta-data.yaml")
-	}
+	// Usar ProjectResourceManager se disponível
+	if cig.resourceManager != nil {
+		templateContent, err = cig.resourceManager.ReadCloudInitTemplate("meta-data-template.yaml")
+		if err != nil {
+			return "", fmt.Errorf("failed to read meta-data template from project: %w", err)
+		}
+	} else {
+		// Fallback para método antigo
+		templatePath := filepath.Join("infrastructure", "cloud-init", "meta-data-template.yaml")
 
-	// Ler template
-	templateContent, err := os.ReadFile(templatePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read meta-data template: %w", err)
+		// Fallback para custom template
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			homeDir, _ := os.UserHomeDir()
+			templatePath = filepath.Join(homeDir, ".syntropy", "templates", "cloud-init", "meta-data.yaml")
+		}
+
+		templateContent, err = os.ReadFile(templatePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read meta-data template: %w", err)
+		}
 	}
 
 	// Processar template
@@ -255,6 +307,70 @@ func (cig *CloudInitGenerator) generateMetaData(data *CloudInitTemplateData) (st
 	}
 
 	return output.String(), nil
+}
+
+// embedScriptsInUserData embute scripts cloud-init no user-data
+func (cig *CloudInitGenerator) embedScriptsInUserData(userData string) (string, error) {
+	if cig.resourceManager == nil {
+		return userData, nil
+	}
+
+	// Listar todos os scripts disponíveis
+	scripts, err := cig.resourceManager.ListCloudInitScripts()
+	if err != nil {
+		return "", fmt.Errorf("failed to list cloud-init scripts: %w", err)
+	}
+
+	if len(scripts) == 0 {
+		cig.logger.Debug("No cloud-init scripts found to embed")
+		return userData, nil
+	}
+
+	// Construir seção write_files para scripts
+	var writeFilesSection strings.Builder
+	writeFilesSection.WriteString("\n# Scripts de instalação Syntropy\n")
+	writeFilesSection.WriteString("write_files:\n")
+
+	// Construir seção runcmd para executar scripts
+	var runcmdSection strings.Builder
+	runcmdSection.WriteString("\n  # Executar scripts de instalação Syntropy\n")
+
+	for _, scriptName := range scripts {
+		// Ler conteúdo do script
+		scriptContent, err := cig.resourceManager.ReadCloudInitScript(scriptName)
+		if err != nil {
+			cig.logger.Warn("Failed to read script", "script", scriptName, "error", err)
+			continue
+		}
+
+		// Adicionar script como write_file
+		scriptPath := fmt.Sprintf("/opt/syntropy/scripts/%s", scriptName)
+		writeFilesSection.WriteString(fmt.Sprintf("  - path: %s\n", scriptPath))
+		writeFilesSection.WriteString("    permissions: '0755'\n")
+		writeFilesSection.WriteString("    owner: syntropy:syntropy\n")
+		writeFilesSection.WriteString("    content: |\n")
+
+		// Adicionar conteúdo do script com indentação
+		lines := strings.Split(string(scriptContent), "\n")
+		for _, line := range lines {
+			writeFilesSection.WriteString(fmt.Sprintf("      %s\n", line))
+		}
+		writeFilesSection.WriteString("\n")
+
+		// Adicionar execução do script no runcmd
+		runcmdSection.WriteString(fmt.Sprintf("  - %s\n", scriptPath))
+	}
+
+	// Inserir write_files antes do primeiro runcmd
+	writeFilesContent := writeFilesSection.String()
+	userDataWithWriteFiles := strings.Replace(userData, "# 5. RUNCMD", writeFilesContent+"# 5. RUNCMD", 1)
+
+	// Inserir execução de scripts no runcmd
+	runcmdContent := runcmdSection.String()
+	userDataWithScripts := strings.Replace(userDataWithWriteFiles, "  # Directories", runcmdContent+"  # Directories", 1)
+
+	cig.logger.Debug("Scripts embedded in user-data", "scripts_count", len(scripts), "scripts", scripts)
+	return userDataWithScripts, nil
 }
 
 // ValidateCloudInit validates cloud-init configuration

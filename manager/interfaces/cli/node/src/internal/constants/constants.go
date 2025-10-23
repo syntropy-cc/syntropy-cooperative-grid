@@ -72,6 +72,11 @@ const (
 	NetworkConfigTemplate = "templates/network-config.yaml"
 	MetaDataTemplate      = "templates/meta-data.yaml"
 
+	// Infrastructure paths
+	InfrastructureDir   = "infrastructure"
+	CloudInitDir        = "cloud-init"
+	CloudInitScriptsDir = "scripts"
+
 	// Node filesystem paths (on the actual node)
 	NodeSyntropyDir = "/opt/syntropy"
 	NodeConfigDir   = "/opt/syntropy/config"
