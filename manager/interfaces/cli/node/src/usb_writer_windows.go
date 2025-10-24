@@ -127,28 +127,16 @@ func (uww *USBWriterWindows) UnmountDevice(ctx context.Context, devicePath strin
 		return fmt.Errorf("invalid device path: %s", devicePath)
 	}
 
-	// Use diskpart to unmount the drive
-	diskpartScript := fmt.Sprintf(`
-select disk %s
-offline disk
-online disk
-`, driveLetter)
-
-	// Create temporary script file
-	scriptPath := filepath.Join(os.TempDir(), "syntropy-unmount.txt")
-	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
-		return fmt.Errorf("failed to create diskpart script: %w", err)
+	// Try PowerShell method first (more reliable)
+	if err := uww.unmountWithPowerShell(ctx, devicePath); err == nil {
+		uww.logger.Debug("Device unmounted successfully with PowerShell", "device", devicePath)
+		return nil
 	}
-	defer os.Remove(scriptPath)
 
-	// Execute diskpart
-	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Parse diskpart error for better user experience
-		errorMsg := uww.parseDiskpartError(err, string(output), "unmount")
-		uww.logger.Warn("Failed to unmount device with diskpart", "device", devicePath, "error", errorMsg)
-		fmt.Printf("⚠️  Aviso: Falha ao desmontar dispositivo com diskpart: %s\n", errorMsg)
+	// Fallback to diskpart if available
+	if err := uww.unmountWithDiskpart(ctx, devicePath); err != nil {
+		uww.logger.Warn("Failed to unmount device with both PowerShell and diskpart", "device", devicePath, "error", err)
+		fmt.Printf("⚠️  Aviso: Falha ao desmontar dispositivo: %v\n", err)
 		fmt.Println("   ℹ️  Continuando com a operação...")
 		// Continue even if unmount fails
 	}
@@ -167,24 +155,15 @@ func (uww *USBWriterWindows) MountDevice(ctx context.Context, devicePath string)
 		return fmt.Errorf("invalid device path: %s", devicePath)
 	}
 
-	// Use diskpart to mount the drive
-	diskpartScript := fmt.Sprintf(`
-select disk %s
-online disk
-attributes disk clear readonly
-`, driveLetter)
-
-	// Create temporary script file
-	scriptPath := filepath.Join(os.TempDir(), "syntropy-mount.txt")
-	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
-		return fmt.Errorf("failed to create diskpart script: %w", err)
+	// Try PowerShell method first (more reliable)
+	if err := uww.mountWithPowerShell(ctx, devicePath); err == nil {
+		uww.logger.Debug("Device mounted successfully with PowerShell", "device", devicePath)
+		return nil
 	}
-	defer os.Remove(scriptPath)
 
-	// Execute diskpart
-	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
-	if err := cmd.Run(); err != nil {
-		uww.logger.Warn("Failed to mount device with diskpart", "device", devicePath, "error", err)
+	// Fallback to diskpart if available
+	if err := uww.mountWithDiskpart(ctx, devicePath); err != nil {
+		uww.logger.Warn("Failed to mount device with both PowerShell and diskpart", "device", devicePath, "error", err)
 		return nil // Continue even if mount fails
 	}
 
@@ -193,6 +172,125 @@ attributes disk clear readonly
 }
 
 // Private helper methods
+
+// unmountWithPowerShell unmounts device using PowerShell
+func (uww *USBWriterWindows) unmountWithPowerShell(ctx context.Context, devicePath string) error {
+	driveLetter := strings.TrimSuffix(devicePath, ":")
+
+	psScript := fmt.Sprintf(`
+try {
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            Set-Disk -Number $disk.Number -IsOffline $true
+            Set-Disk -Number $disk.Number -IsOffline $false
+            Write-Output "Device unmounted successfully"
+        } else {
+            Write-Error "Disk not found for volume"
+            exit 1
+        }
+    } else {
+        Write-Error "Volume not found"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to unmount device: $_"
+    exit 1
+}
+`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("PowerShell unmount failed: %w - %s", err, string(output))
+	}
+	return nil
+}
+
+// unmountWithDiskpart unmounts device using diskpart (fallback)
+func (uww *USBWriterWindows) unmountWithDiskpart(ctx context.Context, devicePath string) error {
+	driveLetter := strings.TrimSuffix(devicePath, ":")
+
+	diskpartScript := fmt.Sprintf(`
+select disk %s
+offline disk
+online disk
+`, driveLetter)
+
+	scriptPath := filepath.Join(os.TempDir(), "syntropy-unmount.txt")
+	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
+		return fmt.Errorf("failed to create diskpart script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := uww.parseDiskpartError(err, string(output), "unmount")
+		return fmt.Errorf("diskpart unmount failed: %s", errorMsg)
+	}
+	return nil
+}
+
+// mountWithPowerShell mounts device using PowerShell
+func (uww *USBWriterWindows) mountWithPowerShell(ctx context.Context, devicePath string) error {
+	driveLetter := strings.TrimSuffix(devicePath, ":")
+
+	psScript := fmt.Sprintf(`
+try {
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            Set-Disk -Number $disk.Number -IsOffline $false
+            Set-Disk -Number $disk.Number -IsReadOnly $false
+            Write-Output "Device mounted successfully"
+        } else {
+            Write-Error "Disk not found for volume"
+            exit 1
+        }
+    } else {
+        Write-Error "Volume not found"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to mount device: $_"
+    exit 1
+}
+`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("PowerShell mount failed: %w - %s", err, string(output))
+	}
+	return nil
+}
+
+// mountWithDiskpart mounts device using diskpart (fallback)
+func (uww *USBWriterWindows) mountWithDiskpart(ctx context.Context, devicePath string) error {
+	driveLetter := strings.TrimSuffix(devicePath, ":")
+
+	diskpartScript := fmt.Sprintf(`
+select disk %s
+online disk
+attributes disk clear readonly
+`, driveLetter)
+
+	scriptPath := filepath.Join(os.TempDir(), "syntropy-mount.txt")
+	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
+		return fmt.Errorf("failed to create diskpart script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("diskpart mount failed: %w - %s", err, string(output))
+	}
+	return nil
+}
 
 // validateInputs validates the input parameters
 func (uww *USBWriterWindows) validateInputs(isoPath string, devicePath string) error {
@@ -480,10 +578,13 @@ func (uww *USBWriterWindows) checkRequiredTools(ctx context.Context) error {
 		return fmt.Errorf("PowerShell não está disponível - necessário para escrita USB")
 	}
 
-	// Check if diskpart is available
+	// Check if diskpart is available (optional, will use PowerShell alternatives)
 	cmd = exec.CommandContext(ctx, "diskpart")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("diskpart não está disponível - necessário para gerenciamento de discos")
+	diskpartAvailable := cmd.Run() == nil
+
+	if !diskpartAvailable {
+		uww.logger.Info("diskpart command not available, will use PowerShell alternatives")
+		fmt.Println("ℹ️  Comando diskpart não encontrado - usando alternativas PowerShell")
 	}
 
 	// Check if dd is available (optional, will fallback to PowerShell)
@@ -495,7 +596,7 @@ func (uww *USBWriterWindows) checkRequiredTools(ctx context.Context) error {
 		fmt.Println("ℹ️  Comando dd não encontrado - usando PowerShell como método alternativo")
 	}
 
-	uww.logger.Debug("Required tools check completed", "dd_available", ddAvailable)
+	uww.logger.Debug("Required tools check completed", "dd_available", ddAvailable, "diskpart_available", diskpartAvailable)
 	return nil
 }
 
