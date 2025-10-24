@@ -3,7 +3,10 @@ package node
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"node-component/src/internal/constants"
@@ -51,14 +54,73 @@ func NewUSBDetectorFactory() *USBDetectorFactory {
 	return &USBDetectorFactory{}
 }
 
+// detectRuntimePlatform detecta a plataforma em tempo de execução
+func detectRuntimePlatform() string {
+	// Detectar Windows via variáveis de ambiente
+	if os.Getenv("OS") == "Windows_NT" ||
+		os.Getenv("SystemRoot") != "" ||
+		os.Getenv("ProgramFiles") != "" {
+		return "windows"
+	}
+
+	// Verificar se está rodando no WSL
+	if _, err := os.Stat("/proc/sys/fs/binfmt_misc/WSLInterop"); err == nil {
+		return "wsl"
+	}
+
+	// Verificar outra forma de detectar WSL
+	if data, err := os.ReadFile("/proc/version"); err == nil {
+		if strings.Contains(strings.ToLower(string(data)), "microsoft") {
+			return "wsl"
+		}
+	}
+
+	// Detectar macOS via uname
+	if cmd := exec.Command("uname"); cmd != nil {
+		if output, err := cmd.Output(); err == nil {
+			if strings.Contains(strings.ToLower(string(output)), "darwin") {
+				return "darwin"
+			}
+		}
+	}
+
+	// Default para Linux baseado em runtime.GOOS
+	return runtime.GOOS
+}
+
 // CreateUSBDetector creates a platform-specific USB detector
 func (f *USBDetectorFactory) CreateUSBDetector(logger types.Logger) (USBDetector, error) {
-	detector := NewPlatformUSBDetector(logger)
+	platform := detectRuntimePlatform()
+
+	logger.Debug("Detected runtime platform", "platform", platform, "compile_platform", runtime.GOOS)
+
+	var detector USBDetector
+
+	switch platform {
+	case "windows":
+		detector = createWindowsDetector(logger)
+	case "linux", "wsl":
+		detector = createLinuxDetector(logger)
+	case "darwin":
+		detector = createMacOSDetector(logger)
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", platform)
+	}
+
 	if detector == nil {
-		return nil, fmt.Errorf("failed to create USB detector for platform: %s", runtime.GOOS)
+		return nil, fmt.Errorf("failed to create USB detector for platform: %s (runtime: %s, compile: %s). "+
+			"This usually means the platform-specific implementation was not compiled. "+
+			"For Windows cross-compilation, ensure build tags are properly set: CGO_ENABLED=0 GOOS=windows go build -tags windows",
+			platform, platform, runtime.GOOS)
 	}
 	return detector, nil
 }
+
+// Platform-specific detector creation is handled by build tags
+// The actual implementations are in:
+// - usb_detector_windows.go (for Windows)
+// - usb_detector_linux.go (for Linux)
+// - usb_detector_macos.go (for macOS)
 
 // USBDetectorBase provides common functionality for USB detectors
 type USBDetectorBase struct {

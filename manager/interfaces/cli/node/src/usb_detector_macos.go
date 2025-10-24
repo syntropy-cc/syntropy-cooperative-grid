@@ -509,7 +509,54 @@ type USBDeviceInfo struct {
 	Speed  int
 }
 
-// NewPlatformUSBDetector creates the platform-specific USB detector
-func NewPlatformUSBDetector(logger types.Logger) USBDetector {
+// createMacOSDetector creates macOS detector - overrides stub in usb_detector.go
+func createMacOSDetector(logger types.Logger) USBDetector {
 	return NewUSBDetectorMacOS(logger)
+}
+
+// createWindowsDetector stub for Windows detector (not available on macOS)
+func createWindowsDetector(logger types.Logger) USBDetector {
+	return nil
+}
+
+// createLinuxDetector stub for Linux detector (not available on macOS)
+func createLinuxDetector(logger types.Logger) USBDetector {
+	return nil
+}
+
+// ValidateDeviceDoubleCheck overrides the base implementation to use macOS-specific validation
+func (udm *USBDetectorMacOS) ValidateDeviceDoubleCheck(ctx context.Context, device types.USBDevice) error {
+	udm.logger.Info("Starting macOS double validation check", "device", device.Path)
+
+	// Validation 1: Check system flags
+	if device.IsSystem {
+		return fmt.Errorf("SECURITY: device %s is marked as system device", device.Path)
+	}
+
+	// Validation 2: Check if not removable
+	if !device.IsRemovable {
+		return fmt.Errorf("SECURITY: device %s is not removable", device.Path)
+	}
+
+	// Validation 3: Check suspicious capacity (system disks are usually > 100GB)
+	minCapacity := int64(512 * 1024 * 1024)             // 512 MB
+	maxCapacity := int64(2 * 1024 * 1024 * 1024 * 1024) // 2 TB
+
+	if device.Capacity < minCapacity {
+		return fmt.Errorf("SECURITY: device %s is too small (%d bytes)", device.Path, device.Capacity)
+	}
+
+	if device.Capacity > maxCapacity {
+		return fmt.Errorf("SECURITY: device %s is suspiciously large (%d bytes)", device.Path, device.Capacity)
+	}
+
+	udm.logger.Info("First validation passed", "device", device.Path)
+
+	// Independent validation via macOS-specific method
+	if err := udm.platformSpecificValidation(ctx, device); err != nil {
+		return fmt.Errorf("SECURITY: platform-specific validation failed: %w", err)
+	}
+
+	udm.logger.Info("macOS double validation check passed", "device", device.Path)
+	return nil
 }

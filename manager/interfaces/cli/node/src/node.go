@@ -92,7 +92,11 @@ func (nm *NodeManager) Initialize() error {
 	// Initialize component services
 	nm.configGenerator = NewAutoConfigGenerator(nm.tokenIntegration, nm.logger)
 	factory := NewUSBDetectorFactory()
-	nm.usbDetector, _ = factory.CreateUSBDetector(nm.logger)
+	var err error
+	nm.usbDetector, err = factory.CreateUSBDetector(nm.logger)
+	if err != nil || nm.usbDetector == nil {
+		return fmt.Errorf("failed to create USB detector: %w", err)
+	}
 	nm.isoDownloader = NewISODownloader(nm.logger)
 	nm.cloudInitGenerator = NewCloudInitGenerator(nm.logger)
 	writerFactory := NewUSBWriterFactory()

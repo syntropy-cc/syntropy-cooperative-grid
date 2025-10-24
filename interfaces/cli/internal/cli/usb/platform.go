@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 )
 
 // detectPlatform detecta a plataforma atual (linux, windows, wsl)
 func detectPlatform() string {
-	if runtime.GOOS == "windows" {
+	// Detectar Windows via variáveis de ambiente (runtime detection)
+	if os.Getenv("OS") == "Windows_NT" ||
+		os.Getenv("SystemRoot") != "" ||
+		os.Getenv("ProgramFiles") != "" {
 		return "windows"
 	}
 

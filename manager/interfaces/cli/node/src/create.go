@@ -34,6 +34,30 @@ func NewCreateSubcomponent(
 	nodeState types.NodeStateManager,
 	logger types.Logger,
 ) *CreateSubcomponent {
+	// Validate critical dependencies
+	if usbDetector == nil {
+		logger.Error("USB detector is nil - this will cause crashes during node creation")
+	}
+	if configGenerator == nil {
+		logger.Error("Config generator is nil - this will cause crashes during node creation")
+	}
+	if isoDownloader == nil {
+		logger.Error("ISO downloader is nil - this will cause crashes during node creation")
+	}
+	if cloudInitGenerator == nil {
+		logger.Error("Cloud-init generator is nil - this will cause crashes during node creation")
+	}
+	if usbWriter == nil {
+		logger.Error("USB writer is nil - this will cause crashes during node creation")
+	}
+	if nodeState == nil {
+		logger.Error("Node state manager is nil - this will cause crashes during node creation")
+	}
+	if logger == nil {
+		// This would be a critical error, but we can't log it
+		panic("logger cannot be nil in NewCreateSubcomponent")
+	}
+
 	return &CreateSubcomponent{
 		configGenerator:    configGenerator,
 		usbDetector:        usbDetector,

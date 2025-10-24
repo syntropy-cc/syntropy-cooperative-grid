@@ -62,7 +62,7 @@ go mod tidy
 
 # Build for Windows
 print_info "Building for Windows..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main.go
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags windows -ldflags "-X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT" -o "$BUILD_DIR/syntropy-windows.exe" main.go
 
 # Build for Linux
 print_info "Building for Linux..."
