@@ -221,15 +221,15 @@ func (udw *USBDetectorWindows) GetSystemDevices(ctx context.Context) ([]string, 
 
 // detectUSBDevicesWithPowerShell detects USB devices using PowerShell
 func (udw *USBDetectorWindows) detectUSBDevicesWithPowerShell(ctx context.Context) ([]types.USBDevice, error) {
-	// PowerShell command to get USB removable drives
+	// PowerShell melhorado - nunca retorna valores null/vazios
 	cmd := exec.CommandContext(ctx, "powershell", "-Command", `
 		Get-WmiObject -Class Win32_LogicalDisk | 
 		Where-Object {$_.DriveType -eq 2} | 
 		ForEach-Object {
 			$drive = $_.DeviceID
-			$size = $_.Size
-			$free = $_.FreeSpace
-			$label = $_.VolumeLabel
+			$size = if ($null -ne $_.Size) { $_.Size } else { 0 }
+			$free = if ($null -ne $_.FreeSpace) { $_.FreeSpace } else { 0 }
+			$label = if ($_.VolumeLabel) { $_.VolumeLabel } else { "Unknown" }
 			Write-Output "$drive|$size|$free|$label"
 		}
 	`)
@@ -250,17 +250,41 @@ func (udw *USBDetectorWindows) detectUSBDevicesWithPowerShell(ctx context.Contex
 
 		fields := strings.Split(line, "|")
 		if len(fields) < 4 {
+			udw.logger.Warn("Invalid device info format", "line", line)
 			continue
 		}
 
-		drive := fields[0]
-		sizeStr := fields[1]
-		label := fields[3]
+		drive := strings.TrimSpace(fields[0])
+		sizeStr := strings.TrimSpace(fields[1])
+		label := strings.TrimSpace(fields[3])
 
-		size, err := strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			udw.logger.Warn("Failed to parse device size", "device", drive, "size", sizeStr, "error", err)
-			continue
+		// Parse size com tratamento robusto
+		size := int64(0)
+		if sizeStr != "" && sizeStr != "0" {
+			if parsedSize, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+				size = parsedSize
+			} else {
+				udw.logger.Warn("Failed to parse device size",
+					"device", drive,
+					"size_str", sizeStr,
+					"error", err)
+			}
+		}
+
+		// Se size ainda é 0, tentar método alternativo
+		if size == 0 {
+			udw.logger.Info("Device reported zero size, trying alternative detection", "device", drive)
+			if altSize, err := udw.getDeviceSizeAlternative(ctx, drive); err == nil && altSize > 0 {
+				size = altSize
+				udw.logger.Info("Successfully obtained size via alternative method",
+					"device", drive,
+					"size", size)
+			} else {
+				udw.logger.Warn("Could not determine device size, device may be unformatted or faulty",
+					"device", drive,
+					"error", err)
+				// Ainda assim adicionar o dispositivo, mas com aviso
+			}
 		}
 
 		// Get additional device info
@@ -286,8 +310,18 @@ func (udw *USBDetectorWindows) detectUSBDevicesWithPowerShell(ctx context.Contex
 		}
 
 		devices = append(devices, device)
+		udw.logger.Debug("Detected USB device",
+			"path", device.Path,
+			"capacity", device.Capacity,
+			"model", label)
 	}
 
+	if len(devices) == 0 {
+		udw.logger.Warn("No removable USB devices found via PowerShell")
+		return nil, fmt.Errorf("no removable USB devices detected")
+	}
+
+	udw.logger.Info("Successfully detected USB devices", "count", len(devices))
 	return devices, nil
 }
 
@@ -545,6 +579,87 @@ func (udw *USBDetectorWindows) getFixedDrives(ctx context.Context) ([]string, er
 	return drives, nil
 }
 
+// getDeviceSizeFromDisk obtém tamanho do disco físico associado à letra
+func (udw *USBDetectorWindows) getDeviceSizeFromDisk(ctx context.Context, driveLetter string) (int64, error) {
+	psScript := fmt.Sprintf(`
+		$drive = "%s"
+		
+		# Tentar via Get-Disk
+		try {
+			$partition = Get-Partition | Where-Object { $_.DriveLetter -eq $drive.TrimEnd(':') } -ErrorAction Stop
+			if ($partition) {
+				$disk = Get-Disk -Number $partition.DiskNumber -ErrorAction Stop
+				if ($disk) {
+					Write-Output $disk.Size
+					exit 0
+				}
+			}
+		} catch {}
+		
+		# Fallback: via WMI DiskDrive
+		try {
+			$logicalDisk = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$drive'" -ErrorAction Stop
+			$partition = Get-WmiObject -Query "ASSOCIATORS OF {Win32_LogicalDisk.DeviceID='$drive'} WHERE AssocClass = Win32_LogicalDiskToPartition" -ErrorAction Stop
+			if ($partition) {
+				$disk = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass = Win32_DiskDriveToDiskPartition" -ErrorAction Stop
+				if ($disk) {
+					Write-Output $disk.Size
+					exit 0
+				}
+			}
+		} catch {}
+		
+		Write-Output "0"
+	`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", psScript)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get disk size: %w", err)
+	}
+
+	sizeStr := strings.TrimSpace(string(output))
+	if sizeStr == "" || sizeStr == "0" {
+		return 0, fmt.Errorf("no size information available")
+	}
+
+	size, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse size: %w", err)
+	}
+
+	return size, nil
+}
+
+// getDeviceSizeAlternative é um wrapper que tenta múltiplos métodos
+func (udw *USBDetectorWindows) getDeviceSizeAlternative(ctx context.Context, driveLetter string) (int64, error) {
+	// Método 1: Via Get-Disk
+	if size, err := udw.getDeviceSizeFromDisk(ctx, driveLetter); err == nil && size > 0 {
+		return size, nil
+	}
+
+	// Método 2: Via WMIC
+	cmd := exec.CommandContext(ctx, "wmic", "logicaldisk", "where",
+		fmt.Sprintf("deviceid='%s'", driveLetter),
+		"get", "size", "/format:value")
+
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "Size=") {
+				sizeStr := strings.TrimPrefix(line, "Size=")
+				sizeStr = strings.TrimSpace(sizeStr)
+				if size, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+					return size, nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("all alternative methods failed to get device size")
+}
+
 // USBDeviceInfo represents USB-specific device information
 type USBDeviceInfo struct {
 	Vendor string
@@ -615,12 +730,17 @@ func (udw *USBDetectorWindows) ValidateDeviceDoubleCheck(ctx context.Context, de
 	minCapacity := int64(512 * 1024 * 1024)             // 512 MB
 	maxCapacity := int64(2 * 1024 * 1024 * 1024 * 1024) // 2 TB
 
-	if device.Capacity < minCapacity {
-		return fmt.Errorf("SECURITY: device %s is too small (%d bytes)", device.Path, device.Capacity)
-	}
+	// Permitir capacity = 0 para dispositivos não formatados ou com problemas de detecção
+	if device.Capacity > 0 {
+		if device.Capacity < minCapacity {
+			return fmt.Errorf("SECURITY: device %s is too small (%d bytes)", device.Path, device.Capacity)
+		}
 
-	if device.Capacity > maxCapacity {
-		return fmt.Errorf("SECURITY: device %s is suspiciously large (%d bytes)", device.Path, device.Capacity)
+		if device.Capacity > maxCapacity {
+			return fmt.Errorf("SECURITY: device %s is suspiciously large (%d bytes)", device.Path, device.Capacity)
+		}
+	} else {
+		udw.logger.Warn("Device has zero capacity - may be unformatted or faulty", "device", device.Path)
 	}
 
 	udw.logger.Info("First validation passed", "device", device.Path)

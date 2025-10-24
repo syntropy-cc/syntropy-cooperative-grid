@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"node-component/src/internal/types"
@@ -438,6 +439,27 @@ func (cs *CreateSubcomponent) selectUSBDeviceFromDetected(devices []types.USBDev
 	fmt.Printf("   Capacidade: %.2f GB\n", float64(selectedDevice.Capacity)/(1024*1024*1024))
 	fmt.Printf("   Modelo: %s\n", selectedDevice.Model)
 	fmt.Printf("\n")
+
+	// Ask for explicit formatting confirmation
+	fmt.Printf("⚠️  CONFIRMAÇÃO DE FORMATAÇÃO OBRIGATÓRIA\n")
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("🔧 O dispositivo USB será FORMATADO completamente\n")
+	fmt.Printf("💾 TODOS os dados serão PERDIDOS permanentemente\n")
+	fmt.Printf("🔄 O dispositivo será formatado como FAT32 para boot\n")
+	fmt.Printf("✅ Esta ação é NECESSÁRIA para criar um USB bootável\n\n")
+	fmt.Printf("❓ Confirma a formatação do dispositivo? (s/n): ")
+
+	var confirm string
+	_, err = fmt.Scanln(&confirm)
+	if err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if strings.ToLower(confirm) != "s" && strings.ToLower(confirm) != "sim" && strings.ToLower(confirm) != "y" && strings.ToLower(confirm) != "yes" {
+		return nil, fmt.Errorf("formatação cancelada pelo usuário")
+	}
+
+	fmt.Printf("✅ Formatação confirmada pelo usuário\n\n")
 
 	return &selectedDevice, nil
 }

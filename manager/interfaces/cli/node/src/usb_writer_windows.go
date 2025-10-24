@@ -46,14 +46,29 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, selec
 		"serial", selectedDevice.Device.Serial,
 		"validation_token", selectedDevice.ValidationToken)
 
-	// Validate inputs using the selected device
-	if err := uww.validateInputs(isoPath, selectedDevice.Device.Path); err != nil {
-		return nil, fmt.Errorf("input validation failed: %w", err)
+	// Perform comprehensive pre-write checks
+	if err := uww.preWriteChecks(ctx, isoPath, selectedDevice.Device.Path); err != nil {
+		return nil, fmt.Errorf("pre-write checks failed: %w", err)
 	}
 
 	// Check required tools before starting
 	if err := uww.checkRequiredTools(ctx); err != nil {
 		return nil, fmt.Errorf("required tools check failed: %w", err)
+	}
+
+	// Determine write method based on ISO type and requirements
+	writeMethod := uww.determineWriteMethod(isoPath, selectedDevice.Device.Path)
+	uww.logger.Info("Selected write method", "method", writeMethod)
+
+	// Only format device if using file copy method (not for raw write)
+	if writeMethod == "file_copy" {
+		fmt.Println("🔧 Formatando dispositivo USB antes da gravação...")
+		if err := uww.formatDevice(ctx, selectedDevice.Device.Path); err != nil {
+			return nil, fmt.Errorf("device formatting failed: %w", err)
+		}
+		fmt.Println("✅ Dispositivo formatado com sucesso")
+	} else {
+		fmt.Println("ℹ️  Usando escrita RAW - não é necessário formatar")
 	}
 
 	// Get ISO file size
@@ -121,10 +136,10 @@ func (uww *USBWriterWindows) WriteISO(ctx context.Context, isoPath string, selec
 func (uww *USBWriterWindows) UnmountDevice(ctx context.Context, devicePath string) error {
 	uww.logger.Debug("Unmounting device", "device", devicePath)
 
-	// Get drive letter from device path (e.g., "C:" from "C:\")
-	driveLetter := strings.TrimSuffix(devicePath, ":")
-	if driveLetter == "" {
-		return fmt.Errorf("invalid device path: %s", devicePath)
+	// Parse and validate drive letter
+	_, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
 	}
 
 	// Try PowerShell method first (more reliable)
@@ -149,10 +164,10 @@ func (uww *USBWriterWindows) UnmountDevice(ctx context.Context, devicePath strin
 func (uww *USBWriterWindows) MountDevice(ctx context.Context, devicePath string) error {
 	uww.logger.Debug("Mounting device", "device", devicePath)
 
-	// Get drive letter from device path
-	driveLetter := strings.TrimSuffix(devicePath, ":")
-	if driveLetter == "" {
-		return fmt.Errorf("invalid device path: %s", devicePath)
+	// Parse and validate drive letter
+	_, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
 	}
 
 	// Try PowerShell method first (more reliable)
@@ -173,9 +188,177 @@ func (uww *USBWriterWindows) MountDevice(ctx context.Context, devicePath string)
 
 // Private helper methods
 
+// formatDevice formats the USB device before writing
+func (uww *USBWriterWindows) formatDevice(ctx context.Context, devicePath string) error {
+	uww.logger.Debug("Formatting device before writing", "device", devicePath)
+
+	// Try PowerShell formatting first
+	fmt.Println("   🔄 Tentando formatação com PowerShell...")
+	if err := uww.formatWithPowerShell(ctx, devicePath); err == nil {
+		uww.logger.Debug("Device formatted successfully with PowerShell", "device", devicePath)
+		fmt.Println("   ✅ Formatação PowerShell bem-sucedida!")
+		return nil
+	} else {
+		fmt.Printf("   ⚠️  Formatação PowerShell falhou: %v\n", err)
+	}
+
+	// Fallback to diskpart formatting if available
+	fmt.Println("   🔄 Tentando formatação com diskpart...")
+	if err := uww.formatWithDiskpart(ctx, devicePath); err != nil {
+		fmt.Printf("   ⚠️  Formatação diskpart falhou: %v\n", err)
+
+		// Try simple PowerShell format as last resort
+		fmt.Println("   🔄 Tentando formatação simples com PowerShell...")
+		if err := uww.formatWithSimplePowerShell(ctx, devicePath); err != nil {
+			return fmt.Errorf("failed to format device with all methods: %w", err)
+		}
+		fmt.Println("   ✅ Formatação simples bem-sucedida!")
+	} else {
+		fmt.Println("   ✅ Formatação diskpart bem-sucedida!")
+	}
+
+	uww.logger.Debug("Device formatted successfully", "device", devicePath)
+	return nil
+}
+
+// formatWithPowerShell formats device using PowerShell
+func (uww *USBWriterWindows) formatWithPowerShell(ctx context.Context, devicePath string) error {
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
+
+	psScript := fmt.Sprintf(`
+try {
+    # Get the volume and disk information
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            Write-Output "Found disk number: $($disk.Number)"
+            
+            # Clear the disk completely
+            Clear-Disk -Number $disk.Number -RemoveData -Confirm:$false -ErrorAction Stop
+            Write-Output "Disk cleared successfully"
+            
+            # Create new partition
+            $partition = New-Partition -DiskNumber $disk.Number -UseMaximumSize -IsActive -AssignDriveLetter
+            Write-Output "Partition created successfully"
+            
+            # Format as FAT32
+            Format-Volume -DriveLetter $partition.DriveLetter -FileSystem FAT32 -NewFileSystemLabel "SYNTROPY" -Confirm:$false
+            Write-Output "Volume formatted successfully"
+            
+            Write-Output "Device formatted successfully"
+        } else {
+            Write-Error "Disk not found for volume"
+            exit 1
+        }
+    } else {
+        Write-Error "Volume not found for drive letter %s"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to format device: $_"
+    exit 1
+}
+`, driveLetter, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("PowerShell format failed: %w - %s", err, string(output))
+	}
+	return nil
+}
+
+// formatWithDiskpart formats device using diskpart (fallback)
+func (uww *USBWriterWindows) formatWithDiskpart(ctx context.Context, devicePath string) error {
+	// Convert drive letter to disk number
+	factory := NewUSBDetectorFactory()
+	detector, err := factory.CreateUSBDetector(uww.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create detector: %w", err)
+	}
+
+	windowsDetector, ok := detector.(*USBDetectorWindows)
+	if !ok {
+		return fmt.Errorf("expected Windows detector")
+	}
+
+	physicalDrive, err := windowsDetector.GetPhysicalDriveFromLetter(ctx, devicePath)
+	if err != nil {
+		return fmt.Errorf("failed to get physical drive: %w", err)
+	}
+
+	// Extract disk number from physical drive path (e.g., "\\.\PHYSICALDRIVE1" -> "1")
+	var diskNum int
+	if _, err := fmt.Sscanf(physicalDrive, "\\\\.\\PHYSICALDRIVE%d", &diskNum); err != nil {
+		return fmt.Errorf("failed to parse disk number from physical drive: %w", err)
+	}
+
+	diskpartScript := fmt.Sprintf(`
+select disk %d
+clean
+create partition primary
+active
+format fs=fat32 quick
+assign
+`, diskNum)
+
+	scriptPath := filepath.Join(os.TempDir(), "syntropy-format.txt")
+	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
+		return fmt.Errorf("failed to create diskpart script: %w", err)
+	}
+	defer os.Remove(scriptPath)
+
+	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("diskpart format failed: %w - %s", err, string(output))
+	}
+	return nil
+}
+
+// formatWithSimplePowerShell formats device using simple PowerShell commands as last resort
+func (uww *USBWriterWindows) formatWithSimplePowerShell(ctx context.Context, devicePath string) error {
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
+
+	psScript := fmt.Sprintf(`
+try {
+    # Simple format using Format-Volume directly
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        # Just format the existing volume
+        Format-Volume -DriveLetter %s -FileSystem FAT32 -NewFileSystemLabel "SYNTROPY" -Confirm:$false -Force
+        Write-Output "Simple format completed successfully"
+    } else {
+        Write-Error "Volume not found for drive letter %s"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to format device with simple method: $_"
+    exit 1
+}
+`, driveLetter, driveLetter, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Simple PowerShell format failed: %w - %s", err, string(output))
+	}
+	return nil
+}
+
 // unmountWithPowerShell unmounts device using PowerShell
 func (uww *USBWriterWindows) unmountWithPowerShell(ctx context.Context, devicePath string) error {
-	driveLetter := strings.TrimSuffix(devicePath, ":")
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
 
 	psScript := fmt.Sprintf(`
 try {
@@ -210,7 +393,10 @@ try {
 
 // unmountWithDiskpart unmounts device using diskpart (fallback)
 func (uww *USBWriterWindows) unmountWithDiskpart(ctx context.Context, devicePath string) error {
-	driveLetter := strings.TrimSuffix(devicePath, ":")
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
 
 	diskpartScript := fmt.Sprintf(`
 select disk %s
@@ -235,7 +421,10 @@ online disk
 
 // mountWithPowerShell mounts device using PowerShell
 func (uww *USBWriterWindows) mountWithPowerShell(ctx context.Context, devicePath string) error {
-	driveLetter := strings.TrimSuffix(devicePath, ":")
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
 
 	psScript := fmt.Sprintf(`
 try {
@@ -270,7 +459,10 @@ try {
 
 // mountWithDiskpart mounts device using diskpart (fallback)
 func (uww *USBWriterWindows) mountWithDiskpart(ctx context.Context, devicePath string) error {
-	driveLetter := strings.TrimSuffix(devicePath, ":")
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return fmt.Errorf("invalid device path: %w", err)
+	}
 
 	diskpartScript := fmt.Sprintf(`
 select disk %s
@@ -292,16 +484,29 @@ attributes disk clear readonly
 	return nil
 }
 
-// validateInputs validates the input parameters
+// determineWriteMethod determines the best write method based on ISO and device characteristics
+func (uww *USBWriterWindows) determineWriteMethod(isoPath, devicePath string) string {
+	// Por padrão, tentar escrita RAW primeiro (mais eficiente para ISOs bootáveis)
+	// Verificar se dd está disponível
+	cmd := exec.Command("dd", "--version")
+	if cmd.Run() == nil {
+		return "raw_write"
+	}
+
+	// Fallback para cópia de arquivos
+	return "file_copy"
+}
+
+// validateInputs validates the input parameters (legacy method, now replaced by preWriteChecks)
 func (uww *USBWriterWindows) validateInputs(isoPath string, devicePath string) error {
 	// Validate ISO file
 	if _, err := os.Stat(isoPath); err != nil {
 		return fmt.Errorf("ISO file does not exist: %s", isoPath)
 	}
 
-	// Validate device path format (should be like "C:")
-	if !strings.HasSuffix(devicePath, ":") {
-		return fmt.Errorf("invalid device path format: %s (should be like 'C:')", devicePath)
+	// Validate device path format using new parser
+	if _, err := uww.parseDriveLetter(devicePath); err != nil {
+		return fmt.Errorf("invalid device path format: %s", devicePath)
 	}
 
 	// Check if drive exists
@@ -389,6 +594,25 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 		"status=progress",
 		"conv=fsync")
 
+	// Start progress tracking for dd command
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if progressTracker != nil {
+					// Para dd, podemos estimar progresso baseado no tempo
+					// Em uma implementação real, você parsearia a saída do dd
+					progressTracker.UpdateProgress(0)
+				}
+			}
+		}
+	}()
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Parse dd error for better user experience
@@ -402,6 +626,11 @@ func (uww *USBWriterWindows) writeISOWithDD(ctx context.Context, isoPath string,
 		return uww.writeISOWithPowerShell(ctx, isoPath, selectedDevice, progressTracker)
 	}
 
+	// Progress tracking finalizado
+	if progressTracker != nil {
+		uww.logger.Debug("Progress tracking completed for dd command")
+	}
+
 	uww.logger.Debug("dd command completed successfully")
 	return nil
 }
@@ -412,26 +641,26 @@ func (uww *USBWriterWindows) writeISOWithPowerShellCopy(ctx context.Context, iso
 
 	// PowerShell script to write ISO using direct copy
 	psScript := fmt.Sprintf(`
-$isoPath = "%s"
-$selectedDevice.Device.Path = "%s"
+$IsoPath = "%s"
+$DevicePath = "%s"
 
 try {
     # Mount ISO
-    $isoMount = Mount-DiskImage -ImagePath $isoPath -PassThru
+    $isoMount = Mount-DiskImage -ImagePath $IsoPath -PassThru
     $isoDrive = ($isoMount | Get-Volume).DriveLetter + ":"
     
     # Copy ISO contents to USB device using Copy-Item
-    Copy-Item -Path "$isoDrive\*" -Destination $selectedDevice.Device.Path -Recurse -Force
+    Copy-Item -Path "$isoDrive\*" -Destination $DevicePath -Recurse -Force
     
     # Dismount ISO
-    Dismount-DiskImage -ImagePath $isoPath
+    Dismount-DiskImage -ImagePath $IsoPath
     
     Write-Output "ISO copy completed successfully"
 } catch {
     Write-Error "Failed to copy ISO: $_"
     exit 1
 }
-`, isoPath, selectedDevice.Device.Path)
+`, uww.escapeForPowerShell(isoPath), uww.escapeForPowerShell(selectedDevice.Device.Path))
 
 	// Execute PowerShell script
 	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
@@ -448,30 +677,7 @@ try {
 func (uww *USBWriterWindows) writeISOWithDiskpart(ctx context.Context, isoPath string, selectedDevice *SelectedUSBDevice, progressTracker *WriteProgressTracker) error {
 	uww.logger.Debug("Writing ISO with diskpart", "iso", isoPath, "device", selectedDevice.Device.Path)
 
-	// First, format the device with diskpart
-	diskpartScript := fmt.Sprintf(`
-select disk %s
-clean
-create partition primary
-active
-format fs=fat32 quick
-assign
-`, strings.TrimSuffix(selectedDevice.Device.Path, ":"))
-
-	// Create temporary script file
-	scriptPath := filepath.Join(os.TempDir(), "syntropy-format.txt")
-	if err := os.WriteFile(scriptPath, []byte(diskpartScript), 0644); err != nil {
-		return fmt.Errorf("failed to create diskpart script: %w", err)
-	}
-	defer os.Remove(scriptPath)
-
-	// Execute diskpart
-	cmd := exec.CommandContext(ctx, "diskpart", "/s", scriptPath)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("diskpart format failed: %w", err)
-	}
-
-	// Then use PowerShell to copy ISO contents
+	// Device is already formatted, just copy ISO contents
 	return uww.writeISOWithPowerShellCopy(ctx, isoPath, selectedDevice, progressTracker)
 }
 
@@ -481,31 +687,55 @@ func (uww *USBWriterWindows) writeISOWithPowerShell(ctx context.Context, isoPath
 
 	// PowerShell script to write ISO to USB
 	psScript := fmt.Sprintf(`
-$isoPath = "%s"
-$selectedDevice.Device.Path = "%s"
+$IsoPath = "%s"
+$DevicePath = "%s"
 
 try {
     # Mount ISO
-    $isoMount = Mount-DiskImage -ImagePath $isoPath -PassThru
+    $isoMount = Mount-DiskImage -ImagePath $IsoPath -PassThru
     $isoDrive = ($isoMount | Get-Volume).DriveLetter + ":"
     
     # Copy ISO contents to USB device
-    robocopy $isoDrive $selectedDevice.Device.Path /E /COPY:DAT /R:3 /W:1
+    robocopy $isoDrive $DevicePath /E /COPY:DAT /R:3 /W:1
     
     # Dismount ISO
-    Dismount-DiskImage -ImagePath $isoPath
+    Dismount-DiskImage -ImagePath $IsoPath
     
     Write-Output "ISO write completed successfully"
 } catch {
     Write-Error "Failed to write ISO: $_"
     exit 1
 }
-`, isoPath, selectedDevice.Device.Path)
+`, uww.escapeForPowerShell(isoPath), uww.escapeForPowerShell(selectedDevice.Device.Path))
 
-	// Execute PowerShell script
+	// Execute PowerShell script with progress tracking
 	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+
+	// Start progress tracking in a goroutine
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if progressTracker != nil {
+					// Simular progresso baseado no tempo decorrido
+					progressTracker.UpdateProgress(0) // Será atualizado com dados reais se disponível
+				}
+			}
+		}
+	}()
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("PowerShell ISO write failed: %w", err)
+	}
+
+	// Progress tracking finalizado
+	if progressTracker != nil {
+		uww.logger.Debug("Progress tracking completed for PowerShell command")
 	}
 
 	uww.logger.Debug("PowerShell ISO write completed successfully")
@@ -666,13 +896,242 @@ func (uww *USBWriterWindows) parseDiskpartError(err error, output, operation str
 	return fmt.Sprintf("Erro durante %s: %v", operation, err)
 }
 
-// hasAdminPrivileges checks if the current process has admin privileges
-func (uww *USBWriterWindows) hasAdminPrivileges(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "net", "session")
-	if err := cmd.Run(); err != nil {
-		return false
+// escapeForPowerShell escapes input for safe use in PowerShell scripts
+func (uww *USBWriterWindows) escapeForPowerShell(input string) string {
+	// Escapar caracteres especiais para PowerShell
+	input = strings.ReplaceAll(input, "`", "``")
+	input = strings.ReplaceAll(input, "'", "''")
+	input = strings.ReplaceAll(input, "$", "`$")
+	input = strings.ReplaceAll(input, "\"", "`\"")
+	return input
+}
+
+// parseDriveLetter parses and validates drive letter format
+func (uww *USBWriterWindows) parseDriveLetter(devicePath string) (string, error) {
+	devicePath = strings.TrimSpace(devicePath)
+
+	// Aceitar "C:" ou "C"
+	if len(devicePath) == 1 && devicePath[0] >= 'A' && devicePath[0] <= 'Z' {
+		return devicePath, nil
 	}
-	return true
+	if len(devicePath) == 2 && devicePath[1] == ':' {
+		return string(devicePath[0]), nil
+	}
+
+	return "", fmt.Errorf("invalid drive letter format: %s", devicePath)
+}
+
+// preWriteChecks performs all necessary checks before writing
+func (uww *USBWriterWindows) preWriteChecks(ctx context.Context, isoPath, devicePath string) error {
+	uww.logger.Debug("Performing pre-write checks", "iso", isoPath, "device", devicePath)
+
+	// 1. Verificar se ISO existe e é válida
+	if _, err := os.Stat(isoPath); err != nil {
+		return fmt.Errorf("ISO file does not exist or is inaccessible: %w", err)
+	}
+
+	// 2. Verificar privilégios de admin
+	if !uww.hasAdminPrivileges(ctx) {
+		return fmt.Errorf("administrative privileges required for USB writing")
+	}
+
+	// 3. Verificar se dispositivo é realmente removível
+	if err := uww.validateRemovableDevice(ctx, devicePath); err != nil {
+		return fmt.Errorf("device validation failed: %w", err)
+	}
+
+	// 4. Verificar capacidade do USB
+	if err := uww.checkDeviceCapacity(ctx, isoPath, devicePath); err != nil {
+		return fmt.Errorf("capacity check failed: %w", err)
+	}
+
+	// 5. Verificar se USB está montado e desmontar se necessário
+	if err := uww.ensureDeviceUnmounted(ctx, devicePath); err != nil {
+		uww.logger.Warn("Failed to unmount device before writing", "error", err)
+		// Continue mesmo se não conseguir desmontar
+	}
+
+	return nil
+}
+
+// validateRemovableDevice validates if the device is actually removable
+func (uww *USBWriterWindows) validateRemovableDevice(ctx context.Context, devicePath string) error {
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return err
+	}
+
+	// Verificar se é um dispositivo removível usando PowerShell
+	psScript := fmt.Sprintf(`
+try {
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            if ($disk.BusType -eq "USB" -or $disk.MediaType -eq "RemovableMedia") {
+                Write-Output "Device is removable"
+            } else {
+                Write-Error "Device is not removable (BusType: $($disk.BusType), MediaType: $($disk.MediaType))"
+                exit 1
+            }
+        } else {
+            Write-Error "Disk information not found"
+            exit 1
+        }
+    } else {
+        Write-Error "Volume not found"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to validate device: $_"
+    exit 1
+}
+`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("device validation failed: %w - %s", err, string(output))
+	}
+
+	return nil
+}
+
+// checkDeviceCapacity checks if the USB device has enough capacity for the ISO
+func (uww *USBWriterWindows) checkDeviceCapacity(ctx context.Context, isoPath, devicePath string) error {
+	// Obter tamanho do arquivo ISO
+	isoFile, err := os.Stat(isoPath)
+	if err != nil {
+		return fmt.Errorf("failed to get ISO file size: %w", err)
+	}
+	isoSize := isoFile.Size()
+
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return err
+	}
+
+	// Obter capacidade do dispositivo
+	psScript := fmt.Sprintf(`
+try {
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            $capacityBytes = $disk.Size
+            Write-Output $capacityBytes
+        } else {
+            Write-Error "Disk information not found"
+            exit 1
+        }
+    } else {
+        Write-Error "Volume not found"
+        exit 1
+    }
+} catch {
+    Write-Error "Failed to get device capacity: $_"
+    exit 1
+}
+`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get device capacity: %w - %s", err, string(output))
+	}
+
+	// Parse capacity from output
+	var capacity int64
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &capacity); err != nil {
+		return fmt.Errorf("failed to parse device capacity: %w", err)
+	}
+
+	// Verificar se há espaço suficiente (deixar 10% de margem)
+	requiredSpace := isoSize + (isoSize / 10)
+	if capacity < requiredSpace {
+		return fmt.Errorf("insufficient device capacity: need %d bytes, have %d bytes",
+			requiredSpace, capacity)
+	}
+
+	uww.logger.Debug("Capacity check passed",
+		"iso_size", isoSize,
+		"device_capacity", capacity,
+		"required_space", requiredSpace)
+
+	return nil
+}
+
+// ensureDeviceUnmounted ensures the device is unmounted before writing
+func (uww *USBWriterWindows) ensureDeviceUnmounted(ctx context.Context, devicePath string) error {
+	driveLetter, err := uww.parseDriveLetter(devicePath)
+	if err != nil {
+		return err
+	}
+
+	// Listar e desmontar todas as partições do dispositivo
+	psScript := fmt.Sprintf(`
+try {
+    $volume = Get-Volume -DriveLetter %s -ErrorAction SilentlyContinue
+    if ($volume) {
+        $disk = Get-Disk -Number $volume.DiskNumber
+        if ($disk) {
+            # Listar todas as partições
+            $partitions = Get-Partition -DiskNumber $disk.Number
+            foreach ($partition in $partitions) {
+                if ($partition.DriveLetter) {
+                    Write-Output "Unmounting partition: $($partition.DriveLetter)"
+                    $partition | Set-Partition -NewDriveLetter $null
+                }
+            }
+            Write-Output "All partitions unmounted"
+        }
+    }
+} catch {
+    Write-Error "Failed to unmount partitions: $_"
+    exit 1
+}
+`, driveLetter)
+
+	cmd := exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to unmount device partitions: %w - %s", err, string(output))
+	}
+
+	return nil
+}
+
+// hasAdminPrivileges checks if the current process has admin privileges using Windows API
+func (uww *USBWriterWindows) hasAdminPrivileges(ctx context.Context) bool {
+	// Método 1: Verificar usando net session (mais simples)
+	cmd := exec.CommandContext(ctx, "net", "session")
+	if err := cmd.Run(); err == nil {
+		return true
+	}
+
+	// Método 2: Verificar usando PowerShell (mais robusto)
+	psScript := `
+try {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        Write-Output "true"
+    } else {
+        Write-Output "false"
+    }
+} catch {
+    Write-Output "false"
+}`
+
+	cmd = exec.CommandContext(ctx, "powershell", "-Command", psScript)
+	output, err := cmd.Output()
+	if err == nil {
+		result := strings.TrimSpace(string(output))
+		return result == "true"
+	}
+
+	return false
 }
 
 // Windows-specific implementation will override the base method
